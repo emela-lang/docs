@@ -1,0 +1,92 @@
+---
+// The dedicated /playground editor: a source textarea, a Run button, and an
+// output panel. Shares the same wasm worker as the inline Run buttons via
+// runEmela(). The compiler/runtime wasm is fetched on the first Run.
+const sample = `import std.io
+
+fn main() -> Unit uses { Io } {
+    Io.print("Hello, Emela!\\n")
+}
+`;
+---
+
+<div class="emela-playground">
+  <div class="emela-pg-editor-wrap">
+    <div class="emela-pg-highlight" aria-hidden="true"></div>
+    <textarea class="emela-pg-editor" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Emela ソース">{sample}</textarea>
+  </div>
+  <div class="emela-pg-bar">
+    <button type="button" class="emela-run-btn emela-pg-run">
+      <span aria-hidden="true">▶</span> Run
+    </button>
+    <span class="emela-pg-hint">ネットワーク（socket / HTTP）はブラウザでは利用できません。</span>
+  </div>
+  <div class="emela-run-output emela-pg-output" hidden></div>
+</div>
+
+<script>
+  import { runEmela } from '../scripts/emela-runner';
+  import { renderResult, renderError } from '../scripts/emela-output';
+  import { highlightInto } from '../scripts/emela-highlight';
+
+  function wire(root: HTMLElement): void {
+    if (root.dataset.wired === 'yes') return;
+    const editor = root.querySelector<HTMLTextAreaElement>('.emela-pg-editor');
+    const button = root.querySelector<HTMLButtonElement>('.emela-pg-run');
+    const output = root.querySelector<HTMLElement>('.emela-pg-output');
+    if (!editor || !button || !output) return;
+    root.dataset.wired = 'yes';
+
+    // Syntax highlighting: a highlight layer sits behind the (transparent-text)
+    // textarea. It loads Shiki lazily; until the first render lands the textarea
+    // keeps its own visible text, so the editor is usable immediately.
+    const wrap = editor.closest<HTMLElement>('.emela-pg-editor-wrap');
+    const highlight = root.querySelector<HTMLElement>('.emela-pg-highlight');
+    if (wrap && highlight) {
+      const sync = () => {
+        highlightInto(highlight, editor.value)
+          .then(() => {
+            wrap.dataset.highlighted = 'yes';
+          })
+          .catch(() => {
+            /* keep the plain textarea if Shiki fails to load */
+          });
+      };
+      editor.addEventListener('input', sync);
+      editor.addEventListener('scroll', () => {
+        highlight.scrollTop = editor.scrollTop;
+        highlight.scrollLeft = editor.scrollLeft;
+      });
+      sync();
+    }
+
+    async function run(): Promise<void> {
+      button!.disabled = true;
+      output!.hidden = false;
+      output!.dataset.state = 'running';
+      output!.textContent = '実行中…';
+      try {
+        renderResult(output!, await runEmela(editor!.value));
+      } catch (err) {
+        renderError(output!, String((err as Error)?.message || err));
+      } finally {
+        button!.disabled = false;
+      }
+    }
+
+    button.addEventListener('click', run);
+    editor.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        run();
+      }
+    });
+  }
+
+  function init(): void {
+    document.querySelectorAll<HTMLElement>('.emela-playground').forEach(wire);
+  }
+
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>

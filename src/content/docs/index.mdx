@@ -1,40 +1,77 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
+title: Emela
+description: WebAssembly / Native へコンパイルする、実験的な関数型プログラミング言語
+template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
-  image:
-    file: ../../assets/houston.webp
+  tagline: capability を型で追跡する、実験的な関数型言語。WebAssembly と Native にコンパイルします。
   actions:
-    - text: Example Guide
-      link: /guides/example/
+    - text: Emela とは
+      link: /docs/guides/introduction/
       icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
+    - text: 言語ツアー
+      link: /docs/guides/tour/
+      icon: right-arrow
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/emela-lang
       icon: external
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+Emela は、小さなコア・明示的な実行時挙動・型付きの effect 追跡を軸にした、
+実験的な関数型言語です。関数が要求する **capability（能力）** を型に書き、
+その集合がそのまま WebAssembly サンドボックスの **権限表** になります。
 
-<CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+```emela
+import std.io
+
+fn main() -> Unit uses { Io } {
+    Io.print("Hello, World!\n")
+}
+```
+
+<CardGrid>
+	<Card title="capability を型で追跡" icon="approve-check">
+		副作用は関数型の `uses` 節に書きます。宣言なき副作用は型エラー、
+		import されないホスト関数はサンドボックスが実行時にも拒否します。
 	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
+	<Card title="null が無い" icon="error">
+		値の不在は `Option<T>` で表します。所有権・借用・move も導入せず、
+		メモリはランタイムが管理します。
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="式指向・不変" icon="pencil">
+		束縛は不変、反復は再帰。`if` / `match` / block はすべて式で、
+		`return` はありません。
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="移植可能な意味論" icon="rocket">
+		`Int` は i32、`Float` は f64 に固定。演算の観測可能な意味は
+		全 backend で一致します。
 	</Card>
 </CardGrid>
+
+## 次に読む
+
+<CardGrid>
+	<Card title="はじめての方へ" icon="open-book">
+		[Emela とは](/guides/introduction/) で設計思想を、
+		[Hello, World](/guides/hello-world/) で最初の一歩を。
+	</Card>
+	<Card title="言語を一通り" icon="list-format">
+		[言語ツアー](/guides/tour/) で主要な機能を例とともに眺められます。
+	</Card>
+	<Card title="他の言語から来た方へ" icon="random">
+		[移行ガイド](/migration/overview/)に Python / TypeScript / C・C++ / Go /
+		Java / Ruby / Gleam / Rust からの対応表と勘所をまとめています。
+	</Card>
+	<Card title="仕様を正確に" icon="document">
+		[リファレンス](/reference/values/) が現在の規範です。
+		各章は自己完結で、今どう振る舞うかだけを述べます。
+	</Card>
+</CardGrid>
+
+:::note[実験的な言語です]
+Emela は設計・実装ともに進行中です。仕様は小さな単位で段階的に安定化しており、
+ここに書かれた内容は変わりうる部分を含みます。
+:::

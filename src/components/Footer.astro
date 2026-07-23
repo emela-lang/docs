@@ -1,0 +1,9 @@
+---
+// Overrides Starlight's Footer: render the built-in footer unchanged, then add
+// the global Run-button script (RunButtons) so it loads on every docs page.
+import Default from '@astrojs/starlight/components/Footer.astro';
+import RunButtons from './RunButtons.astro';
+---
+
+<Default />
+<RunButtons />

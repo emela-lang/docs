@@ -1,0 +1,197 @@
+:root {
+  --sl-font: 'IBM Plex Sans JP', serif;
+  /* Monospace stack used by the Playground editor and Run output. */
+  --emela-mono: 'IBM Plex Mono', var(--sl-font-mono, ui-monospace, monospace);
+}
+
+/* ── Emela playground / Run buttons ─────────────────────────────────────── */
+
+/* Inline Run control that sits under a runnable code block. Uses a positive top
+   margin (never negative) so it always clears the code frame's border/shadow
+   instead of tucking under it. */
+.emela-run {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.75rem 0 1.75rem;
+}
+
+.emela-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.4em 1.1em;
+  font: inherit;
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--sl-color-text-invert, var(--sl-color-black));
+  background: var(--sl-color-accent);
+  border: 1px solid var(--sl-color-accent);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.emela-run-btn:hover {
+  opacity: 0.85;
+}
+
+.emela-run-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.emela-run-output {
+  align-self: stretch;
+  padding: 0.7rem 0.9rem;
+  font-family: var(--emela-mono);
+  font-size: var(--sl-text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--sl-color-gray-6, var(--sl-color-black));
+  border: 1px solid var(--sl-color-gray-5);
+  border-left: 3px solid var(--sl-color-accent);
+  border-radius: 0.4rem;
+}
+
+.emela-run-output[data-state='running'] {
+  color: var(--sl-color-gray-3);
+  border-left-color: var(--sl-color-gray-4);
+}
+
+.emela-run-output[data-state='error'] {
+  border-left-color: var(--sl-color-red);
+}
+
+.emela-out-part + .emela-out-part {
+  margin-top: 0.4rem;
+}
+
+.emela-out-err,
+.emela-out-diag {
+  color: var(--sl-color-red-high, var(--sl-color-red));
+}
+
+.emela-out-muted {
+  color: var(--sl-color-gray-3);
+  font-style: italic;
+}
+
+.emela-out-label {
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* Dedicated /playground editor. */
+.emela-playground {
+  margin: 1.5rem 0;
+}
+
+/* Highlighted editor: a Shiki-rendered layer sits behind a transparent-text
+   textarea. Both share identical text metrics so the caret lines up with the
+   colored text. Night Owl background matches the ```emela code blocks. */
+.emela-pg-editor-wrap {
+  position: relative;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fbfbfb;
+}
+:root[data-theme='dark'] .emela-pg-editor-wrap {
+  background: #011627;
+}
+
+.emela-pg-editor-wrap:focus-within {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: -1px;
+}
+
+/* Metrics shared by the textarea and the highlight layer — must match exactly. */
+.emela-pg-editor,
+.emela-pg-highlight,
+.emela-pg-highlight .shiki {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  font-family: var(--emela-mono);
+  font-size: var(--sl-text-sm);
+  line-height: 1.6;
+  tab-size: 4;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.emela-pg-editor {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 14rem;
+  resize: vertical;
+  z-index: 1;
+  color: var(--sl-color-text);
+  background: transparent;
+  caret-color: var(--sl-color-text);
+  border: 0;
+  outline: none;
+}
+
+/* Hide the textarea's own glyphs only once the highlight layer is live, so the
+   plain text stays readable until Shiki finishes loading. */
+.emela-pg-editor-wrap[data-highlighted='yes'] .emela-pg-editor {
+  color: transparent;
+}
+
+.emela-pg-highlight {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.emela-pg-highlight .shiki {
+  /* Neutralize Starlight's generic `pre` styling so the layer aligns with the
+     textarea and shows no frame of its own. */
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+.emela-pg-highlight .shiki,
+.emela-pg-highlight .shiki span {
+  background: transparent !important;
+  color: var(--shiki-light);
+}
+:root[data-theme='dark'] .emela-pg-highlight .shiki,
+:root[data-theme='dark'] .emela-pg-highlight .shiki span {
+  color: var(--shiki-dark);
+}
+
+.emela-pg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.emela-pg-kbd {
+  font-family: var(--emela-mono);
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-2);
+}
+
+.emela-pg-hint {
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+}
+
+.emela-pg-output {
+  margin-top: 0.75rem;
+  min-height: 3rem;
+}

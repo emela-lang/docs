@@ -1,0 +1,42 @@
+name: Deploy to GitHub Pages
+
+on:
+  # main への push で本番反映。手動実行も可能にする。
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GITHUB_TOKEN に Pages へのデプロイ権限を付与する。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 進行中のデプロイは完了させ、後発の実行と競合させない。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build with Astro
+        # pnpm-lock.yaml を検出して pnpm でインストール・ビルドし、
+        # dist/ を Pages アーティファクトとしてアップロードする。
+        uses: withastro/action@v3
+        with:
+          node-version: 22
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

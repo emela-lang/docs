@@ -1,0 +1,71 @@
+---
+// Adds a "▶ Run" control below Emela code blocks that opt in with the `run`
+// meta (```emela run) — the emela-runnable Expressive Code plugin (astro.config)
+// marks those with `data-emela-run="true"`. Plain ```emela blocks get nothing.
+// Injected once per page through the Footer component override, so it applies to
+// the whole docs site.
+//
+// This component renders no markup itself — only the client script.
+---
+
+<script>
+  import { runEmela } from '../scripts/emela-runner';
+  import { renderResult, renderError } from '../scripts/emela-output';
+
+  // Expressive Code renders each line as a `.ec-line` element; join them so the
+  // extracted source keeps its newlines (plain `textContent` would drop them).
+  function extractSource(pre: HTMLElement): string {
+    const lines = pre.querySelectorAll('.ec-line');
+    if (lines.length) return Array.from(lines, (line) => line.textContent ?? '').join('\n');
+    return pre.textContent ?? '';
+  }
+
+  function attach(pre: HTMLElement): void {
+    // Opt-in only: the block (or an ancestor) must be marked runnable by the
+    // emela-runnable EC plugin. A plain ```emela block is never runnable.
+    if (!pre.closest('[data-emela-run="true"]')) return;
+
+    const block = (pre.closest('.expressive-code') as HTMLElement | null) ?? pre;
+    if (block.dataset.emelaRunAttached === 'yes') return;
+    block.dataset.emelaRunAttached = 'yes';
+
+    const source = extractSource(pre);
+
+    const panel = document.createElement('div');
+    panel.className = 'emela-run';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'emela-run-btn';
+    button.innerHTML = '<span aria-hidden="true">▶</span> Run';
+
+    const output = document.createElement('div');
+    output.className = 'emela-run-output';
+    output.hidden = true;
+
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      output.hidden = false;
+      output.dataset.state = 'running';
+      output.textContent = '実行中…';
+      try {
+        renderResult(output, await runEmela(source));
+      } catch (err) {
+        renderError(output, String((err as Error)?.message || err));
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    panel.append(button, output);
+    block.insertAdjacentElement('afterend', panel);
+  }
+
+  function init(): void {
+    document.querySelectorAll<HTMLElement>('pre[data-language="emela"]').forEach(attach);
+  }
+
+  init();
+  // Re-run after client-side navigation (Starlight view transitions, if enabled).
+  document.addEventListener('astro:page-load', init);
+</script>

@@ -1,0 +1,31 @@
+---
+title: Playground
+description: ブラウザ上で Emela のコードをその場でコンパイル・実行する
+---
+
+import Playground from '../../components/Playground.astro';
+
+Emela のコードをブラウザ内で直接コンパイル・実行できます。**サーバーは不要**で、
+コンパイラとランタイムはまるごと WebAssembly として動きます（`emela run` と同じく、
+`wasm-wasi` にコンパイルして組み込みの [`wasmi`](https://github.com/wasmi-labs/wasmi)
+インタプリタで実行します）。wasm は初回の **Run** 時に読み込まれます。
+
+<Playground />
+
+ドキュメント内の Emela コードブロックには、コードフェンスの言語指定を
+`emela run` にしたものだけ「▶ Run」ボタンが付きます（ただの `emela` は付きません）。
+押すと、このページと同じランタイムで実行結果が表示されます。例:
+
+```emela run
+import std.io
+
+fn main() -> Unit uses { Io } {
+    Io.print("Hello from a code block!\n")
+}
+```
+
+:::note
+ブラウザ内のサンドボックスで動くため、ファイルシステムやネットワーク
+（socket / HTTP）は利用できません。それらを使うプログラムは実行時にエラーになります。
+:::
+
