@@ -5,6 +5,12 @@ description: ブラウザ上で Emela のコードをその場でコンパイル
 
 import Playground from '../../components/Playground.astro';
 
+:::caution[0.1x の言語で動いています]
+この Playground は、作り直す前の Emela（0.1x）のコンパイラを WebAssembly にしたもので動いています。
+0.20 の構文（`#` のコメント、後置の `match`、`effect` と `with` など）のコードは動きません。
+0.20 のコードは[インストール](/start/installation/)して `emela run` で試してください。
+:::
+
 Emela のコードをブラウザ内で直接コンパイル・実行できます。**サーバーは不要**で、
 コンパイラとランタイムはまるごと WebAssembly として動きます（`emela run` と同じく、
 `wasm-wasi` にコンパイルして組み込みの [`wasmi`](https://github.com/wasmi-labs/wasmi)

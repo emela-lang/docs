@@ -1,77 +1,96 @@
 ---
 title: Emela
-description: WebAssembly / Native へコンパイルする、実験的な関数型プログラミング言語
+description: 型付きのエラーとエフェクトを持つ関数型言語。JavaScript、WebAssembly、C にコンパイルします
 template: splash
 hero:
-  tagline: capability を型で追跡する、実験的な関数型言語。WebAssembly と Native にコンパイルします。
+  tagline: Effect-TS の開発パターンと厳格なエフェクト型を、1つの言語に。エラーと副作用が型に載る関数型言語です。
   actions:
     - text: Emela とは
-      link: /docs/guides/introduction/
+      link: /docs/start/introduction/
       icon: right-arrow
     - text: 言語ツアー
-      link: /docs/guides/tour/
+      link: /docs/start/tour/
       icon: right-arrow
       variant: minimal
     - text: GitHub
-      link: https://github.com/emela-lang
+      link: https://github.com/emela-lang/emela
       icon: external
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-Emela は、小さなコア・明示的な実行時挙動・型付きの effect 追跡を軸にした、
-実験的な関数型言語です。関数が要求する **capability（能力）** を型に書き、
-その集合がそのまま WebAssembly サンドボックスの **権限表** になります。
+Emela は、データの定義、それを操作する関数、副作用の明示の3つを単純に保つことを基準にした関数型言語です。関数が起こしうるエラー（`fails`）と使うエフェクト（`use`）は型の一部で、書かなければコンパイラが推論します。
 
-```emela
-import std.io
+```emela check
+import Std.Console.{Console}
+import Std.Platform.{Platform}
 
-fn main() -> Unit uses { Io } {
-    Io.print("Hello, World!\n")
+error Negative(n: Int)
+
+fn half(n: Int) -> Int fails Negative {
+  if n < 0 { fail Negative(n:) }
+  n / 2
+}
+
+fn main() {
+  with Platform {
+    console = use Console
+    [10, -4, 7]
+      |> List.map(fn(n) { Int.to_string(half(n)) escape { Negative(n:) -> "#{n} は負" } })
+      |> String.join(", ")
+      |> console.print_line
+  }
 }
 ```
 
+```console
+$ emela run main.emel
+5, -4 は負, 3
+```
+
 <CardGrid>
-	<Card title="capability を型で追跡" icon="approve-check">
-		副作用は関数型の `uses` 節に書きます。宣言なき副作用は型エラー、
-		import されないホスト関数はサンドボックスが実行時にも拒否します。
+	<Card title="エラーは型に載る" icon="error">
+		`fail` で失敗し、`escape` で受けたいエラーだけを値に戻します。
+		受けなかったエラーは呼び出し元へ伝わり、その集合が関数の型に残ります。
+		Result 型も try / catch もありません。
 	</Card>
-	<Card title="null が無い" icon="error">
-		値の不在は `Option<T>` で表します。所有権・借用・move も導入せず、
-		メモリはランタイムが管理します。
+	<Card title="副作用はエフェクトで" icon="setting">
+		`effect` で操作を宣言し、`handler` で実装し、`with` で供給します。
+		テストではハンドラを差し替えるだけで済み、モックは要りません。
 	</Card>
-	<Card title="式指向・不変" icon="pencil">
-		束縛は不変、反復は再帰。`if` / `match` / block はすべて式で、
-		`return` はありません。
+	<Card title="await のない並行処理" icon="random">
+		fiber はスコープの中でだけ起動し、スコープより長生きしません。
+		中断する操作も普通の呼び出しと同じ形で書きます。
 	</Card>
-	<Card title="移植可能な意味論" icon="rocket">
-		`Int` は i32、`Float` は f64 に固定。演算の観測可能な意味は
-		全 backend で一致します。
+	<Card title="同じ結果を、どのターゲットでも" icon="rocket">
+		出力先は JavaScript、WebAssembly、C。`Int` は32ビット、`Float` は
+		IEEE 754 の64ビットに固定し、どのターゲットでも同じ結果を返します。
 	</Card>
 </CardGrid>
 
 ## 次に読む
 
 <CardGrid>
-	<Card title="はじめての方へ" icon="open-book">
-		[Emela とは](/guides/introduction/) で設計思想を、
-		[Hello, World](/guides/hello-world/) で最初の一歩を。
+	<Card title="はじめる" icon="open-book">
+		[Emela とは](/start/introduction/) で設計の前提を、
+		[インストール](/start/installation/) と [最初のプロジェクト](/start/first-project/) で手元での動かし方を。
 	</Card>
-	<Card title="言語を一通り" icon="list-format">
-		[言語ツアー](/guides/tour/) で主要な機能を例とともに眺められます。
+	<Card title="言語を一巡り" icon="list-format">
+		[言語ツアー](/start/tour/) で、束縛からエフェクト、fiber までを短い例で眺められます。
+		続きは [言語ガイド](/guide/basics/) へ。
 	</Card>
-	<Card title="他の言語から来た方へ" icon="random">
-		[移行ガイド](/migration/overview/)に Python / TypeScript / C・C++ / Go /
-		Java / Ruby / Gleam / Rust からの対応表と勘所をまとめています。
+	<Card title="他の言語から" icon="translate">
+		TypeScript、Gleam、Kotlin、Scala、Rust、Go、Python との対比は
+		[他の言語から](/from/overview/) にあります。
 	</Card>
-	<Card title="仕様を正確に" icon="document">
-		[リファレンス](/reference/values/) が現在の規範です。
-		各章は自己完結で、今どう振る舞うかだけを述べます。
+	<Card title="今どこまで動くか" icon="information">
+		0.20 のコンパイラで動く機能と、まだの機能は
+		[実装の状況](/start/status/) にまとめています。
 	</Card>
 </CardGrid>
 
-:::note[実験的な言語です]
-Emela は設計・実装ともに進行中です。仕様は小さな単位で段階的に安定化しており、
-ここに書かれた内容は変わりうる部分を含みます。
+:::note[開発中の言語です]
+Emela 0.20 は 0.1x 系とは別の言語として作り直した版で、互換性はありません。
+仕様と実装はまだ変わります。
 :::
