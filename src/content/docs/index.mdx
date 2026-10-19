@@ -3,7 +3,7 @@ title: Emela
 description: 型付きのエラーとエフェクトを持つ関数型言語。JavaScript、WebAssembly、C にコンパイルします
 template: splash
 hero:
-  tagline: Effect-TS の開発パターンと厳格なエフェクト型を、1つの言語に。エラーと副作用が型に載る関数型言語です。
+  tagline: エラーと副作用が型に出る関数型言語。その型はコンパイラが推論します。
   actions:
     - text: Emela とは
       link: /start/introduction/
@@ -20,7 +20,7 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-Emela は、データの定義、それを操作する関数、副作用の明示の3つを単純に保つことを基準にした関数型言語です。関数が起こしうるエラー（`fails`）と使うエフェクト（`use`）は型の一部で、書かなければコンパイラが推論します。
+`half` は `Negative` で失敗しうると型に書いてあります。`main` はそのエラーを `escape` で受けて文字列に戻し、出力します。`main` の `Console` は `with Platform` が供給します。
 
 ```emela check
 import Std.Console.{Console}
@@ -51,46 +51,20 @@ $ emela run main.emel
 
 <CardGrid>
 	<Card title="エラーは型に載る" icon="error">
-		`fail` で失敗し、`escape` で受けたいエラーだけを値に戻します。
-		受けなかったエラーは呼び出し元へ伝わり、その集合が関数の型に残ります。
-		Result 型も try / catch もありません。
+		`fail` で失敗し、`escape` で受けたいものだけ値に戻します。Result 型も try / catch もありません。
 	</Card>
 	<Card title="副作用はエフェクトで" icon="setting">
-		`effect` で操作を宣言し、`handler` で実装し、`with` で供給します。
-		テストではハンドラを差し替えるだけで済み、モックは要りません。
+		実装は `with` でハンドラを渡して決まります。テストではハンドラを差し替えます。
 	</Card>
 	<Card title="await のない並行処理" icon="random">
-		fiber はスコープの中でだけ起動し、スコープより長生きしません。
-		中断する操作も普通の呼び出しと同じ形で書きます。
+		fiber はスコープの中でだけ動き、スコープより長生きしません。
 	</Card>
-	<Card title="同じ結果を、どのターゲットでも" icon="rocket">
-		出力先は JavaScript、WebAssembly、C。`Int` は32ビット、`Float` は
-		IEEE 754 の64ビットに固定し、どのターゲットでも同じ結果を返します。
-	</Card>
-</CardGrid>
-
-## 次に読む
-
-<CardGrid>
-	<Card title="はじめる" icon="open-book">
-		[Emela とは](/start/introduction/) で設計の前提を、
-		[インストール](/start/installation/) と [最初のプロジェクト](/start/first-project/) で手元での動かし方を。
-	</Card>
-	<Card title="言語を一巡り" icon="list-format">
-		[言語ツアー](/start/tour/) で、束縛からエフェクト、fiber までを短い例で眺められます。
-		続きは [言語ガイド](/guide/basics/) へ。
-	</Card>
-	<Card title="他の言語から" icon="translate">
-		TypeScript、Gleam、Kotlin、Scala、Rust、Go、Python との対比は
-		[他の言語から](/from/overview/) にあります。
-	</Card>
-	<Card title="今どこまで動くか" icon="information">
-		0.20 のコンパイラで動く機能と、まだの機能は
-		[実装の状況](/start/status/) にまとめています。
+	<Card title="どのターゲットでも同じ結果" icon="rocket">
+		JavaScript、WebAssembly、C に出力します。`Int` は32ビットに固定です。
 	</Card>
 </CardGrid>
 
 :::note[開発中の言語です]
 Emela 0.20 は 0.1x 系とは別の言語として作り直した版で、互換性はありません。
-仕様と実装はまだ変わります。
+仕様と実装はまだ変わります。動く範囲は [実装の状況](/start/status/) にあります。
 :::

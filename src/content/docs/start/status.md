@@ -3,7 +3,7 @@ title: 実装の状況
 description: 0.20.x のコンパイラで動くもの、仕様にあってまだ動かないもの、ターゲットの Tier と C の制限
 ---
 
-このサイトは 0.20 系の仕様、つまり目標の言語を書いています。コンパイラはまだ仕様の全部を扱えません。このページは、今のコンパイラで何が動き、何がまだかをまとめたものです。各ページでも、未実装の機能には「予定」の注記を付けています。
+このサイトは 0.20 系の仕様、つまり目標の言語を書いています。コンパイラはまだ仕様の全部を扱えません。今のコンパイラで何が動き、何がまだかをここにまとめます。各ページでも、未実装の機能には「予定」の注記を付けています。
 
 ここでの「main」は emela リポジトリの main ブランチ（次のリリースに入るもの）を、「0.20.1」は最新のリリースを指します。
 
@@ -30,11 +30,11 @@ description: 0.20.x のコンパイラで動くもの、仕様にあってまだ
 | 機能 | 予定 | 今の動き |
 |---|---|---|
 | `trait`、`impl`、`derive`、Trait の制約の検査 | 0.21 | `trait` の宣言は通るが、Trait の関数を呼ぶと `not supported yet` になる。`==` と文字列の補間は Trait を見ず、どの型にも構造のまま働く |
-| `Map`、`Set`、`Array` | 0.21 | 名前が見つからない（E0211） |
+| `Map`、`Set`、`Array` | 0.21 | 名前が見つからないエラーになる |
 | JSON（Encode / Decode） | 0.21 | なし。Trait と一緒に入る |
 | `Semaphore`、`Queue`（同時に走る fiber の数の上限） | 0.21 | なし |
 | `Http` のサーバー | 0.21 | クライアントの `send` だけ |
-| WebAssembly の出力（`--target wasm`） | 0.21 以降 | `--target` に渡せるのは `js` と `c` だけ。`[build].target = "wasm"` は E0232 |
+| WebAssembly の出力（`--target wasm`） | 0.21 以降 | `--target` に渡せるのは `js` と `c` だけ。`[build].target = "wasm"` はエラー |
 | Pome の依存（`[dependencies]`、`[replace]`、`Pome.lock`） | 未定 | `Pome.toml` は有無と `[build].target` だけを読む。ほかの表は黙って無視する |
 | `emela pome add` / `install` / `update` / `remove` / `list`、`emela new` | 未定 | コマンドがない |
 | capture set（能力、fiber のハンドル、`Deferred` の持ち出しの静的な検査） | 0.22 | 一部を実行時に検査し、defect にする（`handler ... was used after release`、`fiber scope was used after it ended`） |
@@ -51,9 +51,9 @@ description: 0.20.x のコンパイラで動くもの、仕様にあってまだ
 | WASM | 1 | 出力はまだない | |
 | C | 2 | main にある。次のリリースで入る | C11 のコンパイラ（`cc`、`EMELA_CC`） |
 
-- 同じプログラムは、どのターゲットでも同じ観測可能な結果を返すことを仕様で求めています。
-- Tier 2 のターゲットは、意味は Tier 1 と同じで、同じテストスイートを通すことを条件にします。ただし新しい機能は Tier 1 より遅れて入ってかまいません。
-- C ターゲットは、出力した C と C のランタイムを `cc` でコンパイルして native の実行ファイル `target/emela/c/main` を作ります。対象は macOS（arm64）と Linux（x86_64）で、Windows は後の版です。
+同じプログラムはどのターゲットでも同じ観測可能な結果を返すことを仕様で求めています。Tier 2 のターゲットも意味は Tier 1 と同じで、同じテストスイートを通すことを条件にします。新しい機能だけは Tier 1 より遅れて入ってかまいません。
+
+C ターゲットは、出力した C と C のランタイムを `cc` でコンパイルして native の実行ファイル `target/emela/c/main` を作ります。対象は macOS（arm64）と Linux（x86_64）で、Windows は後の版です。
 
 ### C ターゲットの今の制限
 
@@ -63,8 +63,8 @@ C ターゲットでも、純粋な部分、エラーとエフェクト、`suspe
 |---|---|
 | `String.length`、`String.chars` など、書記素クラスタの表が要る関数 | `` `String.length` needs the Unicode grapheme cluster tables, which target `c` does not support yet `` |
 | `String.split(s, "")` を ASCII でない文字列に使う | 実行時の defect |
-| `Http`（`SystemHttp` に C の実装がない） | E0412（`has no @external for target c`） |
-| コールバックを受け取る外部関数 | E0427 |
+| `Http`（`SystemHttp` に C の実装がない） | `has no @external for target c` のエラー |
+| コールバックを受け取る外部関数 | コンパイル時のエラー |
 
 `with Platform` と書いても、`Http` を実際に使わなければ C ターゲットでビルドできます。たどれない関数の `@external` は検査しないためです。
 

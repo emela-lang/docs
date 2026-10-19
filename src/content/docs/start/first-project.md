@@ -3,7 +3,7 @@ title: 最初のプロジェクト
 description: Pome.toml と src/main.emel、emela run / check / test / fmt、dbg、単独ファイル、終了コード
 ---
 
-Emela のプロジェクトは、`Pome.toml` を置いたディレクトリです。ソースは `src/` の下に置き、エントリは `src/main.emel` の `main` です。ここでは Hello world を書いて、実行、検査、テスト、整形を一通り試します。
+Hello world を書いて、実行、検査、テスト、整形を一通り試します。
 
 ## プロジェクトを作る
 
@@ -20,9 +20,9 @@ hello/
     └── main.emel
 ```
 
-- `Pome.toml` は空でかまいません。`emela` は渡されたパスから祖先をたどり、最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。
-- `src/` がソースのルートです。1つのファイルが1つのモジュールで、`src/greeting.emel` は `Greeting` として import できます（[モジュールと公開範囲](/guide/modules/)）。
-- `Pome.toml` に書く内容（名前、版、依存、既定のターゲット）は [プロジェクトと Pome](/tools/pome/) で扱います。
+`Pome.toml` を置いたディレクトリがプロジェクトです。中身は空でかまいません。`emela` は渡されたパスから祖先をたどり、最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。書ける内容（名前、版、依存、既定のターゲット）は [プロジェクトと Pome](/tools/pome/) にあります。
+
+ソースは `src/` の下に置き、1つのファイルが1つのモジュールになります。`src/greeting.emel` は `Greeting` として import できます。エントリは `src/main.emel` の `main` です。
 
 :::caution[Pome の依存はまだ使えません]
 今のコンパイラは `Pome.toml` の有無と `[build].target` だけを見ます。`[dependencies]` は読まず、`emela pome` と `emela new` のコマンドもまだありません。
@@ -53,10 +53,9 @@ fn greets_by_name() {
 }
 ```
 
-- 画面への出力も副作用なので、エフェクト `Console` の操作として呼びます。`use Console` で能力の値を取り出し、`console.print_line(...)` と書きます。
-- `with Platform { ... }` が、本体の中で使う `Console`、`Clock`、`FileSystem` などのホストのハンドラをまとめて供給します。`Console` だけで足りるなら `import Std.Console.{Console, SystemConsole}` として `with SystemConsole { ... }` と書いても同じです。
-- `main` の型に残ってよいエフェクトはありません。`with` を外すと、`Console` が供給されていないという診断（E0402）になります。
-- `#{...}` は文字列の補間です。
+画面への出力も副作用なので、エフェクト `Console` の操作として呼びます。`use Console` で能力の値を取り出し、`console.print_line(...)` と書きます。
+
+`with Platform { ... }` は、本体の中で使う `Console`、`Clock`、`FileSystem` などのホストのハンドラをまとめて供給します。`main` の型に残ってよいエフェクトはありません。`with` を外すと、`Console` が供給されていないというエラーになります。`Console` だけで足りるなら、`import Std.Console.{Console, SystemConsole}` として `with SystemConsole { ... }` と書いても同じです。
 
 ## 実行する
 
@@ -65,7 +64,7 @@ $ emela run
 Hello, world!
 ```
 
-`emela run` は、プロジェクトを JavaScript にコンパイルして Node.js で実行します。パスを省くと `.` を対象にします。出力は `target/emela/js` に書き出され、`main.mjs` がエントリです。
+`emela run` はプロジェクトを JavaScript にコンパイルして Node.js で実行します。パスを省くと `.` を対象にします。出力は `target/emela/js` に書き出され、`main.mjs` がエントリです。
 
 ```text
 target/emela/js/
@@ -78,7 +77,7 @@ target/emela/js/
 
 ## 検査する
 
-`emela check` は、コンパイルせずに診断だけを出します。問題がなければ何も出さずに終了コード 0 で終わります。型を間違えると、こうなります。
+`emela check` はコンパイルせずに診断だけを出します。問題がなければ何も出さずに終了コード 0 で終わります。型を間違えると、こうなります。
 
 ```emela check=error
 fn main() {
@@ -164,9 +163,7 @@ $ emela run main.emel
 "total: 6"
 ```
 
-- 表示は値の構造そのままで、文字列は引用符付き、レコードは `User(id: 1, name: "alice")` の形になります。
-- 標準エラーに出るので、`emela run main.emel 2>/dev/null` とすると消えます。プログラムの出力には `Console` を使います。
-- `main` が返す値は表示されません。
+表示は値の構造そのままで、文字列は引用符付き、レコードは `User(id: 1, name: "alice")` の形になります。標準エラーに出るので `2>/dev/null` で消せます。プログラムの出力には `Console` を使います。`main` が返す値は表示されません。
 
 ## 単独のファイルで動かす
 
@@ -178,10 +175,9 @@ $ emela check main.emel
 $ emela test main.emel
 ```
 
-- 渡したファイルがエントリです。import できるのは、同じディレクトリの直下にある `.emel` だけです。
-- 出力はファイルのあるディレクトリの `target/emela/js`（テストは `target/emela/test`）に書かれます。
+渡したファイルがエントリで、import できるのは同じディレクトリの直下にある `.emel` だけです。出力はファイルのあるディレクトリの `target/emela/js`（テストは `target/emela/test`）に書かれます。
 
-このサイトで `check` の付いた例は、すべて単独のファイルとしてコンパイラの検査を通しています。
+このサイトの例も、単独のファイルとしてコンパイラの検査を通しています。
 
 ## 終了コード
 
@@ -232,4 +228,4 @@ $ echo $?
 101
 ```
 
-エラーと defect の違いは [エラー](/guide/errors/) で扱います。コマンドの全体は [emela コマンド](/tools/cli/) にあります。
+エラーと defect の違いは [エラー](/guide/errors/) に、コマンドの全体は [emela コマンド](/tools/cli/) にあります。
