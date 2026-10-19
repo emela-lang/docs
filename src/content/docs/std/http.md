@@ -78,7 +78,7 @@ pub effect Http {
 }
 ```
 
-ハンドラを書く人が実装するのは `send` だけです。よく使う形は、`send` の上のふつうの関数にしてあります。
+ハンドラを書く人が実装するのは `send` だけです。よく使う形は `send` の上のふつうの関数にしてあります。
 
 ## 関数
 
@@ -94,20 +94,19 @@ pub effect Http {
 | `require_ok` | `require_ok(res: Response) -> Response fails UnexpectedStatus` | 2xx ならそのまま返し、それ以外は fail する |
 | `response` | `response(status: Int, body: String) -> Response` | ヘッダなしの応答。TestServer で使う |
 
-- `header` と `headers` は、名前を ASCII の範囲で大文字小文字を区別せずに比べます。
-- `encode_query` は JS の `encodeURIComponent` を純粋な外部関数として呼びます。URL を部品に分ける型はありません。
+`header` と `headers` は名前を ASCII の範囲で大文字小文字を区別せずに比べます。`encode_query` は JS の `encodeURIComponent` を純粋な外部関数として呼びます。URL を部品に分ける型はありません。
 
 ## 振る舞い
 
 - 本文はテキストだけを扱います。送るときは UTF-8 にし、受けるときは UTF-8 として読み、読めなければ ResponseNotText です。本文の先頭の BOM は取り除きます。本文は全部を読み込んでから返します（ストリームは後の版）。
 - content-type を書かなければ `text/plain;charset=UTF-8` で送ります。
-- ヘッダは `List[(String, String)]` で持ちます。Map が 0.21 なのと、同じ名前のヘッダが複数並ぶためです。応答のヘッダは、名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます。`set-cookie` だけは1つずつ別の組にします。
-- 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いためです。失敗にしたいときは `require_ok` を挟みます。
+- ヘッダは `List[(String, String)]` で持ちます。Map が 0.21 なのと、同じ名前のヘッダが複数並ぶためです。応答のヘッダは名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます。`set-cookie` だけは1つずつ別の組にします。
+- 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いからで、失敗にしたいときは `require_ok` を挟みます。
 - 失敗にするのは応答を受け取れなかったときだけで、名前解決、接続、TLS、リダイレクトの回数超えはどれも ConnectionFailed にまとめます。リダイレクトは自動で辿ります。
-- GET と HEAD の空の本文は、本文なしで送ります。GET と HEAD に空でない本文を書いたときと、正しくないヘッダは ConnectionFailed です。
+- GET と HEAD の空の本文は本文なしで送ります。GET と HEAD に空でない本文を書いたときと、正しくないヘッダは ConnectionFailed です。
 - タイムアウトの設定はありません。`Fiber.timeout` か `Fiber.race` で書きます。`send` を待っている fiber が中断されると、通信を止めます（AbortSignal）。
 
-escape の腕にはエラーの構成子を書きます。`_` で全部を受けることはできません（E0320）。
+`Fiber.timeout` で包んだ `Http.get` のエラーを escape で受けるときも、腕にはエラーの構成子を書きます。`_` で全部は受けられません。
 
 ```emela check=error
 import Std.Clock.{Clock}
@@ -120,6 +119,10 @@ fn fetch_with_deadline(url: String) -> Option[String] use { Http, Clock, Async }
     _ -> None
   }
 }
+```
+
+```text
+escape arms must match an error constructor
 ```
 
 受けるエラーを並べて書きます。
@@ -142,11 +145,9 @@ fn fetch_with_deadline(url: String) -> Option[String] use { Http, Clock, Async }
 
 ## SystemHttp
 
-`SystemHttp` は JS の `fetch` を使う本物のハンドラで、Platform に束ねられています。
+`SystemHttp` は JS の `fetch` を使う本物のハンドラで、Platform に入っています。
 
-- Async に依存し、状態を持ちません。
-- Cookie を覚えず、プロキシの環境変数を使いません。
-- C のターゲットの実装はまだありません。`--target c` で `send` に届くコードをビルドすると E0412 になります。
+Async に依存し、状態を持ちません。Cookie を覚えず、プロキシの環境変数も使いません。C のターゲットの実装はまだなく、`--target c` で `send` に届くコードをビルドするとコンパイルのエラーになります。
 
 ```emela check
 import Std.Platform.{Platform}

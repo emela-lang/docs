@@ -3,7 +3,7 @@ title: 型引数
 description: 型引数の宣言と適用、推論と汎化、制約、エラーと効果の集合を受ける型引数
 ---
 
-型引数を使うと、要素の型に依らない関数やデータを1つの定義で書けます。宣言も適用も `[ ]` で書きます。呼び出し側で型引数を書くことはなく、引数から推論します。
+型引数を使うと、要素の型に依らない関数やデータを1つの定義で書けます。宣言も適用も `[ ]` で書き、呼び出し側では書かずに引数から推論します。
 
 ```emela check
 type Pair[A, B](first: A, second: B)
@@ -19,13 +19,7 @@ fn main() {
 }
 ```
 
-## 宣言と適用
-
-- 型引数は、名前の後の `[A, B]` で宣言します。fn、type、enum、effect に書けます。
-- 型に適用するときも `[ ]` です。`List[Int]`、`Option[User]`、`Pair[String, List[Int]]`
-- 型引数を宣言できるのは `[ ]` の中だけで、参照できるのは型の位置だけです。宣言していない名前を型に書くと「未定義」のエラーです（`fn id(x: A) -> A` は E0211）。
-- 型引数の数が合わなければ E0304 です（`List[Int, Int]`）。
-- 関数の型引数は、呼び出しで書きません。`swap(p)` の `A` と `B` は `p` の型から決まります。
+`swap[A, B]` のように名前の後に型引数を宣言します。fn、type、enum、effect に書けます。型に適用するときも `[ ]` を使い、`List[Int]`、`Pair[String, List[Int]]` のようになります。`swap(p)` の `A` と `B` は `p` の型から決まります。
 
 ```emela check
 enum Tree[A] {
@@ -46,9 +40,7 @@ fn main() {
 }
 ```
 
-### 型名で書く型引数
-
-型引数の名前は、大文字名（`A`、`T`）でも型名（`Item`、`Key`）でも書けます。意味のある名前を付けたいときは型名を使います。
+型引数の名前は `A` や `T` のような大文字名のほか、`Key` や `Item` のような型名でも書けます。意味のある名前を付けたいときは型名を使います。
 
 ```emela check
 fn group_first[Key, Value](pairs: List[(Key, Value)]) -> Option[Key] {
@@ -63,12 +55,12 @@ fn main() {
 }
 ```
 
-型引数は、外側の同じ名前の型やエフェクトを隠します。型名で書いた型引数が既存の型を隠したときは、警告が出ます（W0201）。後から同じ名前の型を足したとき（Prelude への追加を含む）に、既存のコードの意味が黙って変わらないようにするためです。
+型名で書いた型引数が外側の同じ名前の型を隠すと、警告が出ます。
 
 ```emela check
 type Item(name: String)
 
-fn first[Item](xs: List[Item]) -> Option[Item] {   # W0201: type parameter `Item` shadows an outer definition
+fn first[Item](xs: List[Item]) -> Option[Item] {   # type parameter `Item` shadows an outer definition
   List.head(xs)
 }
 
@@ -79,7 +71,7 @@ fn main() {
 
 ## 推論と汎化
 
-型は Hindley-Milner 方式で推論します。多相になる（どの型でも使える）のは、トップレベルの関数と const だけです。
+型は Hindley-Milner 方式で推論します。どの型でも使える多相な定義になるのは、トップレベルの関数と const だけです。
 
 ```emela check
 fn wrap[A](x: A) {
@@ -97,24 +89,27 @@ fn main() {
 }
 ```
 
-ブロックの中の束縛は汎化しません。無名関数を変数に入れて、別の型で2回使うことはできません。
+トップレベルの fn は引数の型を省けないので、多相な関数は型引数を宣言して書きます。戻り値の型は推論に任せられます。
+
+ブロックの中の束縛は多相になりません。無名関数を変数に入れて、別の型で2回使うとエラーです。
 
 ```emela check=error
 fn main() {
   id = fn(x) { x }
   a = id(1)
-  b = id("s")       # E0301: type mismatch: expected `Int`, found `String`
+  b = id("s")
 }
 ```
 
-最初の `id(1)` で `x` の型が Int に決まります。いろいろな型で使いたい関数は、トップレベルの fn にします。
+```text
+type mismatch: expected `Int`, found `String`
+```
 
-- トップレベルの fn の引数の型は必須なので、多相な関数は型引数を宣言して書きます。戻り値の型は推論に任せてもかまいません。
-- 互いに呼び合う関数のまとまりの中では、単相の型で参照します。同じまとまりの中で同じ関数を別の型に使うことはできません（多相再帰はありません）。
+最初の `id(1)` で `x` の型が Int に決まります。いろいろな型で使いたい関数はトップレベルの fn にします。
 
 ## 制約
 
-型引数に `[A: Ord]` の形で制約を書けます。制約は Trait の名前で、`+` で並べられます（`[A: Ord + Show]`）。
+型引数に `[A: Ord]` の形で制約を書けます。制約は Trait の名前で、`[A: Ord + Show]` のように `+` で並べます。
 
 ```emela
 fn max_of[A: Ord](a: A, b: A) -> A {
@@ -130,13 +125,11 @@ Prelude には Eq、Ord、Show、Hash の4つの Trait があります。`==` �
 
 効果の集合に付ける `Immediate` の制約（`[R: Immediate]`）は 0.20 で動きます。中断しない関数だけを受けたい場所で使います（[外部関数](/guide/external/)）。
 
-## 高カインド型はない
+`List` や `Option` のような型構成子そのものを型引数に渡すこと（高カインド型）はできません。`List.map` と `Option.map` は別々の関数です。
 
-型引数に、型構成子そのもの（`List` や `Option` の、型を受け取る前の形）を渡すことはできません。`fn map[F, A, B](x: F[A], ...)` のように、「何かのコンテナ」を抽象する書き方はありません。`List.map` と `Option.map` は別々の関数です。
+## エラーと効果の集合を受ける
 
-## エラーと効果の集合を受ける型引数
-
-型引数は、ふつうの型のほかに、エラーの集合 E と効果の集合 R も受けられます。宣言の中で、失敗しうる関数や効果を使う関数をフィールドに持つときに使います。
+型引数はふつうの型のほかに、エラーの集合と効果の集合も受けられます。失敗しうる関数や効果を使う関数をフィールドに持つ型を作るときに使います。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -176,8 +169,8 @@ fn main() {
 }
 ```
 
-- 宣言の中（type や enum のフィールドなど）に書いた関数型の `fails` と `use` を省くと、「失敗せず、効果も持たない」の意味になります。効果のある関数を持つときは、上のように型引数で明示します。そうすると、`Handler` が効果を持ちうることが型の名前 `Handler[E, R]` に現れます。
-- 型引数がふつうの型か、エラーの集合か、効果の集合かは、使われた位置（`fails E`、`use R`）から推論します。種を書く構文はありません。
-- 集合を渡すときの書き方は、fails 節と use 節にそろえます。`Handler[NotFound | Timeout, { Db, Log }]`、空なら `Handler[{}, {}]`。要素が1つなら囲まずに書けます（`Handler[NotFound, Console]`）。
+type のフィールドに書いた関数型で `fails` と `use` を省くと、「失敗せず、効果も持たない」の意味になります。効果のある関数を持たせるときは、上の `Handler[E, R]` のように型引数で受けます。`E` がエラーの集合で `R` が効果の集合だということは、`fails E` と `use R` という使われ方から推論されます。
 
-位置ごとの省略の意味、集合の型引数の汎化と表示は [型の体系](/reference/type-system/) にあります。エラーとエフェクトそのものは [エラー](/guide/errors/) と [エフェクト](/guide/effects/) で説明します。
+集合を渡すときは fails 節と use 節と同じ形で、`Handler[NotFound | Timeout, { Db, Log }]` と書きます。空なら `Handler[{}, {}]`、要素が1つなら `Handler[NotFound, Console]` のように囲まずに書けます。
+
+細かい規則は [型と効果の体系](/reference/type-system/) にあります。

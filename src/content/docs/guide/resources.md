@@ -1,6 +1,6 @@
 ---
 title: 状態と資源
-description: フィールドを持つハンドラ、init と release、layer、State エフェクト、能力の持ち出しの禁止
+description: フィールドを持つハンドラ、init と release、layer、State エフェクト、能力の持ち出し
 ---
 
 接続やファイルのような資源は、フィールドを持つハンドラで扱います。`init` が with に入るときに資源を開き、`release` が with を抜けるときに必ず閉じます。値は不変なので、書き換える状態は State エフェクトに置きます。
@@ -51,22 +51,13 @@ v1/bob
 close store v1
 ```
 
-## フィールドを持つハンドラ
-
-- 状態を持つハンドラは、名前の後ろにフィールドを宣言します（`handler MemoryStore(prefix: String)`）。
-- フィールドは `self.prefix` のように `self` を通して参照します。
-- 状態を持たないハンドラの操作の中の `self` は値を持たず、型は `()` です。
-- フィールドは不変です。部分更新（`MemoryStore(prefix: "x", ..self)`）も新しい値を作ることになるので、操作の本体には書けません。呼ぶたびに変わる状態は、下の State に置きます。
-
 ## init と release
 
-- `init` は with に入るときに1回実行され、ハンドラの値を返します。フィールドのあるハンドラでは必須です（E0419）。
-- `release` は with を抜けるときに1回実行されます。本体が値で終わっても、エラー、defect、中断で終わっても実行されます。
-- フィールドのないハンドラにも `init` と `release` を書けます。そのときの init は、`handler H` なら値 `H` を、`handler H()` なら `H()` を返します。
-- `init` の中では `self` は使えません（値を作る前なので）。`release` と操作の中では使えます。
-- `release` の値は捨てるので、型は問いません。`release` の中で suspend な操作を呼んでもかまいません（その間は中断されません）。
+状態を持つハンドラは名前の後ろにフィールドを宣言します（`handler MemoryStore(prefix: String)`）。フィールドは操作や release の中で `self.prefix` のように参照します。フィールドは不変なので、呼ぶたびに変わる状態は後で説明する State に置きます。
 
-本体がエラーで終わっても、release は走ります。
+`init` は with に入るときに1回実行され、ハンドラの値を返します。フィールドのあるハンドラには必ず書きます。`release` は with を抜けるときに1回実行され、本体が値で終わっても、エラー、defect、中断で終わっても必ず走ります。フィールドのないハンドラにも `init` と `release` を書けます。
+
+次の例では本体が `Boom` で失敗しますが、release が先に走ってから escape がエラーを受けます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -110,9 +101,9 @@ close
 recovered
 ```
 
-### ハンドラの値は init の中でだけ作れる
+### ハンドラの値を作れる場所
 
-ハンドラの値（`MemoryStore(prefix: ...)`）を作れるのは、そのハンドラの init の中だけです。外で作れると、init と release を飛ばせてしまうためです。
+ハンドラの値（`MemoryStore(prefix: ...)`）を作れるのは、そのハンドラの init の中だけです。外で作れると、init と release を飛ばせてしまいます。
 
 ```emela check=error
 effect Counter {
@@ -125,20 +116,20 @@ handler Fixed(n: Int) implements Counter {
 }
 
 fn make() { Fixed(n: 2) }
-# error[E0418]: handler `Fixed` can only be constructed in its own `init`
-#   = help: use `with Fixed { ... }`; `init` and `release` run there
 ```
 
-- init の中の無名関数の中は、init の中とみなします。
-- 構成子のパターン（`Fixed(n:) = ...`）は値を作らないので、どこに書いてもかまいません。
-- ハンドラは引数を取りません。設定を外から渡すときは、上の `Config` のようなエフェクトを init で use します。
+```text
+handler `Fixed` can only be constructed in its own `init`
+  = help: use `with Fixed { ... }`; `init` and `release` run there
+```
 
-### init の use は依存になる
+ハンドラは引数を取りません。設定を外から渡すときは、最初の例の `Config` のようなエフェクトを init で use します。
 
-init、release、操作の本体の中の `use` が、そのハンドラの依存です。依存は、with の外側のハンドラか、同じ with で先に初期化されたハンドラが満たします。
+### 依存と初期化の順序
 
-- `with H1, ..., Hn { 本体 }` は、ハンドラを依存の順に並べて順に init を実行し、本体を評価し、逆順に release を実行します。
-- ある init が失敗すると、それまでに初期化が済んだハンドラだけを逆順に release し、本体は評価しません。失敗したハンドラ自身の release は実行しません。with はその init のエラーで終わります。init のエラーは with の E に入ります。
+init、release、操作の本体で `use` したエフェクトが、そのハンドラの依存です。依存は with の外側のハンドラか、同じ with で先に初期化されたハンドラが満たします。`with H1, ..., Hn { 本体 }` はハンドラを依存の順に並べて init を順に実行し、本体を評価してから、逆の順に release を実行します。
+
+途中の init が失敗すると、初期化の済んだハンドラだけを逆順に release し、本体は評価しません。with はその init のエラーで終わるので、escape で受けられます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -192,21 +183,7 @@ cannot connect to db://down
 
 ### release は失敗できない
 
-release の E は空でなければなりません（E0420）。失敗しうる後始末は、release の中で escape するか、`panic` で defect にします。
-
-```emela check=error
-effect Counter {
-  fn next() -> Int
-}
-
-error Boom
-
-handler Bad implements Counter {
-  release { fail Boom }
-  fn next() { 1 }
-}
-# error[E0420]: `release` of handler `Bad` cannot fail, but this may fail with error `Boom`
-```
+release はエラーで終われません。失敗しうる後始末は release の中で escape して受けるか、`panic` で defect にします。
 
 ## layer
 
@@ -291,14 +268,11 @@ release cache
 disconnect db://test
 ```
 
-- 中にはハンドラか、別の layer を並べます。
-- 並び順は意味を持ちません。コンパイラが依存（init、release、操作の本体の R）から初期化の順序を決め、release はその逆順に実行します。上の例では `DbCache` を先に書いていますが、操作が Db を使うので LocalDb の後に初期化されます。依存から順が決まらないところは、書いた順を保ちます。
-- 同じエフェクトを2つのハンドラが供給する layer は E0421、互いを含む layer は E0422 です。誤りは layer の宣言で1回だけ報告します。
-- with に書いた layer は、中のハンドラに展開してから並べます。一部だけ差し替えるときは、`with AppLive, TestConfig { ... }` と後ろに並べます。上書きされた EnvConfig は初期化もされません（2回目の実行で `init config` が出ていません）。
+layer の中にはハンドラか、別の layer を並べます。並び順は意味を持たず、初期化の順序はコンパイラが依存から決めます。上の例では `DbCache` を先に書いていますが、操作が Db を使うので LocalDb の後に初期化されます。
 
-### 満たされない依存は with の R に残る
+with に書いた layer は中のハンドラに展開してから並べられます。一部だけ差し替えるときは、`with AppLive, TestConfig { ... }` のように後ろに並べます。上書きされた EnvConfig は初期化もされないので、2回目の実行では `init config` が出ていません。
 
-layer の中で満たされない依存はエラーにせず、with の R に残ります。一部の依存を外から与える layer を書けます。main とテストでは R が空でなければならないので、そこでエラーになります。
+layer の中で満たされない依存はエラーにならず、with の R に残ります。そのため、一部の依存を外から与える layer も書けます。main とテストでは R が空でなければならないので、そこで供給を忘れるとエラーになります。
 
 ```emela
 layer Storage {
@@ -307,8 +281,7 @@ layer Storage {
 }
 
 fn main() {
-  with SystemConsole, Storage { ... }
-  # error[E0402]: effect `Config` is not provided in `main`
+  with SystemConsole, Storage { ... }    # Config が供給されていない
 }
 ```
 
@@ -331,7 +304,7 @@ fn main() {
 
 ## State
 
-可変な状態は、同梱のエフェクト `State[S]`（`Std.State`）で表します。状態の置き場所は `State.run` の枠で、値そのものは不変のままです。
+可変な状態は同梱のエフェクト `State[S]`（`Std.State`）で表します。状態の置き場所は `State.run` の枠で、値そのものは不変のままです。
 
 ```emela
 pub effect State[S] {
@@ -362,13 +335,11 @@ fn main() {
 }
 ```
 
-- `State.run(initial, body)` は、初期値 initial の状態を供給して body を実行し、body の値と最後の状態の組を返します。
-- body の R から `State[S]` が消えるので、外からは純粋に見えます。`count_words` を呼んでも、`main` の R には何も残りません。
-- 状態の型 S は、body の R の `State[...]` から決まります。`State.run([], ...)` の `[]` の要素の型も、そこから推論します。
-- `update` に渡す関数は純粋です（操作の宣言の中の関数型なので）。そのため update は一息に実行され、[fiber](/guide/concurrency/) の間で共有しても途中の状態は見えません。
-- body が中断しても、状態は再開の後に引き継がれます。
+`State.run(initial, body)` は、初期値 initial の状態を供給して body を実行し、body の値と最後の状態の組を返します。body の R から `State[S]` が消えるので、外からは純粋に見えます。`count_words` を呼んでも、`main` の R には何も残りません。
 
-### 失敗したとき
+状態の型 S は body の R の `State[...]` から決まるので、`State.run([], ...)` の `[]` の要素の型も推論されます。`update` の一息での実行や、中断をまたぐときの扱いは [State・Fiber・Deferred](/std/state-fiber/) にあります。
+
+### body が失敗したとき
 
 body が失敗すると、状態を捨ててエラーだけが伝わります。失敗の時点の状態も欲しいときは、body の中で escape して値に変えます。
 
@@ -437,7 +408,7 @@ fn main() {
 
 ### State に依存するハンドラ
 
-状態を使うハンドラは、State に依存するハンドラとして書きます。同梱のテスト用ハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）はこの形です。
+状態を使うハンドラは State に依存するハンドラとして書きます。同梱のテスト用ハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）はこの形です。
 
 ```emela check
 import Std.State.{State}
@@ -470,7 +441,7 @@ fn main() {
 
 `State.run` が外側、`with RecordingLogger` が内側です。RecordingLogger の依存 `State[List[String]]` を、外の `State.run` が満たします。テストでの使い方は[テスト](/guide/testing/)で扱います。
 
-## 能力の持ち出しの禁止
+## 能力を with の外へ持ち出さない
 
 能力の値と、それを捕まえたクロージャは、供給元の with の外へ出せません。外へ出たクロージャを呼ぶと、release 済みのハンドラを使うことになるためです。
 
@@ -517,6 +488,4 @@ defect: handler FileLogger was used after release
 0.20 と 0.21 では、この検査を実行時に行います。release 済みのハンドラの操作を呼ぶと `handler <名前> was used after release` の defect になります。この検査が掛かるのは、フィールド、init、release のどれかを持つハンドラだけです。状態を持たないハンドラは、with の外へ持ち出しても動きます。
 :::
 
-- 能力の値そのものを返す、引数に渡す、データに入れるのは、今も静的に止まります（E0408〜E0410。[エフェクトとハンドラ](/guide/effects/)）。
-- with の中で使い終わるクロージャ（`List.map(names, fn(n) { log.info(n) })`）は問題ありません。
-- Scope の能力、fiber のハンドル、Deferred の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。
+能力の値そのものを返す、引数に渡す、データに入れるのは、今もコンパイル時に止まります（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, fn(n) { log.info(n) })`）は問題ありません。Scope の能力、fiber のハンドル、Deferred の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。

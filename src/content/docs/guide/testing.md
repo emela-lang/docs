@@ -65,25 +65,11 @@ test result: ok. 2 passed; 0 failed; 0 filtered out
 
 `greet` はテストのことを知りません。本番では with に本物のハンドラを、テストでは FakeUsers と TestConsole を書きます。
 
-## @test
+## @test と assert
 
-- `@test` を付けられるのは、引数のない fn です（引数があれば E0226）。
-- どのファイルにも書けます。実装と同じファイルに書けば、非公開の関数をそのままテストできます。
-- テスト関数は通常のビルドでは取り除かれます。そのため、テスト関数はテスト関数の中からしか参照できません（E0227）。値としての参照も同じです。テスト関数どうしは参照できます。
+`@test` は引数のない fn に付けます。どのファイルにも書けます。実装と同じファイルに書けば、非公開の関数をそのままテストできます。テスト関数は通常のビルドでは取り除かれるので、呼べるのはほかのテスト関数の中からだけです。
 
-```emela check=error
-@test
-fn sample() { assert 1 + 1 == 2 }
-
-fn main() {
-  sample()
-  # error[E0227]: test function `sample` can only be used from test functions
-}
-```
-
-## assert
-
-`assert 式` は、式が False のとき defect になります。式の型は Bool で、assert 全体の型は `()` です。
+`assert 式` は、式が False のとき defect になります。
 
 ```emela check
 error NotFound(id: Int)
@@ -159,18 +145,13 @@ $ echo $?
 1
 ```
 
-- 失敗のメッセージは `assertion failed: <式の字面>` です。比較のときは、続けて両辺の値を dbg と同じ表示で出します（`left:` と `right:`）。
-- 比較の assert は、両辺を左から1回ずつ評価します。
-- assert はキーワードで、コンパイラが式の形を見ます。`assert_eq` のような関数を使い分ける必要はありません。
-- assert はテスト関数の外でも使えます。通常のビルドでも取り除かれず、`main` の中で失敗すれば defect（終了コード 101）です。
+失敗のメッセージは `assertion failed: <式の字面>` で、比較のときは続けて両辺の値（`left:` と `right:`）を出します。assert はキーワードで、コンパイラが式の形を見ます。`assert_eq` のような関数を使い分ける必要はありません。テスト関数の外でも使え、`main` の中で失敗すれば defect（終了コード 101）です。
 
-:::caution[0.21 で入る予定]
-仕様では、両辺の型が Show を満たさないときは値を出しません。Trait の検査は 0.21 で入るので、今は全部の型で値を出します。
-:::
+テスト関数の中で処理されなかったエラー（上の `find_bob`）と defect（上の `crashes`）は、そのテストの失敗として報告され、ほかのテストは続けて実行されます。失敗することを確かめるときは、最初の例の `greet_fails_for_unknown_id` のように escape で値に変えて assert します。
 
 ## ハンドラを差し替える
 
-テストで使うハンドラは、普通のハンドラと同じように書きます。上の FakeUsers がそれです。同梱のエフェクトには、状態を State に置くテスト用のハンドラがあります。`State.run` で最初の状態を渡し、終わった後の状態を見て確かめます。
+テストで使うハンドラは普通のハンドラと同じように書きます。上の FakeUsers がそれです。同梱のエフェクトには、状態を State に置くテスト用のハンドラがあります。`State.run` で最初の状態を渡し、終わった後の状態を見て確かめます。
 
 | ハンドラ | 状態 | 説明 |
 |---|---|---|
@@ -179,7 +160,7 @@ $ echo $?
 | `TestFileSystem` | `State[TestFiles]` | ファイルとディレクトリを状態に置く |
 | `TestHttp` | `State[TestServer]` | `respond` の関数が応答を返し、送った要求を `sent` に貯める |
 
-使い方と細かい規則は [Platform](/std/platform/)、[FileSystem](/std/file-system/)、[Http](/std/http/) にあります。State そのものは [状態と資源](/guide/resources/) で扱います。
+使い方は [Platform](/std/platform/)、[FileSystem](/std/file-system/)、[Http](/std/http/) にあります。State そのものは [状態と資源](/guide/resources/) で扱います。
 
 TestClock の `sleep` は、どの fiber も先に進めなくなったとき、一番早く起きる予定の時刻まで時刻を進めます。fiber を使うコードも、実際の時計と同じ順で、待たずにテストできます。
 
@@ -209,9 +190,7 @@ fn main() { () }
 
 複数の State を重ねるときは `State.run` を入れ子にします。`with Platform, TestClock { ... }` のように、layer の後ろに書いたハンドラで一部だけを置き換えることもできます。
 
-## テスト関数の制約
-
-- テスト関数の R は、Async を除いて空でなければなりません。Async はテストランナーが供給するので、`sleep` や fiber は使えます。ほかのエフェクトは with で供給します。
+テスト関数の中で使うエフェクトは、Async を除いてすべて with で供給します。Async はテストランナーが供給するので、`sleep` や fiber はそのまま使えます。
 
 ```emela check=error
 import Std.Console.{Console}
@@ -219,53 +198,13 @@ import Std.Console.{Console}
 @test
 fn prints() {
   (use Console).print_line("hi")
-  # error[E0402]: effect `Console` is not provided in test function `prints`
 }
 
 fn main() { () }
 ```
 
-- テスト関数の E は空でなくてかまいません。処理されなかったエラーは、そのテストの失敗として報告されます（上の `find_bob`）。失敗することを確かめるときは、escape で値に変えて assert します。
-- defect もそのテストの失敗です。他のテストは続けて実行されます。
-- 中断したまま resume されずに終わったテストは、`interrupted` の失敗として報告されます。
-
-```emela check
-effect Ask {
-  suspend fn ask() -> Int
-}
-
-handler Silent implements Ask {
-  suspend fn ask(resume) { () }
-}
-
-fn main() { () }
-
-@test
-fn never_answered() {
-  with Silent {
-    assert (use Ask).ask() == 1
-  }
-}
-
-@test
-fn after() { assert True }
-```
-
-```console
-$ emela test main.emel
-running 2 tests
-test never_answered ... FAILED
-test after ... ok
-
-failures:
-
----- never_answered ----
-interrupted
-
-failures:
-    never_answered
-
-test result: FAILED. 1 passed; 1 failed; 0 filtered out
+```text
+error: effect `Console` is not provided in test function `prints`
 ```
 
 ## emela test
@@ -274,12 +213,7 @@ test result: FAILED. 1 passed; 1 failed; 0 filtered out
 emela test [パス] [フィルタ]
 ```
 
-- パスはエントリのファイルかプロジェクトのディレクトリで、省くと `.` です。
-- 検査を通ったプログラムのテスト関数を1つずつ実行し、結果を標準出力に出します。テストの中で出力したものも、その間に出ます。
-- フィルタを渡すと、名前に部分一致するテストだけを実行します。大文字と小文字は区別します。外したテストの数は `filtered out` に出ます。
-- 1つでも失敗すれば終了コード 1、なければ 0 です。テストが0個でも 0 です。
-- 単独ファイルでは、エントリから import でたどれるモジュールのテストだけを実行します。
-- 出力は `target/emela/test` に書くので、通常のビルドの出力を上書きしません。`--target c` でも実行できます。
+パスはエントリのファイルかプロジェクトのディレクトリで、省くと `.` です。フィルタを渡すと、名前に部分一致するテストだけを実行します。1つでも失敗すれば終了コード 1、なければ 0 です（テストが0個でも 0 です）。
 
 テストの名前は、エントリのモジュールのものは関数名だけ、ほかのモジュールのものはモジュール名を前に付けます。`src/main.emel` と `src/text/slug.emel` のプロジェクトでは次のようになります。
 
