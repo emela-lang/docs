@@ -5,10 +5,10 @@ import starlight from '@astrojs/starlight';
 import starlightCatppuccin from "@catppuccin/starlight";
 import { rehypeBaseLinks } from './src/rehype/base-links.mjs';
 
-// GitHub Pages のプロジェクトサイトとして https://emela-lang.github.io/docs/ に
-// 配信する。`base` を付けると内部リンクや静的アセットはこのサブパス配下になる。
-const SITE = 'https://emela-lang.github.io';
-const BASE = '/docs';
+// GitHub Pages のカスタムドメイン https://docs.emela.dev/ のルートに配信する。
+// サブパスに戻すときは BASE を変える（内部リンクと静的アセットがその配下になる）。
+const SITE = 'https://docs.emela.dev';
+const BASE = '/';
 
 // Emela 用のシンタックスハイライト定義（TextMate grammar）を読み込む。
 // Starlight に内蔵された Expressive Code / Shiki にカスタム言語として登録する。

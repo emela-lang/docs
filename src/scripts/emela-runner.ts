@@ -20,7 +20,7 @@ export interface RunResult {
 }
 
 // Resolve under Astro's configured base so the Playground works both at the
-// site root in dev and under the /docs/ subpath on GitHub Pages. BASE_URL may
+// site root in dev and under `base` when one is configured. BASE_URL may
 // or may not carry a trailing slash depending on config, so strip any and join
 // with exactly one.
 const WORKER_URL = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/wasm/emela/emela-worker.js`;
