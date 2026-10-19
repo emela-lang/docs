@@ -127,6 +127,7 @@ export default defineConfig({
 					items: [
 						{ label: '字句と予約語', slug: 'reference/lexical' },
 						{ label: '文法', slug: 'reference/grammar' },
+						{ label: 'モジュールと名前の解決', slug: 'reference/modules' },
 						{ label: '型と効果の体系', slug: 'reference/type-system' },
 						{ label: '実行時の意味', slug: 'reference/semantics' },
 						{ label: 'ターゲット', slug: 'reference/targets' },
