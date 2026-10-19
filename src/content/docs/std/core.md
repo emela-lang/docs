@@ -3,7 +3,7 @@ title: Prelude と core
 description: Prelude の型と関数、core のモジュール Int、Int64、Float、String、List、Option の全関数
 ---
 
-Prelude と core は、import なしで使える標準ライブラリです。Prelude の名前は修飾なしで、core のモジュールの関数は `List.map` のようにモジュール名で修飾して呼びます。どれも純粋で、ホストに触れません。
+Prelude と core は import なしで使える標準ライブラリです。Prelude の名前は修飾なしで、core のモジュールの関数は `List.map` のようにモジュール名で修飾して呼びます。どれも純粋で、ホストに触れません。
 
 ```emela check
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
 
 ## Prelude
 
-Prelude の名前は、どのモジュールからも import なしで見えます。
+Prelude の名前はどのモジュールからも import なしで見えます。
 
 | 分類 | 名前 |
 |---|---|
@@ -41,8 +41,7 @@ pub enum Ordering { Less, Equal, Greater }
 | `dbg` | `dbg[A: Show](value: A) -> A` | 値の表示を標準エラーに1行出し、値をそのまま返す |
 | `ParseError` | `error ParseError(input: String)` | `parse` の入力の形が正しくない。`input` は入力の全体 |
 
-- `dbg` の出力は副作用ですが、デバッグ用の例外として R に載せず、純粋な関数として扱います。式の途中に挟めます（`xs |> dbg |> List.length`）。
-- defect は型に出ない異常終了です。`emela run` では終了コード 101 になります。[エラー](/guide/errors/) を見てください。
+`dbg` の出力は副作用ですが、デバッグ用の例外として `use` に出さず、純粋な関数として扱います。そのため式の途中に挟めます（`xs |> dbg |> List.length`）。defect は型に出ない異常終了で、`emela run` では終了コード 101 になります（[エラー](/guide/errors/)）。
 
 :::caution[0.21 で入る予定]
 `trait` と `impl` と `derive`、Trait の制約の検査は 0.21 で入ります。0.20 では、`==` や `<`、補間、`dbg` の表示は、Trait を見ずに構造のまま全部の型で動きます。関数の値だけは表示できません。
@@ -65,8 +64,7 @@ pub enum Ordering { Less, Equal, Greater }
 | `shift_right` | `shift_right(n: Int, by: Int) -> Int` | 算術右シフト（上位を符号で埋める）。`by` が 32 以上なら 0 か -1 |
 | `shift_right_unsigned` | `shift_right_unsigned(n: Int, by: Int) -> Int` | 論理右シフト（上位を 0 で埋める）。`by` が 32 以上なら 0 |
 
-- シフト量が負なら defect です。JS のように幅で剰余を取ることはしません。
-- ビット演算の演算子はありません。関数をパイプでつなぎます（`flags |> Int.bit_and(MASK)`）。
+シフト量が負なら defect です。ビット演算の演算子はなく、関数をパイプでつなぎます（`flags |> Int.bit_and(MASK)`）。
 
 ```emela check
 const READ: Int = 4
@@ -260,7 +258,7 @@ fn main() {
 
 ## Bool
 
-`Bool` は Prelude の enum で、0.20 には `Bool.xxx` と呼べる関数のモジュールはありません（`Bool.to_string` のように書くと E0217 になります）。否定は `!`、論理積と論理和は `&&` と `||` で、どちらも右辺を必要なときだけ評価します。文字列にするときは補間（`"#{flag}"`）を使います。
+`Bool` は Prelude の enum で、0.20 には `Bool.to_string` のように呼べる関数のモジュールがありません。否定は `!`、論理積と論理和は `&&` と `||` で、どちらも右辺を必要なときだけ評価します。文字列にするときは補間（`"#{flag}"`）を使います。
 
 ```emela check
 fn main() {

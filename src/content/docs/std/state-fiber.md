@@ -1,9 +1,9 @@
 ---
 title: State・Fiber・Deferred
-description: std の effect 層 Std.State、Std.Fiber、Std.Cause、Std.Deferred のリファレンス
+description: 可変な状態と並行性を受け持つ Std.State、Std.Fiber、Std.Cause、Std.Deferred のリファレンス
 ---
 
-std の effect 層は、可変な状態（`Std.State`）と並行性（`Std.Fiber`、`Std.Cause`、`Std.Deferred`）を受け持ちます。このページは型と関数の一覧です。使い方の説明は [リソース](/guide/resources/) と [並行性](/guide/concurrency/) にあります。
+可変な状態（`Std.State`）と並行性（`Std.Fiber`、`Std.Cause`、`Std.Deferred`）の型と関数の一覧です。使い方の説明は [リソース](/guide/resources/) と [並行性](/guide/concurrency/) にあります。
 
 ## Std.State
 
@@ -24,9 +24,8 @@ pub effect State[S] {
 | `update` | `fn update(f: fn(S) -> S) -> ()` | 状態に `f` を適用する |
 | `run` | `run[S, A, E, R](initial: S, body: fn() -> A fails E use { State[S], R }) -> (A, S) fails E use R` | 初期値 `initial` の状態で `body` を実行し、`body` の値と最後の状態の組を返す |
 
-- `body` の R から `State[S]` が消えるので、`State.run` の呼び出しは外からは純粋に見えます。
-- `body` が失敗したときは、状態を捨ててエラーだけが伝わります。失敗の時点の状態も欲しいときは、`body` の中で escape して値に変えます。
-- `body` が中断しても、状態は再開の後に引き継がれます。
+`body` の `use` から `State[S]` が消えるので、`State.run` の呼び出しは外からは純粋に見えます。`body` が失敗したときは状態を捨ててエラーだけが伝わります。失敗の時点の状態も欲しいときは、`body` の中で escape して値に変えます。`body` が中断しても、状態は再開の後に引き継がれます。
+
 - `update` の `f` は純粋なので、`update` は一息に実行されます。fiber の間で共有しても途中の状態は見えません。
 - 同じ型の状態を2つ持つときは、別の型で包みます（`State[Hits]` と `State[Misses]`）。
 - `run` はランタイムが供給する組み込みのハンドラです。
@@ -47,7 +46,7 @@ fn main() {
 }
 ```
 
-テスト用のハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）は、どれも状態を State に置きます。[Console・Clock・Random・Env](/std/platform/) を見てください。
+テスト用のハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）はどれも状態を State に置きます。[Console・Clock・Random・Env](/std/platform/) を見てください。
 
 ## Std.Fiber
 

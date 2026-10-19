@@ -3,7 +3,7 @@ title: FileSystem と Path
 description: テキストのファイルを読み書きする FileSystem エフェクトと、そのハンドラ、パスを組み立てる Std.Path
 ---
 
-`Std.FileSystem` は、ファイルとディレクトリをテキスト（UTF-8）で扱うエフェクトです。操作はどれも `suspend fn` で、操作ごとに起こりうるエラーだけを `fails` に書いているので、escape で受けたエラーは型から消えます。`Std.Path` は、パスの文字列を組み立てる純粋な関数を持ちます。
+`Std.FileSystem` はファイルとディレクトリをテキスト（UTF-8）で扱うエフェクトです。操作はどれも `suspend fn` で、操作ごとに起こりうるエラーだけを `fails` に書いているので、escape で受けたエラーは型から消えます。パスの文字列は `Std.Path` の純粋な関数で組み立てます。
 
 ```emela check
 import Std.Platform.{Platform}
@@ -81,9 +81,7 @@ pub effect FileSystem {
 | `create_directory(path)` | ディレクトリを、親もまとめて作る |
 | `remove(path)` | ファイルか空のディレクトリを消す |
 
-- 操作はすべて `suspend fn` です。同期の API にすると、読み書きの間すべての fiber が止まるためです。
-- FileSystem の R は Immediate でないので、外部関数のコールバックの中では使えません。コールバックからは [Deferred](/std/state-fiber/) で fiber に合図を送り、fiber の側でファイルを扱います。
-- バイナリは扱えません。Bytes の型がないので、後の版に回しています。
+操作をすべて `suspend fn` にしているのは、同期の API だと読み書きの間すべての fiber が止まるからです。そのため外部関数のコールバックの中では FileSystem を使えません。コールバックからは [Deferred](/std/state-fiber/) で fiber に合図を送り、fiber の側でファイルを扱います。Bytes の型がまだないので、バイナリは扱えません。
 
 ## エラー
 
@@ -97,9 +95,7 @@ pub effect FileSystem {
 | `InvalidText(path: String)` | UTF-8 として読めない |
 | `FileSystemFailure(path: String, message: String)` | それ以外のホストのエラー。`message` はホストの説明 |
 
-- どれも `pub error` なので、import して escape で受けられます（`import Std.FileSystem.{FileNotFound}`）。
-- エラーを種類ごとに分けているのは、escape で受けたものが E から消えるようにするためです。1つの error に種類のフィールドを持たせると、一部の値だけを受ける腕になり、E に残ってしまいます。escape の規則は [エラー](/guide/errors/) にあります。
-- 名前は、利用者が書く `NotFound` などとぶつからないように付けています。
+どれも `pub error` なので、import して escape で受けられます（`import Std.FileSystem.{FileNotFound}`）。種類ごとに別の error にしてあるので、escape で受けたものは `fails` から消えます。1つの error に種類のフィールドを持たせると、一部の値だけを受ける腕になって `fails` に残ります。名前に `File` などを付けているのは、自分で書く `NotFound` とぶつからないようにするためです。escape の規則は [エラー](/guide/errors/) にあります。
 
 ## 振る舞い
 
@@ -109,7 +105,7 @@ pub effect FileSystem {
 - `exists` と `is_directory` は失敗しません。権限で見えないときも False です。
 - `list_directory` はパスでなく名前だけを、名前の順（コードポイントの辞書順）に並べて返します。
 - UTF-8 として読めないファイルは、置換文字に置き換えずに InvalidText で失敗します。読んで書き戻したときに中身が壊れないようにするためです。先頭の BOM は取り除かずに残します。
-- 相対パスは、プロセスの現在のディレクトリから解きます。
+- 相対パスはプロセスの現在のディレクトリから解きます。
 - パスは String のままです。正規化（`..` の解決）、絶対パスへの変換、`~` の展開はしません。
 
 実際に SystemFileSystem で試すと、次のようになります。
@@ -177,15 +173,14 @@ True False False
 
 ## SystemFileSystem
 
-`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、Platform に束ねられています。
+`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、Platform に入っています。
 
 | ターゲット | 実装 |
 |---|---|
 | JS | `node:fs/promises` |
 | C | POSIX の関数を外部関数の中で同期に呼び、その場で完了する（読み書きの間はほかの fiber も止まる） |
 
-- Async に依存し、状態を持ちません。
-- C では、U+0000 を含むファイルを C の文字列で渡せないので、読むと FileSystemFailure になります。FileSystemFailure の `message` の文言はターゲットで違います。
+Async に依存し、状態を持ちません。C では U+0000 を含むファイルを C の文字列で渡せないので、読むと FileSystemFailure になります。FileSystemFailure の `message` の文言はターゲットで違います。
 
 ## TestFileSystem と TestFiles
 
@@ -196,7 +191,7 @@ pub type TestFiles(files: List[(String, String)], directories: List[String])
 ```
 
 - `files` は、パスと中身の組をパスの順に並べたものです。書くと、この順を保って入ります。
-- ディレクトリは、`directories` にあるものと、`files` と `directories` にあるパスの祖先です。`a/b/c.txt` があれば `a` と `a/b` はディレクトリです。
+- ディレクトリは `directories` にあるものと、`files` と `directories` にあるパスの祖先です。`a/b/c.txt` があれば `a` と `a/b` はディレクトリです。
 - パスは文字列のまま比べます。`a/b` と `./a/b` は別のパスです。
 - エラーは SystemFileSystem と同じ規則で起こします。FileAccessDenied、InvalidText、FileSystemFailure は起こせないので、それを試すときは小さなハンドラを自分で書きます。
 
@@ -239,7 +234,7 @@ State と `State.run` は [State・Fiber・Deferred](/std/state-fiber/) に、�
 
 ## Std.Path
 
-`Std.Path` は、パスの文字列を組み立てる純粋な関数を持ちます（std の値の層）。ファイルシステムには触れません。`import Std.Path` の後に `Path.join(dir, "notes.txt")` と書きます。
+`Std.Path` はパスの文字列を組み立てる純粋な関数を持ち、ファイルシステムには触れません。`import Std.Path` の後に `Path.join(dir, "notes.txt")` と書きます。
 
 | 関数 | シグネチャ | 説明 |
 |---|---|---|
@@ -251,7 +246,6 @@ State と `State.run` は [State・Fiber・Deferred](/std/state-fiber/) に、�
 - 区切りは `/` だけを扱います。Node は Windows でも `/` を受け付けます。
 - 正規化しません。`..` は解決せず、絶対パスにもしません。
 - 末尾の `/` と、続けて書いた `/` は数えません。`a/b/` は `a/b` と同じです。
-- `join` の `b` が絶対パスなら `b` を返すのは、Rust の `Path::join` や Python と同じです（Node の `path.join` は単につなぎます）。
 
 ```emela check
 import Std.Path

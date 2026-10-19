@@ -17,9 +17,7 @@ $ emela --version
 emela 0.20.1
 ```
 
-- 最新のリリースを `$HOME/.emela/bin/emela` に置きます。
-- そのディレクトリが `PATH` になければ、スクリプトが最後に `add $HOME/.emela/bin to PATH to run emela directly` と知らせます。シェルの設定に足してください。
-- 入れ直すときも同じコマンドを流します。前の `emela` は上書きされます。
+最新のリリースが `$HOME/.emela/bin/emela` に入ります。そのディレクトリが `PATH` になければ、スクリプトが最後に `add $HOME/.emela/bin to PATH to run emela directly` と知らせます。シェルの設定に足してください。入れ直すときも同じコマンドで、前の `emela` は上書きされます。
 
 環境変数で、置き場所と版を変えられます。
 
@@ -43,8 +41,9 @@ curl -fsSL https://raw.githubusercontent.com/emela-lang/emela/main/install.sh \
 | `emela run`、`emela test`（JS ターゲット、既定） | Node.js 18 以降 |
 | `--target c` | C11 のコンパイラ（`cc`） |
 
-- JS ターゲットは、出力した JavaScript を Node.js で動かします。`PATH` の `node` を使い、環境変数 `EMELA_NODE` があればそちらを使います。Deno と Bun も、`node:` のモジュールと `fetch` を持つので対象に入ります。ブラウザは 0.20 の対象ではありません。
-- C ターゲットは、出力した C を `cc` でコンパイルして native の実行ファイルを作ります。別のコンパイラを使うときは `EMELA_CC` に指定します（`EMELA_CC=clang`）。対象は macOS（arm64）と Linux（x86_64）です。
+JS ターゲットは、出力した JavaScript を `PATH` の `node` で動かします。環境変数 `EMELA_NODE` があればそちらを使います。Deno と Bun も `node:` のモジュールと `fetch` を持つので対象に入りますが、ブラウザは 0.20 の対象ではありません。
+
+C ターゲットは、出力した C を `cc` でコンパイルして native の実行ファイルを作ります。別のコンパイラを使うときは `EMELA_CC=clang` のように指定します。対象は macOS（arm64）と Linux（x86_64）です。
 
 :::caution[C ターゲットはまだリリースに入っていません]
 `--target c` は main ブランチにあり、次のリリースで入ります。0.20.1 までのリリースの `emela` は JS ターゲットだけです。C ターゲットの今の制限は [実装の状況](/start/status/) にまとめています。
@@ -52,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/emela-lang/emela/main/install.sh \
 
 ## 確かめる
 
-入ったら、1行のプログラムを動かしてみます。
+1行のプログラムを動かしてみます。
 
 ```emela check
 fn main() {
@@ -69,4 +68,4 @@ $ emela run main.emel
 
 ## エディタ
 
-`emela lsp` が言語サーバーで、診断、hover（型と `fails`、`use`）、補完、定義へのジャンプ、改名、整形などを提供します。VS Code、Neovim、Vim、Sublime Text 向けの設定は [エディタと言語サーバー](/tools/editors/) にあります。
+`emela lsp` が言語サーバーです。診断、hover（型と `fails`、`use`）、補完、定義へのジャンプ、改名、整形などに対応します。VS Code、Neovim、Vim、Sublime Text 向けの設定は [エディタと言語サーバー](/tools/editors/) にあります。

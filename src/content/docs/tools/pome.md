@@ -3,7 +3,7 @@ title: プロジェクトと Pome
 description: Pome.toml とプロジェクトの決まり方、依存の書き方、version の選び方、Pome.lock、emela pome のコマンド
 ---
 
-Pome は、Emela の配布と依存の単位です。`Pome.toml` を置いたディレクトリが1つのプロジェクトで、そのまま1つの Pome になります。中央のレジストリは持たず、依存は Git のリポジトリから直接取ります。
+Pome は Emela の配布と依存の単位です。`Pome.toml` を置いたディレクトリが1つのプロジェクトで、そのまま1つの Pome になります。中央のレジストリは持たず、依存は Git のリポジトリから直接取ります。
 
 ```text
 greeter/
@@ -25,7 +25,7 @@ target = "js"
 ```
 
 :::caution[今の CLI で読むのは `[build].target` だけ]
-0.20 のコンパイラは `Pome.toml` があるかどうかと `[build].target` だけを見ます。`[pome]`、`[dependencies]`、`[replace]` は診断なしに無視され、依存を取ってくることも `Pome.lock` を書くこともしません。TOML として読めない `Pome.toml` も、今は何も言われません。空の `Pome.toml` でもプロジェクトになります。このページの依存の節は、仕様で決まった予定の形です。
+0.20 のコンパイラは `Pome.toml` があるかどうかと `[build].target` だけを見ます。`[pome]`、`[dependencies]`、`[replace]` は診断なしに無視され、依存を取ってくることも `Pome.lock` を書くこともしません。TOML として読めない `Pome.toml` も、今は何も言われません。空の `Pome.toml` でもプロジェクトになります。このページの依存の節は仕様で決まった予定の形です。
 :::
 
 ## プロジェクトの決まり方
@@ -33,7 +33,7 @@ target = "js"
 - `Pome.toml` を置いたディレクトリがプロジェクトで、ソースのルートは `<プロジェクト>/src` です。
 - `emela` コマンドに渡したパスを、シンボリックリンクを解いた絶対パスに直し、祖先を上にたどって最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。
 - ディレクトリを渡して `Pome.toml` が見つからなければエラーです。ファイルを渡して見つからなければ、単独のファイルとして扱います。
-- ファイルを渡して `Pome.toml` が見つかったのに、そのファイルが `src/` の外にあれば E0208 です。
+- ファイルを渡して `Pome.toml` が見つかったのに、そのファイルが `src/` の外にあればエラーです。
 - モジュール名はファイルのパスから決まります（`src/http/client.emel` は `Http.Client`）。詳しくは [モジュール](/guide/modules/) にあります。
 
 ### main.emel と lib.emel
@@ -60,7 +60,7 @@ fn says_hello() {
 ```
 
 :::caution[ライブラリだけのプロジェクト]
-今の CLI は、`main.emel` のないプロジェクトの `build` と `run` を E0209（エントリがない）で止め、`test` は内部の誤りで止まります。`check` は通ります。
+今の CLI は、`main.emel` のないプロジェクトの `build` と `run` をエントリがないというエラーで止め、`test` は内部の誤りで止まります。`check` は通ります。
 :::
 
 ## Pome.toml
@@ -92,7 +92,7 @@ target = "c"                                     # 既定のビルド対象（�
 | `emela` | 必須 | この Pome を作るのに要るコンパイラの最小の版 |
 | `module` | 省略可 | 依存されたときのルート名 |
 
-- `emela` より新しいコンパイラを求める依存はエラーです。古い minor 向けの依存は、警告を出して作ってみて、依存の中でエラーが出たら対象の版を注記に出します。
+- `emela` より新しいコンパイラを求める依存はエラーです。古い minor 向けの依存は警告を出して作ってみて、依存の中でエラーが出たら対象の版を注記に出します。
 - モジュールごとに言語の版を切り替える仕組み（エディション）はありません。
 
 ### [dependencies]
@@ -122,7 +122,7 @@ target = "c"                                     # 既定のビルド対象（�
 
 - コマンドの `--target` が優先します。
 - `[replace]` と同じく、その Pome をビルドするときだけ効き、依存されたときは無視します。
-- 知らないターゲットは E0232 です。
+- 知らないターゲットはエラーです。
 
 ```console
 $ emela build
@@ -133,33 +133,33 @@ error[E0232]: unknown target `wasm` in `[build].target`
 1 error
 ```
 
-これは今の CLI でも動きます。ただし `check` は `[build].target` を見ないので、E0232 は `build`、`run`、`test` で出ます。
+この検査は今の CLI でも動きます。ただし `check` は `[build].target` を見ないので、このエラーは `build`、`run`、`test` で出ます。
 
 ## 依存のモジュール
 
-- 依存した Pome のモジュールは、その Pome のルート名の下に見えます。`src/lib.emel` がルートのモジュール（`Quince`）、`src/router.emel` が `Quince.Router` です。
-- ルート名の既定は、source path の最後の区切りをモジュール名の規則で PascalCase にしたものです。`-` は `_` と同じに扱います（`json-codec` は `JsonCodec`）。
+- 依存した Pome のモジュールはその Pome のルート名の下に見えます。`src/lib.emel` がルートのモジュール（`Quince`）、`src/router.emel` が `Quince.Router` です。
+- ルート名の既定は source path の最後の区切りをモジュール名の規則で PascalCase にしたものです。`-` は `_` と同じに扱います（`json-codec` は `JsonCodec`）。
 - ルート名は、作者が `[pome].module` で変えられ、依存する側が `[dependencies]` の表の `module` で付け替えられます。
-- `Std`、core のモジュール名（`List`、`String` など）、`Prelude` はルート名に使えません。自分のモジュールやほかの依存のルート名とぶつかれば E0204 で、依存する側で付け替えます。
+- `Std`、core のモジュール名（`List`、`String` など）、`Prelude` はルート名に使えません。自分のモジュールやほかの依存のルート名とぶつかればエラーで、依存する側で付け替えます。
 - 依存の依存（推移的な依存）は見えません。import できるのは、自分の `[dependencies]` に書いた Pome だけです。
-- Pome の中のモジュールは、すべて依存する側から見えます。
+- Pome の中のモジュールはすべて依存する側から見えます。
 - 依存として使われる Pome は `@external` を持てません。ホストへの道は std の platform 層だけにして、どの Pome もすべてのターゲットで同じ意味で動くようにするためです。
 
 ## version の選び方
 
-- version は、リポジトリの git の tag（semver に `v` を付けたもの。`v0.3.2`）で表します。公開は tag を push するだけです。
-- 使う version は、依存の木の中でその Pome について書かれた要求のうち、最大のものです（Minimal Version Selection、Go のモジュールと同じ方式）。
+- version はリポジトリの git の tag（semver に `v` を付けたもの。`v0.3.2`）で表します。公開は tag を push するだけです。
+- 使う version は依存の木の中でその Pome について書かれた要求のうち、最大のものです（Minimal Version Selection）。
 - 新しい tag が出ても、誰かが要求を上げない限り、使う version は変わりません。
 - 1回のビルドで、1つの Pome は1つの version だけを使います。
-- v2 以上の major は、同じ source path でも別の Pome とみなします。v0 と v1 は同じ Pome で、互換は作者の責任です。
+- v2 以上の major は同じ source path でも別の Pome とみなします。v0 と v1 は同じ Pome で、互換は作者の責任です。
 - version の選び方は `[pome].emela` を見ません。
 
 ## 取得と Pome.lock
 
 - 依存はマシンの `git` で取ります。tag の一覧は `git ls-remote --tags`、取得は tag の浅い clone です。
 - 取ったものは `~/.emela/pomes/<source path>@<version>/` に展開し、読み取り専用で置きます。場所は環境変数 `EMELA_POME_CACHE` で変えられます。
-- `Pome.lock` には、依存ごとに source path、version、commit、中身のハッシュ（`.git` を除いたファイルをパスの順に並べ、パスと中身から計算した sha256）を書きます。
-- `Pome.lock` は `emela pome` のコマンドが書き、手では編集しません。アプリケーション（`main.emel` を持つ Pome）は lock を持ち、ライブラリは持ってもかまいません。依存する側は、依存の lock を使いません。
+- `Pome.lock` には依存ごとに source path、version、commit、中身のハッシュ（`.git` を除いたファイルをパスの順に並べ、パスと中身から計算した sha256）を書きます。
+- `Pome.lock` は `emela pome` のコマンドが書き、手では編集しません。アプリケーション（`main.emel` を持つ Pome）は lock を持ち、ライブラリは持ってもかまいません。依存する側は依存の lock を使いません。
 - `check`、`build`、`run`、`test` は、lock にある依存がキャッシュになければ取ってきて、ハッシュを確かめてから使います。lock は書き換えません。
 - `Pome.toml` にあって lock にない依存はエラーで、`emela pome install` を案内します。ハッシュが合わなければ、すり替えの疑いとしてエラーにします。
 - 言語サーバーはネットワークに出ず、足りない依存を診断で知らせます。

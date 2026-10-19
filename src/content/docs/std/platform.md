@@ -48,7 +48,7 @@ pub effect Console {
 | `print_line(text: String) -> ()` | 標準出力に、改行を付けて書く |
 | `print_error_line(text: String) -> ()` | 標準エラーに、改行を付けて書く |
 
-- どちらも失敗しません。改行なしで書く操作と、入力を読む操作はまだありません。
+どちらも失敗しません。改行なしで書く操作と、入力を読む操作はまだありません。
 
 | ハンドラ | 依存 | 説明 |
 |---|---|---|
@@ -97,19 +97,15 @@ pub effect Clock {
 | `SystemClock` | `Async` | `sleep` はホストのタイマー（JS の `setTimeout`、C ではランタイムのイベントループ）を待つ。待っている fiber が中断されるとタイマーを消す。`now` は Unix エポックからのミリ秒（JS の `Date.now()`） |
 | `TestClock` | `Async`、`State[Instant]` | 状態に置いた仮の時刻で動く |
 
-- `sleep` は `suspend fn` なので、`main` やテスト関数では Async が供給されています。中断の仕組みは [中断と再開](/guide/suspend/) にあります。
-- SystemClock も TestClock も Async に依存するので、Immediate を求める場所（外部関数のコールバックの中など）では使えません。
+`main` やテスト関数では Async が供給されているので、そのまま `sleep` を呼べます。SystemClock も TestClock も Async に依存するので、外部関数のコールバックの中のような Immediate を求める場所では使えません。中断の仕組みは [中断と再開](/guide/suspend/) にあります。
 
 ### TestClock の仮の時刻
 
-TestClock は、状態の `Instant` を現在の時刻として使います。`State.run` に最初の時刻を渡します。
+TestClock は状態の `Instant` を現在の時刻として使い、`now` はその時刻を返します。最初の時刻は `State.run` に渡します。
 
-- `now` は状態の時刻を返します。
-- `sleep(ms)` は本当に待ちます。どの fiber も先に進めず、ホストの処理も残っていないときに、一番早く起きる予定の時刻まで状態の時刻を進めて、その fiber を起こします。
-- 起きる順は予定の時刻の早い順で、同じ時刻なら `sleep` を呼んだ順です。
-- fiber が1本なら、`sleep` で時刻が `ms` だけ進んですぐ続くのと同じ結果になります。実際の時間は待ちません。
+`sleep(ms)` を呼んだ fiber は止まります。どの fiber も先に進めず、ホストの処理も残っていなくなると、一番早く起きる予定の時刻まで状態の時刻を進めて、その fiber を起こします。同じ時刻なら `sleep` を呼んだ順です。fiber が1本なら、時刻が `ms` だけ進んですぐ続くのと同じで、実際の時間は待ちません。
 
-複数の fiber が時刻の順に起きるので、`Fiber.timeout` や `Fiber.race` を実際の時計と同じ順でテストできます。ZIO の TestClock と同じ考え方です。
+複数の fiber が時刻の順に起きるので、`Fiber.timeout` や `Fiber.race` を実際の時計と同じ順でテストできます。
 
 ```emela check
 import Std.Clock.{Clock, TestClock}
@@ -159,10 +155,7 @@ fn times_out_without_waiting() {
 
 `Std.Instant` はある時点を、`Std.Duration` は時間の長さを表す値の型です。どちらも中身がミリ秒の Int64 の opaque な型で、構成子やフィールドには触れず、モジュールの関数で作って取り出します。
 
-- Instant は Unix エポック（1970-01-01T00:00:00Z）からのミリ秒です。閏秒は数えません。
-- Duration はミリ秒の長さで、負の値も表します。
-- 単位の変換と足し算のあふれは、Int64 の規則で巻き戻ります。
-- 現在の時点は `Std.Instant` からは取れません。Clock の `now` が返します。
+Instant は Unix エポック（1970-01-01T00:00:00Z）からのミリ秒で、閏秒は数えません。Duration は負の長さも表します。単位の変換と足し算のあふれは Int64 の規則で巻き戻ります。現在の時点は `Std.Instant` からは取れず、Clock の `now` が返します。
 
 ### Std.Instant
 
@@ -229,9 +222,9 @@ pub effect Random {
 |---|---|---|
 | `SystemRandom` | なし | ホストの暗号論的に安全な乱数源（JS の `crypto.getRandomValues`、C の `arc4random_buf` か `getrandom`）。状態を持たない |
 
-- どちらの操作も失敗しません。
-- 範囲を指定した値は、操作の上に書くふつうの関数で作ります。種を渡せる擬似乱数は、純粋な値と関数として別に用意する予定で、0.20 の std にはありません。
-- テスト用のハンドラは同梱していません。決まった値を返すハンドラを自分で書きます。
+どちらの操作も失敗しません。範囲を指定した値は操作の上に書くふつうの関数で作ります。種を渡せる擬似乱数は純粋な値と関数として別に用意する予定で、0.20 の std にはありません。
+
+テスト用のハンドラは同梱していません。決まった値を返すハンドラを自分で書きます。
 
 ```emela check
 import Std.Random.{Random}
@@ -272,8 +265,7 @@ pub effect Env {
 |---|---|---|
 | `SystemEnv` | なし | ホストの環境変数（JS の `process.env`、C の `getenv`）。状態を持たない |
 
-- `get` は失敗しません。全部の変数を返す操作はまだありません。
-- テスト用のハンドラは同梱していません。Random と同じく自分で書きます。
+`get` は失敗しません。全部の変数を返す操作はまだありません。テスト用のハンドラは Random と同じく自分で書きます。
 
 ```emela check
 import Std.Env.{Env}
@@ -315,8 +307,9 @@ pub layer Platform {
 }
 ```
 
-- Platform は Async に依存します（SystemClock、SystemFileSystem、SystemHttp が依存するため）。`main` では Async が供給されているので、そのまま `with Platform { ... }` と書けます。
-- 一部を差し替えるときは、差し替えるハンドラを後ろに並べます。後に書いたハンドラが、同じエフェクトのハンドラを置き換えます。
+SystemClock、SystemFileSystem、SystemHttp が Async に依存するので、Platform も Async に依存します。`main` では Async が供給されているので、そのまま `with Platform { ... }` と書けます。
+
+一部を差し替えるときは、差し替えるハンドラを後ろに並べます。後に書いたハンドラが同じエフェクトのハンドラを置き換えます。
 
 ```emela check
 import Std.Platform.{Platform}

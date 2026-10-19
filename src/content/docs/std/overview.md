@@ -1,9 +1,9 @@
 ---
 title: 標準ライブラリの構成
-description: Prelude、core、std の区分と、std の4つの層、ハンドラの名前、API の約束
+description: Prelude、core、std の区分と、ハンドラの名前、API の約束
 ---
 
-Emela の標準ライブラリは、コンパイラに同梱された `.emel` のソースです。import なしで使える小さな core と、`Std` の下に置いた std に分かれていて、ホストに触れる機能はすべて std のエフェクトとして提供されます。
+Emela の標準ライブラリはコンパイラに同梱された `.emel` のソースです。import なしで使える小さな core と、`Std` の下に置いた std に分かれていて、ホストに触れる機能はすべて std のエフェクトとして提供されます。
 
 ```emela check
 import Std.Platform.{Platform}
@@ -36,26 +36,9 @@ Hello, emela!
 | core | `List`、`String` など短い名前 | import なしで `List.map` と修飾して呼ぶ | コンパイラが構文として知っている型のモジュール（`Int`、`Int64`、`Float`、`String`、`List`、`Option`） |
 | std | `Std.Console` など `Std` の下 | import して使う | それ以外のすべて |
 
-- Prelude には純粋なものしか入っていません。Prelude と core だけで書いた関数は純粋です。
-- core はコンパイラの組み込み関数の表と一対一で対応するので、コンパイラと同じ版でしか動きません。できるだけ小さく保ちます。
-- std は太らせてよい側です。ただし入れるのは、ほとんどのプログラムが使い、形が1つに決まるもの（ホストの境界、並行と状態、基本の値の型、テストの部品など）に限ります。
+Prelude には純粋なものしか入っておらず、Prelude と core だけで書いた関数は純粋です。core はコンパイラの組み込み関数と一対一で対応していて、小さく保ちます。std に入れるのは、ほとんどのプログラムが使い、形が1つに決まるもの（ホストの境界、並行と状態、基本の値の型、テストの部品など）です。
 
-各モジュールの関数は [core](/std/core/) と、std の各ページにあります。
-
-## std の4つの層
-
-std のモジュールは、性質で4つの層に分かれます。
-
-| 層 | 性質 | モジュール |
-|---|---|---|
-| 値 | 純粋で、ホストに依存しない | `Std.Instant`、`Std.Duration`、`Std.Path` |
-| effect | 並行性と状態 | `Std.State`、`Std.Fiber`、`Std.Cause`、`Std.Deferred` |
-| platform | エフェクトの宣言とホストのハンドラ | `Std.Console`、`Std.Clock`、`Std.Random`、`Std.Env`、`Std.FileSystem`、`Std.Http`、`Std.Platform` |
-| test | テスト用に差し替えるハンドラ | `TestConsole`、`TestClock`、`TestFileSystem`、`TestHttp`（それぞれのエフェクトと同じモジュール） |
-
-- 値の層と、純粋な Emela で書いた platform のハンドラは、コンパイラから切り離して配れる部分です。
-- effect の層（State、Fiber）は `@intrinsic` を持ち、ランタイムと同じ版でしか動きません。
-- test の層のハンドラは状態を [State](/std/state-fiber/) に置くので、`State.run` の中で使います。
+## どのページに何があるか
 
 | ページ | 扱うモジュール |
 |---|---|
@@ -67,13 +50,13 @@ std のモジュールは、性質で4つの層に分かれます。
 
 ## なぜ Std の下に置くのか
 
-ソースのルート直下の `list.emel` や `string.emel` のように、core のモジュールと同じ名前のファイルは予約名で、置けません（E0203）。std のモジュールまで短い名前にすると、std にモジュールを足すたびに、利用者のファイル名が1つずつ予約名になっていきます。
+ソースのルート直下に、`list.emel` や `string.emel` のような core のモジュールと同じ名前のファイルは置けません。std のモジュールまで短い名前にすると、std にモジュールを足すたびに、利用者のファイル名が1つずつ予約名になっていきます。
 
 std を `Std` の下に置いたので、予約名は `std.emel` と `std/` だけで済みます。自分のプロジェクトに `http.emel` を書いても `Std.Http` とはぶつかりません。モジュール名の決まりは [モジュール](/guide/modules/) にあります。
 
 ## ハンドラの名前
 
-platform のエフェクトには、ホストを使う本物のハンドラと、テスト用のハンドラがあります。名前は前に付ける語で分け、どちらもエフェクトと同じモジュールに置きます。
+platform のエフェクトにはホストを使う本物のハンドラと、テスト用のハンドラがあります。名前は前に付ける語で分け、どちらもエフェクトと同じモジュールに置きます。
 
 | エフェクト | 本物のハンドラ | テスト用のハンドラ |
 |---|---|---|
@@ -88,8 +71,7 @@ platform のエフェクトには、ホストを使う本物のハンドラと�
 import Std.Clock.{Clock, SystemClock, TestClock}
 ```
 
-- ハンドラの名前に JS や C のようなターゲットの名前は出てきません。1つのハンドラが外部関数の `@external` をターゲットごとに並べて持ち、ビルドするターゲットで使う実装が決まります。
-- そのターゲットの実装がない操作を呼ぶと E0412 になります。0.20 では、Http に C の実装がありません。呼ばない操作は検査しないので、`with Platform` は C でも使えます。
+ハンドラの名前にターゲットの名前は入りません。1つのハンドラがターゲットごとの実装を持ち、ビルドするターゲットで使う実装が決まります。0.20 では Http に C の実装がなく、C で `send` を呼ぶとコンパイルのエラーになります。呼ばなければ検査しないので、`with Platform` は C でも使えます。
 
 ## Platform
 
@@ -106,13 +88,13 @@ pub layer Platform {
 }
 ```
 
-`main` はふつう `with Platform { ... }` と書きます。一部だけ差し替えるときは、差し替えるハンドラを後ろに並べます（`with Platform, TestClock { ... }`）。後に書いたハンドラが、同じエフェクトのハンドラを置き換えます。
+`main` はふつう `with Platform { ... }` と書きます。一部だけ差し替えるときは、差し替えるハンドラを後ろに並べます（`with Platform, TestClock { ... }`）。後に書いたハンドラが同じエフェクトのハンドラを置き換えます。
 
-テスト用のハンドラを束ねた layer はありません。TestClock と TestConsole はそれぞれ別の型の State に依存するので、束ねても `State.run` を重ねる手間は減らないためです。使い方は [Console・Clock・Random・Env](/std/platform/) にあります。
+テスト用のハンドラを束ねた layer はありません。テスト用のハンドラはそれぞれ別の型の State に依存するので、束ねても `State.run` を重ねる手間は減らないためです。使い方は [Console・Clock・Random・Env](/std/platform/) にあります。
 
 ## API の約束
 
-core と std の関数は、次の約束に従って名前と引数を決めています。自分のライブラリを書くときも、そろえておくと読みやすくなります。
+core と std の関数は次の約束に従って名前と引数を決めています。自分のライブラリを書くときも、そろえておくと読みやすくなります。
 
 ### 対象を最初の引数に
 
@@ -169,7 +151,7 @@ fn main() {
 }
 ```
 
-入力の形の誤りは、どれも Prelude の `error ParseError(input: String)` で表します。`input` は入力の全体です。エラーの書き方は [エラー](/guide/errors/) にあります。
+入力の形の誤りはどれも Prelude の `error ParseError(input: String)` で表します。`input` は入力の全体です。エラーの書き方は [エラー](/guide/errors/) にあります。
 
 ### 名前の型
 
@@ -184,13 +166,13 @@ Option の既定値は `Option.or(opt, default)`、Option を返す関数をつ�
 
 ### 変換の置き場所
 
-2つの型の間の変換は、後から足した型（依存する側）のモジュールに、行きと帰りをまとめて置きます。基本の型は後から足した型を知らないためです。
+2つの型の間の変換は後から足した型（依存する側）のモジュールに、行きと帰りをまとめて置きます。基本の型は後から足した型を知らないためです。
 
 - Int と Int64 の間は `Int64.from_int` と `Int64.to_int`
 - Int と Float の間は `Float.from_int`（戻りは `Float.floor` などの丸め）
 - Instant と Int64 の間は `Instant.from_unix_milliseconds` と `Instant.to_unix_milliseconds`
 
-ただし String への変換だけは、どの型も自分のモジュールの `to_string` に置きます（`Int.to_string`、`Duration.to_string`）。同じ変換を両方の型に置くことはしません。
+ただし String への変換だけはどの型も自分のモジュールの `to_string` に置きます（`Int.to_string`、`Duration.to_string`）。同じ変換を両方の型に置くことはしません。
 
 ## 0.21 以降に入るもの
 
@@ -206,7 +188,7 @@ Option の既定値は `Option.or(opt, default)`、Option を返す関数をつ�
 
 ## github.com/emela-lang/x
 
-形がまだ固まっていない純粋な Emela の部品は、std に入れる前に Pome `github.com/emela-lang/x`（ルート名 `X`）で先に出し、使われて固まったら std に取り込みます。Go の `golang.org/x` と同じ考え方です。フレームワークのように好みの分かれるものは std に入れず、独立した Pome にします。
+形がまだ固まっていない純粋な Emela の部品は、std に入れる前に Pome `github.com/emela-lang/x`（ルート名 `X`）で先に出し、使われて固まったら std に取り込みます。フレームワークのように好みの分かれるものは std に入れず、独立した Pome にします。
 
 :::caution[依存はまだ使えない]
 0.20 のコンパイラは `Pome.toml` の `[dependencies]` をまだ読まないので、`x` を依存に足して使うことはできません。Pome の現状は [プロジェクトと Pome](/tools/pome/) にあります。
