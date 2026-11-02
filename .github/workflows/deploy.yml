@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Build with Astro
         # pnpm-lock.yaml を検出して pnpm でインストール・ビルドし、
         # dist/ を Pages アーティファクトとしてアップロードする。
