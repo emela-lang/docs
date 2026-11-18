@@ -10,7 +10,7 @@
 
 <script>
   import { runEmela } from '../scripts/emela-runner';
-  import { renderResult, renderError } from '../scripts/emela-output';
+  import { appendChunk, renderError, renderResult, startOutput } from '../scripts/emela-output';
 
   // Expressive Code renders each line as a `.ec-line` element; join them so the
   // extracted source keeps its newlines (plain `textContent` would drop them).
@@ -45,11 +45,9 @@
 
     button.addEventListener('click', async () => {
       button.disabled = true;
-      output.hidden = false;
-      output.dataset.state = 'running';
-      output.textContent = '実行中…';
+      startOutput(output);
       try {
-        renderResult(output, await runEmela(source));
+        renderResult(output, await runEmela(source, { onChunk: (chunk) => appendChunk(output, chunk) }));
       } catch (err) {
         renderError(output, String((err as Error)?.message || err));
       } finally {

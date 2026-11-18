@@ -1,14 +1,24 @@
 ---
-// The dedicated /playground editor: a source textarea, a Run button, and an
-// output panel. Shares the same wasm worker as the inline Run buttons via
-// runEmela(). The compiler/runtime wasm is fetched on the first Run.
-const sample = `import std.io
+// The dedicated /playground editor: a source textarea, Run and Format buttons,
+// and an output panel. Shares the compiler worker with the inline Run buttons
+// (src/scripts/emela-runner.ts). The compiler wasm is fetched on first use.
+const sample = `import Std.Console.{Console}
+import Std.Platform.{Platform}
 
-fn main() -> Unit uses { Io } {
-    Io.print("Hello, Emela!\\n")
+error NotFound(id: Int)
+
+fn find(id: Int) -> String fails NotFound {
+  if id == 1 { "alice" } else { fail NotFound(id:) }
 }
-`;
----
+
+fn main() {
+  with Platform {
+    console = use Console
+    console.print_line("Hello, #{find(1)}!")
+    console.print_line(find(2) escape { NotFound(_) -> "guest" })
+  }
+}
+`;---
 
 <div class="emela-playground">
   <div class="emela-pg-editor-wrap">
@@ -19,22 +29,24 @@ fn main() -> Unit uses { Io } {
     <button type="button" class="emela-run-btn emela-pg-run">
       <span aria-hidden="true">▶</span> Run
     </button>
-    <span class="emela-pg-hint">ネットワーク（socket / HTTP）はブラウザでは利用できません。</span>
+    <button type="button" class="emela-run-btn emela-pg-format">整形</button>
+    <span class="emela-pg-hint">Ctrl / ⌘ + Enter で実行。ファイル、環境変数、標準入力、HTTP はブラウザでは使えません。</span>
   </div>
   <div class="emela-run-output emela-pg-output" hidden></div>
 </div>
 
 <script>
-  import { runEmela } from '../scripts/emela-runner';
-  import { renderResult, renderError } from '../scripts/emela-output';
+  import { formatEmela, runEmela } from '../scripts/emela-runner';
+  import { appendChunk, renderError, renderResult, startOutput } from '../scripts/emela-output';
   import { highlightInto } from '../scripts/emela-highlight';
 
   function wire(root: HTMLElement): void {
     if (root.dataset.wired === 'yes') return;
     const editor = root.querySelector<HTMLTextAreaElement>('.emela-pg-editor');
     const button = root.querySelector<HTMLButtonElement>('.emela-pg-run');
+    const formatButton = root.querySelector<HTMLButtonElement>('.emela-pg-format');
     const output = root.querySelector<HTMLElement>('.emela-pg-output');
-    if (!editor || !button || !output) return;
+    if (!editor || !button || !formatButton || !output) return;
     root.dataset.wired = 'yes';
 
     // Syntax highlighting: a highlight layer sits behind the (transparent-text)
@@ -62,11 +74,9 @@ fn main() -> Unit uses { Io } {
 
     async function run(): Promise<void> {
       button!.disabled = true;
-      output!.hidden = false;
-      output!.dataset.state = 'running';
-      output!.textContent = '実行中…';
+      startOutput(output!);
       try {
-        renderResult(output!, await runEmela(editor!.value));
+        renderResult(output!, await runEmela(editor!.value, { onChunk: (chunk) => appendChunk(output!, chunk) }));
       } catch (err) {
         renderError(output!, String((err as Error)?.message || err));
       } finally {
@@ -74,7 +84,27 @@ fn main() -> Unit uses { Io } {
       }
     }
 
+    async function format(): Promise<void> {
+      formatButton!.disabled = true;
+      try {
+        const result = await formatEmela(editor!.value);
+        if (result.ok) {
+          editor!.value = result.source;
+          editor!.dispatchEvent(new Event('input'));
+        } else {
+          output!.hidden = false;
+          renderError(output!, result.diagnostics.trimEnd());
+        }
+      } catch (err) {
+        output!.hidden = false;
+        renderError(output!, String((err as Error)?.message || err));
+      } finally {
+        formatButton!.disabled = false;
+      }
+    }
+
     button.addEventListener('click', run);
+    formatButton.addEventListener('click', format);
     editor.addEventListener('keydown', (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();

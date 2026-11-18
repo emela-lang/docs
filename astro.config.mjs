@@ -16,16 +16,22 @@ const emelaGrammar = JSON.parse(
   readFileSync(new URL('./src/grammars/emela.tmLanguage.json', import.meta.url), 'utf-8'),
 );
 
-// Expressive Code plugin: mark a code block as runnable only when its meta
-// string opts in with `run`, e.g. ```emela run. It sets `data-emela-run="true"`
-// on the block root; the client script (RunButtons.astro) attaches a "▶ Run"
-// button to exactly those blocks — so a plain ```emela block gets no button.
+// Expressive Code plugin: marks a code block as runnable with
+// `data-emela-run="true"` on the block root; the client script (RunButtons.astro)
+// attaches a "▶ Run" button to exactly those blocks. A block is runnable when its
+// meta says `run` (```emela run), or when it says `check` (a complete program
+// that CI checks, see scripts/check-examples.mjs) and defines `main`. A plain
+// ```emela block or a ```emela check=error block gets no button.
 const emelaRunnablePlugin = {
   name: 'emela-runnable',
   hooks: {
     postprocessRenderedBlock: (context) => {
-      if (context.codeBlock.language !== 'emela') return;
-      if (context.codeBlock.metaOptions.getBoolean('run') !== true) return;
+      const block = context.codeBlock;
+      if (block.language !== 'emela') return;
+      const meta = block.meta.split(/\s+/);
+      const runnable =
+        meta.includes('run') || (meta.includes('check') && /^fn main\(/m.test(block.code));
+      if (!runnable) return;
       const root = context.renderData.blockAst;
       root.properties = root.properties || {};
       root.properties['data-emela-run'] = 'true';

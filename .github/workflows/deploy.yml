@@ -23,6 +23,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      # Playground が動かすブラウザ用コンパイラを、docs が説明する版（.emela-version）のリリースから取る。
+      - id: pin
+        run: echo "version=$(cat .emela-version)" >> "$GITHUB_OUTPUT"
+      - id: emela
+        uses: emela-lang/setup-emela@v1
+        with:
+          version: ${{ steps.pin.outputs.version }}
+          playground: true
+      - name: Put the playground compiler next to its workers
+        run: cp "${{ steps.emela.outputs.playground }}"/* public/wasm/emela/
       - name: Build with Astro
         # pnpm-lock.yaml を検出して pnpm でインストール・ビルドし、
         # dist/ を Pages アーティファクトとしてアップロードする。

@@ -9,8 +9,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "build:wasm": "bash scripts/build-wasm.sh",
-    "check:examples": "node scripts/check-examples.mjs"
+    "check:examples": "node scripts/check-examples.mjs",
+    "fetch:playground": "bash scripts/fetch-playground.sh"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.3",

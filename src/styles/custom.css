@@ -58,7 +58,6 @@
 }
 
 .emela-run-output[data-state='running'] {
-  color: var(--sl-color-gray-3);
   border-left-color: var(--sl-color-gray-4);
 }
 
@@ -66,7 +65,9 @@
   border-left-color: var(--sl-color-red);
 }
 
-.emela-out-part + .emela-out-part {
+/* Lines the program wrote follow each other; diagnostics and notes stand apart. */
+.emela-out-diag + .emela-out-part,
+.emela-out-part + .emela-out-muted {
   margin-top: 0.4rem;
 }
 

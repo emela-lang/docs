@@ -1,92 +1,132 @@
-// Shared client-side helper: runs Emela source through the wasm worker.
+// Client-side helpers that check, format and run Emela source in the browser.
 //
-// A single module worker (public/wasm/emela/emela-worker.js) is created lazily
-// on the first run and reused. Requests are correlated by id so several code
-// blocks can share the one worker. A stuck run (e.g. an infinite loop) is
-// bounded by a timeout that terminates and resets the worker.
+// The compiler (public/wasm/emela/compiler-worker.js) is one worker, created on first use and
+// kept. Each run gets a fresh run worker (run-worker.js) that is terminated when the program
+// ends or the timeout passes, so an endless program never blocks the page or the compiler.
 
-/** The parsed result of `emela::run` (see crates/emela-wasm/src/lib.rs). */
+const BASE = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/wasm/emela`;
+
+/** One write of the program, in the order it happened. */
+export interface Chunk {
+  fd: 1 | 2;
+  text: string;
+}
+
 export interface RunResult {
-  /** `false` on a compile / type error; `true` even if the program trapped. */
+  /** Rendered diagnostics as `emela check` prints them; empty when there are none. */
+  diagnostics: string;
+  /** `false` when compiling failed: nothing ran. */
+  compiled: boolean;
+  output: Chunk[];
+  /** The exit code as `emela run` gives it, or `null` when the run was stopped. */
+  exitCode: number | null;
+  /** Set when the run was stopped by the timeout. */
+  timedOut: boolean;
+}
+
+interface Checked {
   ok: boolean;
-  stdout: string;
-  stderr: string;
-  /** Exit code when the program exited cleanly, else `null`. */
-  exit_code: number | null;
-  /** Runtime trap message (`panic` / `unreachable`), else `null`. */
-  trap: string | null;
-  /** Rendered compile / type diagnostic, else `null`. */
-  error: string | null;
+  diagnostics: string;
 }
 
-// Resolve under Astro's configured base so the Playground works both at the
-// site root in dev and under `base` when one is configured. BASE_URL may
-// or may not carry a trailing slash depending on config, so strip any and join
-// with exactly one.
-const WORKER_URL = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/wasm/emela/emela-worker.js`;
-
-interface Pending {
-  resolve: (r: RunResult) => void;
-  reject: (e: Error) => void;
+interface Formatted extends Checked {
+  source: string;
 }
 
-let worker: Worker | null = null;
+interface Compiled extends Checked {
+  entry: string;
+  files: { path: string; text: string }[];
+}
+
+let compiler: Worker | null = null;
 let seq = 0;
-const pending = new Map<number, Pending>();
+const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
-function getWorker(): Worker {
-  if (worker) return worker;
-  const w = new Worker(WORKER_URL, { type: 'module' });
-  w.onmessage = (event: MessageEvent) => {
-    const { id, ok, result, error } = event.data || {};
+function compilerWorker(): Worker {
+  if (compiler) return compiler;
+  const worker = new Worker(`${BASE}/compiler-worker.js`, { type: 'module' });
+  worker.onmessage = (event: MessageEvent) => {
+    const { id, ok, result, error } = event.data ?? {};
     const entry = pending.get(id);
     if (!entry) return;
     pending.delete(id);
-    if (ok) entry.resolve(result as RunResult);
-    else entry.reject(new Error(error || 'worker error'));
+    if (ok) entry.resolve(result);
+    else entry.reject(new Error(error ?? 'compiler error'));
   };
-  w.onerror = (event) => {
-    killWorker(new Error(event.message || 'worker crashed'));
-  };
-  worker = w;
-  return w;
-}
-
-/** Terminate the worker and fail every in-flight request. */
-function killWorker(err: Error): void {
-  if (worker) {
+  worker.onerror = (event) => {
+    compiler = null;
     worker.terminate();
-    worker = null;
-  }
-  for (const { reject } of pending.values()) reject(err);
-  pending.clear();
+    for (const { reject } of pending.values()) reject(new Error(event.message || 'the compiler stopped'));
+    pending.clear();
+  };
+  compiler = worker;
+  return worker;
 }
 
-/** Compile and run `source`, resolving with its captured output. */
-export function runEmela(source: string, timeoutMs = 10_000): Promise<RunResult> {
-  const w = getWorker();
+function request<T>(op: 'check' | 'format' | 'compile', source: string): Promise<T> {
+  const worker = compilerWorker();
   const id = ++seq;
-  return new Promise<RunResult>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+    worker.postMessage({ id, op, source });
+  });
+}
+
+/** Diagnostics of `source`, as `emela check main.emel`. */
+export function checkEmela(source: string): Promise<Checked> {
+  return request<Checked>('check', source);
+}
+
+/** `source` formatted as `emela fmt` does; unchanged, with diagnostics, on a syntax error. */
+export function formatEmela(source: string): Promise<Formatted> {
+  return request<Formatted>('format', source);
+}
+
+/**
+ * Compiles `source` and runs it, as `emela run main.emel`. `onChunk` sees each write as it
+ * happens; the returned result has all of them.
+ */
+export async function runEmela(
+  source: string,
+  { timeoutMs = 10_000, onChunk }: { timeoutMs?: number; onChunk?: (chunk: Chunk) => void } = {},
+): Promise<RunResult> {
+  const compiled = await request<Compiled>('compile', source);
+  const result: RunResult = {
+    diagnostics: compiled.diagnostics,
+    compiled: compiled.ok,
+    output: [],
+    exitCode: null,
+    timedOut: false,
+  };
+  if (!compiled.ok) return result;
+
+  const worker = new Worker(`${BASE}/run-worker.js`, { type: 'module' });
+  return new Promise<RunResult>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(result);
+    };
     const timer = setTimeout(() => {
-      if (!pending.has(id)) return;
-      pending.delete(id);
-      killWorker(new Error('timeout'));
-      reject(
-        new Error(
-          `実行がタイムアウトしました（${timeoutMs / 1000}s）。無限ループの可能性があります。`,
-        ),
-      );
+      result.timedOut = true;
+      done();
     }, timeoutMs);
-    pending.set(id, {
-      resolve: (r) => {
-        clearTimeout(timer);
-        resolve(r);
-      },
-      reject: (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    });
-    w.postMessage({ id, source });
+    worker.onmessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message.type === 'out') {
+        const chunk = { fd: message.fd, text: message.text } as Chunk;
+        result.output.push(chunk);
+        onChunk?.(chunk);
+      } else if (message.type === 'exit') {
+        result.exitCode = message.code;
+        done();
+      }
+    };
+    worker.onerror = (event) => {
+      result.output.push({ fd: 2, text: `${event.message}\n` });
+      result.exitCode = 1;
+      done();
+    };
+    worker.postMessage({ files: compiled.files, entry: compiled.entry });
   });
 }
