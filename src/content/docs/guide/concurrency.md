@@ -20,7 +20,7 @@ fn tick(name: String, n: Int, ms: Int) -> Int uses { Clock, Console } {
 
 fn main() {
   with SystemConsole, SystemClock {
-    (a, b) = Fiber.both(|| tick("a", 3, 100), || tick("b", 2, 150))
+    (a, b) = Fiber.both(|| tick("a", 3, 100), || tick("b", 2, 130))
     (use Console).print_line("done #{a + b}")
   }
 }
