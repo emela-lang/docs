@@ -60,17 +60,17 @@ C のターゲットには、次の制限があります。
 ```emela check
 fn main() {
   max = 2147483647
-  dbg(max + 1)                     # -2147483648
-  dbg(-7 / 2)                      # -3
-  dbg(-7 % 2)                      # -1
-  dbg(1.0 / 0.0)                   # Infinity
-  dbg(-7.5 % 2.0)                  # -1.5
-  dbg(Float.round(2.5))            # 3
-  dbg(Float.round(-2.5))           # -3
-  dbg(Int.checked_add(max, 1))     # None
-  dbg((0 - max - 1) / -1)          # -2147483648
+  dbg(max + 1) # -2147483648
+  dbg(-7 / 2) # -3
+  dbg(-7 % 2) # -1
+  dbg(1.0 / 0.0) # Infinity
+  dbg(-7.5 % 2.0) # -1.5
+  dbg(Float.round(2.5)) # 3
+  dbg(Float.round(-2.5)) # -3
+  dbg(Int.checked_add(max, 1)) # None
+  dbg((0 - max - 1) / -1) # -2147483648
   big: Int64 = 4294967297
-  dbg(Int64.to_int(big))           # 1
+  dbg(Int64.to_int(big)) # 1
   ()
 }
 ```
@@ -107,11 +107,12 @@ JS と C のどちらで動かしても、コメントのとおりの値が出�
 
 ```emela check
 fn main() {
-  dbg(String.length("👍"))             # 1
-  dbg(String.byte_size("é"))           # 2
-  dbg(String.code_points("é"))         # [233]
-  dbg(String.from_code_point(55296))   # None（サロゲート）
-  dbg(String.split("", ","))           # [""]
+  dbg(String.length("👍")) # 1
+  dbg(String.byte_size("é")) # 2
+  dbg(String.code_points("é")) # [233]
+  dbg(String.from_code_point(55296)) # None（サロゲート）
+  dbg(String.split("", ",")) # [""]
+  ()
 }
 ```
 
@@ -143,7 +144,8 @@ fn count(n: Int, acc: Int) -> Int {
 }
 
 fn main() {
-  dbg(count(1_000_000, 0))    # JS でも C でも 1000000
+  dbg(count(1_000_000, 0)) # JS でも C でも 1000000
+  ()
 }
 ```
 

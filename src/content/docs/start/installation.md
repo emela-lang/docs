@@ -56,6 +56,7 @@ C ターゲットは、出力した C を `cc` でコンパイルして native �
 ```emela check
 fn main() {
   dbg("Hello, Emela!")
+  ()
 }
 ```
 
@@ -68,4 +69,4 @@ $ emela run main.emel
 
 ## エディタ
 
-`emela lsp` が言語サーバーです。診断、hover（型と `fails`、`use`）、補完、定義へのジャンプ、改名、整形などに対応します。VS Code、Neovim、Vim、Sublime Text 向けの設定は [エディタと言語サーバー](/tools/editors/) にあります。
+`emela lsp` が言語サーバーです。診断、hover（型と `fails`、`uses`）、補完、定義へのジャンプ、改名、整形などに対応します。VS Code、Neovim、Vim、Sublime Text 向けの設定は [エディタと言語サーバー](/tools/editors/) にあります。

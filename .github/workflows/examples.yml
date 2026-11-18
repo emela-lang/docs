@@ -1,0 +1,114 @@
+name: Examples
+
+# docs の例（```emela check と直後の ```console）を本物のコンパイラで検査する。
+#
+# - pinned: .emela-version の版で検査する。docs が説明している版なので、PR で必ず通す。
+# - drift: 最新リリースと emela の main で検査し、落ちた例を issue に書く。
+#   docs が言語の変化に置いていかれたことを、週に1回知らせる。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned:
+    name: Examples (pinned emela)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: pin
+        run: echo "version=$(cat .emela-version)" >> "$GITHUB_OUTPUT"
+      - uses: emela-lang/setup-emela@v1
+        with:
+          version: ${{ steps.pin.outputs.version }}
+      - run: emela --version
+      - run: node scripts/check-examples.mjs
+
+  drift:
+    name: Examples (emela ${{ matrix.emela }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        emela: [release, main]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the latest emela release
+        if: matrix.emela == 'release'
+        uses: emela-lang/setup-emela@v1
+
+      - name: Check out emela main
+        if: matrix.emela == 'main'
+        uses: actions/checkout@v4
+        with:
+          repository: emela-lang/emela
+          path: emela
+      - name: Cache the emela build
+        if: matrix.emela == 'main'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: emela
+      - name: Build emela main
+        if: matrix.emela == 'main'
+        working-directory: emela
+        run: |
+          cargo build --release --locked -p emela
+          echo "$PWD/target/release" >> "$GITHUB_PATH"
+
+      - id: check
+        name: Check the examples
+        run: |
+          emela --version | tee version.txt
+          set +e
+          node scripts/check-examples.mjs > report.txt 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat report.txt
+
+      - name: Report to an issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "docs の例が emela ${{ matrix.emela }} で通らない"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS: ${{ steps.check.outputs.status }}
+        run: |
+          issue="$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+            --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"
+          if [ "$STATUS" = 0 ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "$(cat version.txt) ですべての例が通った。$RUN_URL"
+            fi
+            exit 0
+          fi
+          {
+            echo "$(cat version.txt) で docs の例が落ちている。"
+            echo
+            echo '```'
+            tail -n 1 report.txt
+            grep '^✗' report.txt
+            echo '```'
+            echo
+            echo "診断の全文: $RUN_URL"
+          } > body.md
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --body-file body.md
+          else
+            gh issue create --title "$TITLE" --body-file body.md
+          fi
+          exit 1

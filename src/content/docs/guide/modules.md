@@ -89,7 +89,7 @@ fn main() {
     out = use Console
     out.print_line("#{List.length([1, 2, 3])}")   # 3
   }
-  dbg(xs)                                         # Some([1, 2])
+  _ = dbg(xs)                                     # Some([1, 2])
 }
 ```
 
@@ -198,7 +198,7 @@ enum Maybe {
 }
 
 fn main() {
-  dbg(Some(1))    # このモジュールの Some
+  _ = dbg(Some(1))    # このモジュールの Some
 }
 ```
 

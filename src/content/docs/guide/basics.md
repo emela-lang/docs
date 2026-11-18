@@ -8,15 +8,15 @@ description: ソースファイル、コメント、文の終わりと行の継�
 ```emela check
 ## 2つの数を足す
 fn add(x: Int, y: Int) -> Int {
-  x + y            # 最後の式が戻り値になる
+  x + y # 最後の式が戻り値になる
 }
 
 const LIMIT = 10
 
 fn main() {
   total = add(3, 4)
-  dbg(total)       # 7
-  dbg(total < LIMIT)  # True
+  dbg(total) # 7
+  dbg(total < LIMIT) # True
 }
 ```
 
@@ -31,7 +31,7 @@ fn main() {
 type User(
   ## 一意の番号。0 は管理者
   id: Int,
-  name: String,     # 表示名
+  name: String, # 表示名
 )
 
 ## 図形
@@ -43,7 +43,7 @@ enum Shape {
 
 fn main() {
   # 行の全体をコメントにする
-  dbg(User(id: 1, name: "a"))   # User(id: 1, name: "a")
+  dbg(User(id: 1, name: "a")) # User(id: 1, name: "a")
 }
 ```
 
@@ -55,37 +55,30 @@ fn main() {
 
 ```emela check
 fn main() {
-  total = 1
-    + 2
-    + 3
-  dbg(total)        # 6
+  total = 1 + 2 + 3
+  dbg(total) # 6
 
   doubled = [1, 2, 3]
-    |> List.map(fn(n) { n * 2 })
+    |> List.map(|n| n * 2)
     # コメントだけの行と空行は飛ばして、次の行を見る
+    |> List.fold(from: 0, f: |acc, n| acc + n)
+  dbg(doubled) # 12
 
-    |> List.fold(from: 0, f: fn(acc, n) { acc + n })
-  dbg(doubled)      # 12
-
-  point = (
-    1,
-    2,
-  )
-  dbg(point)        # (1, 2)
+  point = (1, 2)
+  dbg(point) # (1, 2)
 
   label = if total > 5 {
     "big"
-  }
-  else {
+  } else {
     "small"
   }
-  dbg(label)        # "big"
+  dbg(label) # "big"
 }
 ```
 
 前の行に続くのは、次の行が二項演算子、`.`、`escape`、`else`、`->`、`|` で始まるときと、開いた `(` や `[` がまだ閉じていないときです。判定するのは次の行の頭だけで、前の行の終わり方は見ません。
 
-長いシグネチャも `->`、`fails`、`|`、`use` の前で折り返せます。本体の `{` はシグネチャの最後の行に書きます。
+長いシグネチャも `->`、`fails`、`|`、`uses` の前で折り返せます。本体の `{` はシグネチャの最後の行に書きます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -93,11 +86,9 @@ import Std.Console.{Console, SystemConsole}
 error Empty
 error TooLong(length: Int)
 
-fn check_name(name: String)
-  -> String
-  fails Empty
-    | TooLong
-  use Console {
+fn check_name(name: String) -> String
+  fails Empty | TooLong
+  uses { Console } {
   out = use Console
   out.print_line("checking #{name}")
   n = String.length(name)
@@ -109,15 +100,15 @@ fn check_name(name: String)
 fn main() {
   with SystemConsole {
     name = check_name("emela") escape {
-      Empty -> "?"
+      Empty      -> "?"
       TooLong(_) -> "?"
     }
-    dbg(name)       # "emela"
+    dbg(name) # "emela"
   }
 }
 ```
 
-`fails` と `use` で行が続くのはシグネチャの中だけです。本体の中で `use` から始まる行は、新しい文になります。
+`fails` と `uses` で始まる行は、後ろに型の名前か `{` が続くので、どこでも前の行の続きになります。この形で始まる文はありません。
 
 ### 新しい文になる行
 
@@ -130,7 +121,7 @@ fn add(x: Int, y: Int) -> Int {
 
 fn main() {
   n: Int = add
-  (1, 2)            # add の呼び出しではなく、タプルの式の文
+  (1, 2) # add の呼び出しではなく、タプルの式の文
 }
 ```
 
@@ -145,12 +136,11 @@ type mismatch: expected `Int`, found `fn(Int, Int) -> Int`
 ```emela check
 fn main() {
   a = 10
-  -3                # a とは別の文。値は捨てられる
-  dbg(a)            # 10
+  -3 # a とは別の文。値は捨てられる
+  dbg(a) # 10
 
-  b = (10
-    - 3)            # 括弧の中なので続く
-  dbg(b)            # 7
+  b = (10 - 3) # 括弧の中なので続く
+  dbg(b) # 7
 }
 ```
 
@@ -164,11 +154,11 @@ fn main() {
 
 ```emela check
 fn main() {
-  xs = List.map([1, 2, 3], fn(n) {
-    m = n * 10      # { の中なので、ここで文が終わる
+  xs = List.map([1, 2, 3], |n| {
+    m = n * 10 # { の中なので、ここで文が終わる
     m + 1
   })
-  dbg(xs)           # [11, 21, 31]
+  dbg(xs) # [11, 21, 31]
 }
 ```
 
@@ -199,9 +189,9 @@ const DEFAULT_CONFIG = Config(port: 8080)
 
 fn main() {
   config = Config(port: 3000)
-  dbg(config.port)           # 3000   左が小文字名: 値のフィールド
-  dbg(DEFAULT_CONFIG.port)   # 8080   左が大文字名: const の値のフィールド
-  dbg(List.length([1, 2]))   # 2      左が型名: モジュールの関数
+  dbg(config.port) # 3000   左が小文字名: 値のフィールド
+  dbg(DEFAULT_CONFIG.port) # 8080   左が大文字名: const の値のフィールド
+  dbg(List.length([1, 2])) # 2      左が型名: モジュールの関数
 }
 ```
 

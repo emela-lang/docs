@@ -151,8 +151,9 @@ $ emela fmt
 fn main() {
   xs = [1, 2, 3]
   dbg(xs)
-  total = dbg(List.fold(xs, 0, fn(acc, x) { acc + x }))
+  total = dbg(List.fold(xs, 0, |acc, x| acc + x))
   dbg("total: #{total}")
+  ()
 }
 ```
 
@@ -189,7 +190,7 @@ $ emela test main.emel
 | defect で終わった | 101 |
 | 中断したまま再開されずに終わった | 130 |
 
-`main` まで伝わったエラーは、標準エラーに `error: <値>` と出ます。
+`main` まで伝わったエラーは、標準エラーに `error: <エラー>` と出ます。エラーの型が `Show` を満たさないときは、名前だけを表示します。
 
 ```emela check
 error Invalid(reason: String)
@@ -202,13 +203,14 @@ fn check_age(age: Int) {
 fn main() {
   dbg(check_age(20))
   dbg(check_age(-1))
+  ()
 }
 ```
 
 ```console
 $ emela run main.emel
 20
-error: Invalid(reason: "negative age")
+error: Invalid
 $ echo $?
 1
 ```
@@ -218,6 +220,7 @@ defect は `defect: <メッセージ>` と出ます。
 ```emela check
 fn main() {
   dbg(1 / 0)
+  ()
 }
 ```
 

@@ -10,19 +10,19 @@ import Std.Console.{Console}
 
 @external(js, "Math.hypot")
 @external(c, "hypot")
-fn hypot(x: Float, y: Float) -> Float use {}
+fn hypot(x: Float, y: Float) -> Float uses {}
 
 @external(js, "console.log")
 @external(c, "puts")
 fn host_print(text: String) -> ()
 
-handler HostConsole implements Console {
+handler HostConsole: Console {
   fn print_line(text) { host_print(text) }
   fn print_error_line(text) { host_print(text) }
 }
 
 fn main() {
-  d = hypot(3.0, 4.0)       # use {} なので、どこからでも呼べる
+  d = hypot(3.0, 4.0)       # uses {} なので、どこからでも呼べる
   with HostConsole {
     (use Console).print_line("distance: #{d}")
   }
@@ -32,7 +32,7 @@ fn main() {
 ```console
 $ emela run main.emel
 distance: 5.0
-$ emela run --target c main.emel
+$ emela run --target native main.emel
 distance: 5.0
 ```
 
@@ -47,14 +47,14 @@ fn console_log(msg: String) -> ()
 @external(js, "Math.sin")
 @external(wasm, "env", "sin")
 @external(c, "sin")
-fn sin(x: Float) -> Float use {}
+fn sin(x: Float) -> Float uses {}
 
 @external(js, "./http_ffi.mjs", "fetchText")
 @external(wasm, "wasi:http/client", "fetch")
 suspend fn fetch_text(url: String) -> String
 ```
 
-コンパイラはホストの関数の中身を見られないので、引数と戻り値の型は必ず書きます。注釈はターゲット（`js`、`wasm`、`c`）ごとに1つ書き、1つの fn に並べられます。
+コンパイラはホストの関数の中身を見られないので、引数と戻り値の型は必ず書きます。注釈はリンクする相手の言語（`js`、`wasm`、`c`）ごとに1つ書き、1つの fn に並べられます。ビルドのターゲット `native` は `c` の注釈を使います。
 
 `(js, "名前")` はグローバルから辿れる JS の関数（`console.log`、`Math.sin`）を指し、`(c, "名前")` はリンクのときに解決する C の関数（libc や OS のライブラリのもの）を指します。
 
@@ -68,16 +68,16 @@ suspend fn fetch_text(url: String) -> String
 suspend fn sleep_milliseconds(ms: Int) -> ()
 ```
 
-:::caution[0.21 以降で入る予定]
-`--target wasm` はまだありません。`@external(wasm, ...)` の注釈は書けますが、今のターゲットは `js` と `c` です。C のターゲットは Tier 2 です（[ターゲット](/reference/targets/)）。
+:::note
+ビルドのターゲットは `js`、`native`、`wasm` で、使う注釈はそれぞれ `js`、`c`、`wasm` です。ターゲット名の `c` は `native` の古い名前で、0.29 でなくなります（[ターゲット](/reference/targets/)）。
 :::
 
 ## 呼べる場所
 
 | 宣言 | 意味 | 呼べる場所 |
 |---|---|---|
-| `use {}` を明記 | 純粋だと宣言する | どこからでも |
-| `use` を省略 | ホストの副作用を持つ | ハンドラの init、release、操作の本体の中だけ |
+| `uses {}` を明記 | 純粋だと宣言する | どこからでも |
+| `uses` を省略 | ホストの副作用を持つ | ハンドラの init、release、操作の本体の中だけ |
 | `suspend fn` | 完了を待つ必要がある。Async を要求する | ハンドラの中だけ |
 
 ```emela check=error
@@ -93,9 +93,9 @@ fn main() {
 error: external function `console_log` can only be used in handlers
 ```
 
-`use {}` の宣言が正しいかどうかを、コンパイラは検証できません。宣言した人が責任を持ちます。
+`uses {}` の宣言が正しいかどうかを、コンパイラは検証できません。宣言した人が責任を持ちます。
 
-制限は呼び出しだけでなく参照にも掛かります。use を省略した外部関数を関数の値としてハンドラの外へ持ち出すこともできません。外部関数のホストの副作用は R に載らず、外から見えるのはそれを包んだハンドラのエフェクトです。
+制限は呼び出しだけでなく参照にも掛かります。uses を省略した外部関数を関数の値としてハンドラの外へ持ち出すこともできません。外部関数のホストの副作用は R に載らず、外から見えるのはそれを包んだハンドラのエフェクトです。
 
 suspend fn の外部関数は JS では Promise を返す関数に対応します。呼び出した fiber は完了まで中断します。
 
@@ -157,12 +157,12 @@ effect Host {
 fn host_platform() -> String
 
 @external(js, "./host.mjs", "parsePort")
-fn parse_port(text: String) -> Int use {}
+fn parse_port(text: String) -> Int uses {}
 
 @external(js, "./host.mjs", "wait")
 suspend fn wait(ms: Int) -> ()
 
-handler NodeHost implements Host {
+handler NodeHost: Host {
   fn platform() { host_platform() }
   fn port(text) {
     n = parse_port(text)
@@ -203,7 +203,7 @@ JS では、suspend fn の外部関数の最後の引数に、ランタイムが
 上の `host.mjs` の `wait` を `Fiber.timeout` の中で待たせると、違いが分かります。
 
 ```emela
-r = Fiber.timeout(50, fn() { (use Host).pause(10000) })
+r = Fiber.timeout(50, || (use Host).pause(10000))
 (use Console).print_line("#{r}")    # None
 ```
 
@@ -220,14 +220,14 @@ r = Fiber.timeout(50, fn() { (use Host).pause(10000) })
 type JsValue
 
 @external(js, "JSON.parse")
-fn parse(text: String) -> JsValue use {}
+fn parse(text: String) -> JsValue uses {}
 
 @external(js, "JSON.stringify")
-fn stringify(value: JsValue) -> String use {}
+fn stringify(value: JsValue) -> String uses {}
 
 fn main() {
   v = parse("{ \"name\": \"alice\",  \"tags\": [1, 2] }")
-  dbg(stringify(v))    # "{\"name\":\"alice\",\"tags\":[1,2]}"
+  _ = dbg(stringify(v))    # "{\"name\":\"alice\",\"tags\":[1,2]}"
 }
 ```
 
@@ -263,13 +263,13 @@ effect Timer {
 @external(js, "setTimeout")
 fn set_timeout(f: fn() -> String, ms: Int) -> ()
 
-handler JsTimer implements Timer {
+handler JsTimer: Timer {
   fn later(ms, f) { set_timeout(f, ms) }
 }
 
 fn main() {
   with SystemConsole, JsTimer {
-    (use Timer).later(10, fn() { dbg("fired") })
+    (use Timer).later(10, || dbg("fired"))
     (use Console).print_line("scheduled")
   }
 }
@@ -293,9 +293,9 @@ effect Timer {
   suspend fn later(ms: Int) -> ()
 }
 
-handler JsTimer implements Timer {
+handler JsTimer: Timer {
   suspend fn later(ms, resume) {
-    set_timeout(fn() { (use Clock).sleep(1) }, ms)
+    set_timeout(|| (use Clock).sleep(1), ms)
     resume(())
   }
 }
@@ -313,7 +313,7 @@ error: effect `Clock` may suspend, but callbacks passed to external function `se
 
 ### C の型
 
-`c` のターゲットでは、Emela の型を次の C の型に写します。C の関数のプロトタイプはこの表で決まり、コンパイラは C のヘッダを読みません。宣言とホストの関数の型が合わないときの振る舞いは決めていません。
+`native` のターゲットでは、Emela の型を次の C の型に写します。C の関数のプロトタイプはこの表で決まり、コンパイラは C のヘッダを読みません。宣言とホストの関数の型が合わないときの振る舞いは決めていません。
 
 | Emela の型 | C の引数 | C の戻り値 |
 |---|---|---|
@@ -348,7 +348,7 @@ version = "0.1.0"
 emela = "0.20.1"
 
 [build]
-target = "c"
+target = "native"
 ```
 
 ```c
@@ -422,7 +422,7 @@ fn counter_close(h: Handle) -> ()
 @external(c, "./counter.c", "counter_pause")
 suspend fn counter_pause(ms: Int) -> ()
 
-handler NativeCounter(handle: Handle) implements Counter {
+handler NativeCounter(handle: Handle): Counter {
   init { NativeCounter(handle: counter_open(10)) }
   release { counter_close(self.handle) }
 
@@ -450,11 +450,11 @@ $ emela run .
 count = 12
 ```
 
-`[build] target = "c"` を書いたので、`emela run .` は C に出力して `cc` でビルドし、実行します。`emela.h` はランタイムが出力先に書き出すヘッダで、`.c` からはそのまま include できます。
+`[build] target = "native"` を書いたので、`emela run .` は C に出力して `cc` でビルドし、実行します。`emela.h` はランタイムが出力先に書き出すヘッダで、`.c` からはそのまま include できます。
 
 ### C の非同期のホスト関数
 
-C には Promise にあたるものがないので、`c` のターゲットの suspend fn の外部関数は、完了を後からランタイムに知らせる形で書きます。上の `counter_pause` がこの形です。
+C には Promise にあたるものがないので、`native` のターゲットの suspend fn の外部関数は、完了を後からランタイムに知らせる形で書きます。上の `counter_pause` がこの形です。
 
 C の関数は型の表の引数の後ろに完了を待っている fiber を表す `em_task *task` を受け取り、`void` を返します。完了は戻り値の型に応じた `em_complete_int`、`em_complete_string`、`em_complete_unit` などの関数で、1つの `task` についてちょうど1回知らせます（2回目は defect です）。C の関数の中ですぐに呼んでも、後から呼んでもかまいません。
 
@@ -466,11 +466,11 @@ C の関数は型の表の引数の後ろに完了を待っている fiber を�
 
 ```emela check
 @external(js, "JSON.parse")
-fn parse_int(text: String) -> Int use {}
+fn parse_int(text: String) -> Int uses {}
 
 fn main() {
-  dbg(parse_int("42"))    # 42
-  dbg(parse_int("{"))     # defect
+  dbg(parse_int("42"))       # 42
+  _ = dbg(parse_int("{"))    # defect
 }
 ```
 
@@ -494,9 +494,9 @@ effect Numbers {
 }
 
 @external(js, "Number")
-fn js_number(text: String) -> Float use {}
+fn js_number(text: String) -> Float uses {}
 
-handler JsNumbers implements Numbers {
+handler JsNumbers: Numbers {
   fn parse(text) {
     x = js_number(text)
     if x != x { fail BadNumber(text:) } else { x }    # NaN は自分自身と等しくない
@@ -532,26 +532,26 @@ $ emela run main.emel
 
 ```emela check
 @external(js, "Math.cbrt")
-fn cbrt(x: Float) -> Float use {}
+fn cbrt(x: Float) -> Float uses {}
 
 @external(js, "Math.log2")
 @external(c, "log2")
-fn log2(x: Float) -> Float use {}
+fn log2(x: Float) -> Float uses {}
 
 fn main() {
   dbg(log2(8.0))
-  dbg(cbrt(27.0))
+  _ = dbg(cbrt(27.0))
 }
 ```
 
-これを `emela run --target c main.emel` で実行すると、次のエラーになります。
+これを `emela run --target native main.emel` で実行すると、次のエラーになります。
 
 ```text
-error: external function `cbrt` has no `@external` for target `c`
+error: external function `cbrt` has no `@external(c, ...)` for target `native`
   = help: add `@external(c, ...)`, or avoid calling it from the entry
 ```
 
-`dbg(cbrt(27.0))` の行を消せば、`cbrt` はたどれなくなり、C でもビルドできます。だから `with Platform` と書いても、Http を使わなければ、Http の注釈のないターゲットでビルドできます。この検査は build、run、test でします。`emela check` と LSP はターゲットを決めないので、しません。
+`_ = dbg(cbrt(27.0))` の行を消せば、`cbrt` はたどれなくなり、C でもビルドできます。だから `with Platform` と書いても、Http を使わなければ、Http の注釈のないターゲットでビルドできます。この検査は build、run、test でします。`emela check` と LSP はターゲットを決めないので、しません。
 
 ## 依存の Pome
 

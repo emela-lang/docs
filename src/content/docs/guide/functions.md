@@ -13,9 +13,9 @@ fn area(width: Int, height: Int) -> Int {
 fn main() {
   w = 3
   h = 4
-  dbg(area(w, h))                   # 12
-  dbg(area(width: 5, height: 2))    # 10
-  dbg([1, 2, 3] |> List.map(fn(n) { n * n }))   # [1, 4, 9]
+  dbg(area(w, h)) # 12
+  dbg(area(width: 5, height: 2)) # 10
+  dbg([1, 2, 3] |> List.map(|n| n * n)) # [1, 4, 9]
 }
 ```
 
@@ -26,15 +26,15 @@ fn main() {
 ```emela check
 fn main() {
   count = 0
-  count = count + 1             # 同じ名前で束縛し直す
-  dbg(count)                    # 1
+  count = count + 1 # 同じ名前で束縛し直す
+  dbg(count) # 1
 
-  (evens, odds) = List.partition([1, 2, 3, 4], fn(n) { n % 2 == 0 })
-  dbg(evens)                    # [2, 4]
-  dbg(odds)                     # [1, 3]
+  (evens, odds) = List.partition([1, 2, 3, 4], |n| n % 2 == 0)
+  dbg(evens) # [2, 4]
+  dbg(odds) # [1, 3]
 
   pairs: List[(String, Int)] = List.zip(["a", "b"], [1, 2])
-  dbg(pairs)                    # [("a", 1), ("b", 2)]
+  dbg(pairs) # [("a", 1), ("b", 2)]
 }
 ```
 
@@ -49,11 +49,11 @@ type User(id: Int, name: String)
 
 fn main() {
   (x, y) = (1, 2)
-  dbg(x + y)                    # 3
+  dbg(x + y) # 3
 
   user = User(id: 7, name: "alice")
-  User(name:, ..) = user        # name を取り出す
-  dbg(name)                     # "alice"
+  User(name:, ..) = user # name を取り出す
+  dbg(name) # "alice"
 }
 ```
 
@@ -70,7 +70,7 @@ fn main() {
     b = 2
     a + b
   }
-  dbg(total)        # 3
+  dbg(total) # 3
 }
 ```
 
@@ -88,7 +88,7 @@ fn add(x: Int, y: Int) -> Int {
 }
 
 fn greet(name: String) {
-  "hello, #{name}"              # 戻り値の型 String は推論する
+  "hello, #{name}" # 戻り値の型 String は推論する
 }
 
 fn find(id: Int) -> User fails NotFound {
@@ -96,8 +96,8 @@ fn find(id: Int) -> User fails NotFound {
 }
 
 fn main() {
-  dbg(add(1, 2))                # 3
-  dbg(greet("emela"))           # "hello, emela"
+  dbg(add(1, 2)) # 3
+  dbg(greet("emela")) # "hello, emela"
   dbg(find(1) escape { NotFound(_) -> User(id: 0, name: "guest") })
   # User(id: 1, name: "alice")
 }
@@ -119,10 +119,10 @@ fn connect(host: String, port: Int) -> String {
 }
 
 fn main() {
-  dbg(connect("localhost", 5432))               # "localhost:5432"
-  dbg(connect("localhost", port: 5432))         # "localhost:5432"
-  dbg(connect(host: "localhost", port: 5432))   # "localhost:5432"
-  dbg(connect(port: 5432, host: "localhost"))   # "localhost:5432"
+  dbg(connect("localhost", 5432)) # "localhost:5432"
+  dbg(connect("localhost", port: 5432)) # "localhost:5432"
+  dbg(connect(host: "localhost", port: 5432)) # "localhost:5432"
+  dbg(connect(port: 5432, host: "localhost")) # "localhost:5432"
 }
 ```
 
@@ -139,8 +139,8 @@ fn main() {
   id = 42
   x = 1
   y = 2
-  dbg(NotFound(id:))        # NotFound(id: 42)
-  dbg(Point(x:, y:))        # Point(x: 1, y: 2)
+  dbg(NotFound(id:)) # NotFound(id: 42)
+  dbg(Point(x:, y:)) # Point(x: 1, y: 2)
 }
 ```
 
@@ -150,7 +150,7 @@ fn main() {
 
 ```emela check=error
 fn main() {
-  inc = fn(n: Int) { n + 1 }
+  inc = |n: Int| n + 1
   dbg(inc(n: 1))
 }
 ```
@@ -161,20 +161,20 @@ no parameter named `n`: a function value has no parameter names
 
 ## 無名関数
 
-無名関数は `fn(引数) { 本体 }` と書きます。`x => x + 1` のような短縮記法はありません。
+無名関数は `|引数| 本体` と書きます。引数がなければ `|| 本体` です。本体に文を並べるときは `|x| { ... }` とブロックにします。
 
 ```emela check
 fn main() {
-  inc = fn(n) { n + 1 }
-  dbg(inc(41))                                  # 42
-  dbg(List.map([1, 2, 3], fn(n) { n * 10 }))    # [10, 20, 30]
-  dbg(List.fold([1, 2, 3], from: 0, f: fn(acc, n) { acc + n }))  # 6
-  typed = fn(s: String) { String.length(s) }
-  dbg(typed("abc"))                             # 3
+  inc = |n| n + 1
+  dbg(inc(41)) # 42
+  dbg(List.map([1, 2, 3], |n| n * 10)) # [10, 20, 30]
+  dbg(List.fold([1, 2, 3], from: 0, f: |acc, n| acc + n)) # 6
+  typed = |s: String| String.length(s)
+  dbg(typed("abc")) # 3
 }
 ```
 
-引数の型は省けて、渡す先の引数の型から決まります。`List.map(users, fn(u) { u.name })` の `u` は `users` の要素の型です。戻り値の型は書かず、本体から推論します。
+引数の型は省けて、渡す先の引数の型から決まります。`List.map(users, |u| u.name)` の `u` は `users` の要素の型です。戻り値の型は書かず、本体から推論します。
 
 外側の変数も捕まえられます。変数は不変なので、捕まえた値が後で変わることはありません。
 
@@ -194,12 +194,12 @@ fn add(a: Int, b: Int) -> Int {
 }
 
 fn main() {
-  dbg(List.map([1, 2, 3], double))          # [2, 4, 6]
-  dbg(List.map([1, 2], Some))               # [Some(1), Some(2)]
-  dbg(List.map([1, 2, 3], Int.to_string))   # ["1", "2", "3"]
-  dbg(List.fold([1, 2, 3], from: 0, f: add))  # 6
+  dbg(List.map([1, 2, 3], double)) # [2, 4, 6]
+  dbg(List.map([1, 2], Some)) # [Some(1), Some(2)]
+  dbg(List.map([1, 2, 3], Int.to_string)) # ["1", "2", "3"]
+  dbg(List.fold([1, 2, 3], from: 0, f: add)) # 6
   make: fn(Int, Int) -> Point = Point
-  dbg(make(1, 2))                           # Point(x: 1, y: 2)
+  dbg(make(1, 2)) # Point(x: 1, y: 2)
 }
 ```
 
@@ -207,18 +207,18 @@ fn main() {
 
 ```emela check
 fn adder(n: Int) -> fn(Int) -> Int {
-  fn(x) { x + n }
+  |x| x + n
 }
 
 fn compose[A, B, C](f: fn(A) -> B, g: fn(B) -> C) -> fn(A) -> C {
-  fn(x) { g(f(x)) }
+  |x| g(f(x))
 }
 
 fn main() {
   add3 = adder(3)
-  dbg(add3(4))                                # 7
-  show_double = compose(fn(n) { n * 2 }, Int.to_string)
-  dbg(show_double(21))                        # "42"
+  dbg(add3(4)) # 7
+  show_double = compose(|n| n * 2, Int.to_string)
+  dbg(show_double(21)) # "42"
 }
 ```
 
@@ -239,9 +239,9 @@ fn main() {
   total = [3, -1, 4]
     |> List.filter(is_valid)
     |> List.fold(from: 0, f: add)
-  dbg(total)                    # 7
+  dbg(total) # 7
 
-  "emela" |> String.length |> dbg   # 5
+  "emela" |> String.length |> dbg # 5
 }
 ```
 
@@ -249,12 +249,12 @@ fn main() {
 
 ## 関数型
 
-関数の型は `fn(A, B) -> C` と書きます。後ろに `fails E` と `use R` を付けて、エラーとエフェクトを書けます。
+関数の型は `fn(A, B) -> C` と書きます。後ろに `fails E` と `uses { R }` を付けて、エラーとエフェクトを書けます。
 
 ```emela
 fn(Int) -> String
-fn(String) -> User fails NotFound use Db
-fn(A) -> B fails {} use {}        # 失敗せず、効果も持たない関数だけ
+fn(String) -> User fails NotFound uses { Db }
+fn(A) -> B fails {} uses {}       # 失敗せず、効果も持たない関数だけ
 ```
 
 引数の型に `fn(A) -> B` と書くと、どんなエラーと効果を持つ関数でも受け取れます。渡した関数のエラーと効果は、それを呼ぶ側にそのまま伝わります。
@@ -268,9 +268,9 @@ fn check(n: Int) -> Int fails Negative {
 
 fn main() {
   ok = List.map([1, 2], check) escape { Negative(_) -> [] }
-  dbg(ok)                           # [1, 2]
+  dbg(ok) # [1, 2]
   bad = List.map([1, -2], check) escape { Negative(n:) -> [n] }
-  dbg(bad)                          # [-2]
+  dbg(bad) # [-2]
 }
 ```
 

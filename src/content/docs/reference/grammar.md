@@ -10,7 +10,7 @@ Emela の構文を EBNF で書いたものです。仕様の決定をそのま�
 ## 記法
 
 - `{ x }` は0回以上の繰り返し、`[ x ]` は省略可能、`|` は選択を表します。引用符で囲んだものは終端記号です。
-- `NL` は、文の区切りとして働く改行です（[字句と予約語](/reference/lexical/) の行の継続規則）。継続と判定された改行、`(` `[` の内側の改行、効果の集合（`use { ... }`）の波括弧の内側の改行は、字句解析の段階で取り除かれます。
+- `NL` は、文の区切りとして働く改行です（[字句と予約語](/reference/lexical/) の行の継続規則）。継続と判定された改行、`(` `[` の内側の改行、効果の集合（`uses { ... }`）の波括弧の内側の改行は、字句解析の段階で取り除かれます。
 - 並びの末尾のカンマはどこでも許されます。規則では省略しています。
 
 括弧の役割は種類ごとに決まっています。`xs[0]` のような添字の構文はありません。
@@ -24,13 +24,14 @@ Emela の構文を EBNF で書いたものです。仕様の決定をそのま�
 ```emela check
 type Point(
   x: Int,
-  y: Int,      # 末尾のカンマ
+  y: Int, # 末尾のカンマ
 )
 
 fn main() {
   xs = [1, 2, 3,]
   dbg(Point(x: 1, y: 2,))
   dbg(xs)
+  ()
 }
 ```
 
@@ -77,7 +78,7 @@ annot_arg    = lower_name | literal | lower_name ":" literal
 
 fn_decl      = [ "suspend" ] "fn" lower_name [ type_params ]
                "(" [ params ] ")" [ signature ] [ block ]
-signature    = [ "->" type [ "fails" error_set ] ] [ "use" effect_set ]
+signature    = [ "->" type [ "fails" error_set ] ] [ "uses" effect_set ]
 params       = param { "," param }
 param        = "self" | lower_name [ ":" type ]
 
@@ -102,7 +103,8 @@ op_sig       = [ "suspend" ] "fn" lower_name [ type_params ] "(" [ params ] ")"
                "->" type [ "fails" error_set ]     (* type_params は組み込みのエフェクトだけ *)
 
 handler_decl = "handler" type_name [ "(" [ fields ] ")" ]
-               "implements" type_ref [ "[" type { "," type } "]" ] "{" { handler_item NL } "}"
+               ":" effect_ref { "+" effect_ref } "{" { handler_item NL } "}"
+effect_ref   = type_ref [ "[" type { "," type } "]" ]
 handler_item = "init" block
              | "release" block
              | [ "suspend" ] "fn" lower_name "(" [ lower_name { "," lower_name } ] ")" block
@@ -113,7 +115,7 @@ trait_decl   = "trait" type_name [ ":" bound { "+" bound } ] "{" { trait_item NL
 trait_item   = "fn" lower_name "(" [ params ] ")" [ signature ] [ block ]
              | derive_rule                                    (* 構文は未確定 *)
 
-impl_decl    = "impl" type_ref "for" type "{" { impl_item NL } "}"
+impl_decl    = "impl" type_ref [ type_params ] ":" type_ref "{" { impl_item NL } "}"
 impl_item    = "fn" lower_name "(" [ params ] ")" block
 ```
 
@@ -135,7 +137,7 @@ effect Counter {
   fn next() -> Int
 }
 
-handler FixedCounter implements Counter {
+handler FixedCounter: Counter {
   fn next() { LIMIT }
 }
 
@@ -147,7 +149,7 @@ layer AppTest {
 pub fn area(s: Shape) -> Float {
   s match {
     Circle(radius:) -> 3.14 * radius * radius
-    Rect(w, h) -> w * h
+    Rect(w, h)      -> w * h
   }
 }
 
@@ -189,7 +191,7 @@ type       = type_ref [ "[" type_arg { "," type_arg } "]" ]
            | "(" type ")"                                     (* 括弧 *)
            | "(" type "," type { "," type } ")"               (* タプル *)
            | "fn" "(" [ type { "," type } ] ")" "->" type
-             [ "fails" error_set ] [ "use" effect_set ]
+             [ "fails" error_set ] [ "uses" effect_set ]
 type_ref   = [ module_path "." ] type_name
 
 type_arg   = type
@@ -209,18 +211,18 @@ effect Log {
   fn info(msg: String) -> ()
 }
 
-type Job[E, R](run: fn() -> Int fails E use R)
+type Job[E, R](run: fn() -> Int fails E uses { R })
 
 fn twice[E](f: fn() -> Int fails Timeout | E) -> Int fails Timeout | E {
   f() + f()
 }
 
-fn start(job: Job[Timeout, { Log }]) -> Int fails Timeout use { Log } {
+fn start(job: Job[Timeout, { Log }]) -> Int fails Timeout uses { Log } {
   job.run()
 }
 
-fn pair() -> (Int, fn(Int) -> Int fails {} use {}) {
-  (1, fn(x) { x + 1 })
+fn pair() -> (Int, fn(Int) -> Int fails {} uses {}) {
+  (1, |x| x + 1)
 }
 ```
 
@@ -265,7 +267,8 @@ if_expr    = "if" expr block [ "else" ( block | if_expr ) ]
 arm        = pattern [ "if" expr ] "->" expr
 with_expr  = "with" with_item { "," with_item } block
 with_item  = type_ref [ "by" type_ref [ "[" type { "," type } "]" ] ]   (* by はラベル *)
-lambda     = "fn" "(" [ params ] ")" block
+lambda     = ( "||" | "|" [ lambda_param { "," lambda_param } ] "|" ) expr
+lambda_param = pattern [ ":" type ]
 ```
 
 `cmp_expr` は比較演算子を1つしか持てないので、`a < b < c` は書けません（E0119）。比較のほかの二項演算子と `|>` は左結合です。`escape` と `match` は後置で、続けて何度でも書けます。
@@ -283,13 +286,14 @@ fn main() {
   user = find(2) escape {
     NotFound(id:) -> User(id:, name: "guest")
   }
-  renamed = User(name: "bob", ..user)    # 部分更新
+  renamed = User(name: "bob", ..user) # 部分更新
   xs = [1, 2, ..[3, 4]]
   label = renamed.id match {
     n if n > 1 -> "many"
-    _ -> "one"
+    _          -> "one"
   }
   dbg((renamed, xs, label))
+  ()
 }
 ```
 
@@ -345,15 +349,15 @@ type User(id: Int, name: String, admin: Bool)
 fn sign(n: Int) -> String {
   n match {
     ZERO -> "zero"
-    -1 -> "minus one"
-    _ -> "other"
+    -1   -> "minus one"
+    _    -> "other"
   }
 }
 
 fn describe(xs: List[Int]) -> String {
   xs match {
-    [] -> "empty"
-    [x] -> "one: #{x}"
+    []          -> "empty"
+    [x]         -> "one: #{x}"
     [x, ..rest] -> "first #{x}, then #{rest}"
   }
 }
@@ -361,12 +365,13 @@ fn describe(xs: List[Int]) -> String {
 fn is_admin(u: User) -> Bool {
   u match {
     User(admin: True, ..) -> True
-    User(..) -> False
+    User(..)              -> False
   }
 }
 
 fn main() {
   dbg((sign(-1), describe([1, 2]), is_admin(User(id: 1, name: "a", admin: True))))
+  ()
 }
 ```
 

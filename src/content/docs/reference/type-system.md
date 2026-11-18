@@ -23,7 +23,7 @@ E と R は普段ソースに現れず、LSP が表示します。
 ## 関数型
 
 ```
-fn(A, B) -> C fails E use R
+fn(A, B) -> C fails E uses { R }
 ```
 
 引数の位置に書く関数型では、節の省略は「何でもよく、呼び出し元に伝わる」を意味します。
@@ -32,9 +32,9 @@ fn(A, B) -> C fails E use R
 |---|---|
 | `fn(A) -> B` | どんなエラーと効果を持っていてもよい。それらは、受け取った関数を呼ぶ側の E と R に加わる |
 | `fn(A) -> B fails {}` | 失敗しない関数だけ |
-| `fn(A) -> B use {}` | 効果を持たない関数だけ |
-| `fn(A) -> B fails {} use {}` | 純粋な関数だけ |
-| `fn(A) -> B use R`（R は型引数） | 効果に名前を付け、制約を掛けられる（下の「効果への制約」） |
+| `fn(A) -> B uses {}` | 効果を持たない関数だけ |
+| `fn(A) -> B fails {} uses {}` | 純粋な関数だけ |
+| `fn(A) -> B uses { R }`（R は型引数） | 効果に名前を付け、制約を掛けられる（下の「効果への制約」） |
 
 `List.map(xs, f)` は f のエラーと効果をそのまま引き継ぐので、純粋版と効果版を2つ用意しなくて済みます。
 
@@ -44,7 +44,7 @@ error Bad
 fn apply(f: fn(Int) -> Int fails {}) -> Int { f(1) }
 
 fn main() {
-  apply(fn(x) { fail Bad })    # error[E0321]: fails {} の位置に失敗する関数
+  apply(|x| fail Bad)    # error[E0321]: fails {} の位置に失敗する関数
 }
 ```
 
@@ -64,24 +64,25 @@ fn main() {
 type Request(path: String)
 type Response(body: String)
 
-type Handler[E, R](run: fn(Request) -> Response fails E use R)
+type Handler[E, R](run: fn(Request) -> Response fails E uses { R })
 
 fn compose[A, B, C](f: fn(A) -> B, g: fn(B) -> C) -> fn(A) -> C {
-  fn(x) { g(f(x)) }      # 戻り値の関数は f と g のエラーと効果を持つと推論される
+  |x| g(f(x)) # 戻り値の関数は f と g のエラーと効果を持つと推論される
 }
 
 fn main() {
-  inc = compose(fn(x: Int) { x + 1 }, fn(x: Int) { x * 2 })
+  inc = compose(|x: Int| x + 1, |x: Int| x * 2)
   dbg(inc(3))
+  ()
 }
 ```
 
 - 宣言の中を空にするのは、型の名前に現れない集合変数を作らないためです。`Handler` が効果を持ちうることは、`Handler[E, R]` と型引数に現れます。
-- 型引数がふつうの型か、エラーの集合か、効果の集合かは、使われた位置（`fails E`、`use R`）から推論します。種を書く構文は持ちません。
+- 型引数がふつうの型か、エラーの集合か、効果の集合かは、使われた位置（`fails E`、`uses { R }`）から推論します。種を書く構文は持ちません。
 
 ### 集合の型引数
 
-名前付き型の集合の型引数には集合を渡せます。書き方は fails 節（`A | B`）と use 節（`{ A, B }`）にそろえます。
+名前付き型の集合の型引数には集合を渡せます。書き方は fails 節（`A | B`）と uses 節（`{ A, B }`）にそろえます。
 
 ```emela check
 error NotFound(id: Int)
@@ -98,20 +99,20 @@ effect Log {
 type Request(path: String)
 type Response(body: String)
 
-type Handler[E, R](run: fn(Request) -> Response fails E use R)
+type Handler[E, R](run: fn(Request) -> Response fails E uses { R })
 
 fn serve(h: Handler[NotFound | Timeout, { Db, Log }], req: Request) -> Response
   fails NotFound | Timeout
-  use { Db, Log } {
+  uses { Db, Log } {
   h.run(req)
 }
 
-fn only_db(h: Handler[NotFound, Db], req: Request) -> Response fails NotFound use Db {
+fn only_db(h: Handler[NotFound, Db], req: Request) -> Response fails NotFound uses { Db } {
   h.run(req)
 }
 
 fn echo() -> Handler[{}, {}] {
-  Handler(run: fn(req) { Response(body: req.path) })
+  Handler(run: |req| Response(body: req.path))
 }
 ```
 
@@ -122,7 +123,7 @@ fn echo() -> Handler[{}, {}] {
 - 型引数の数が合わなければ E0304 です（`List[Int, Int]`）。
 
 ```emela check=error
-type Handler[E, R](run: fn() -> Int fails E use R)
+type Handler[E, R](run: fn() -> Int fails E uses { R })
 
 fn bad(h: Handler[Int, {}]) -> Int { 1 }    # error[E0323]: E はエラーの集合
 ```
@@ -133,7 +134,7 @@ fn bad(h: Handler[Int, {}]) -> Int { 1 }    # error[E0323]: E はエラーの集
 |---|---|---|
 | 戻り値の型 | T と E を推論する | T を検査し、E は fails 節のとおりであることを強制する |
 | fails 節 | 戻り値の型があれば「エラーなし」 | ちょうどその集合であることを強制する |
-| use 節 | 常に R を推論する（戻り値の型を書いていても） | ちょうどその集合であることを強制する。引数の関数を呼んだときの効果（見えない集合変数）は足される |
+| uses 節 | 常に R を推論する（戻り値の型を書いていても） | ちょうどその集合であることを強制する。引数の関数を呼んだときの効果（見えない集合変数）は足される |
 
 関数の宣言の戻り値の書き方で、エラーの扱いは次のように決まります。
 
@@ -149,10 +150,11 @@ fn bad(h: Handler[Int, {}]) -> Int { 1 }    # error[E0323]: E はエラーの集
 - 引数の関数が受け取る関数（`f: fn(fn() -> A) -> B` の内側）の見えない集合変数は、本体から見ると中身が分かりません。そこへ失敗する関数を渡すとエラーになります。
 
 ```emela check
-fn twice(f: fn() -> Int) -> Int { f() + f() }   # E は f のエラー。-> Int でもエラーにならない
+fn twice(f: fn() -> Int) -> Int { f() + f() } # E は f のエラー。-> Int でもエラーにならない
 
 fn main() {
-  dbg(twice(fn() { 21 }))
+  dbg(twice(|| 21))
+  ()
 }
 ```
 
@@ -162,14 +164,14 @@ fn main() {
 
 - 戻り値の型を書いていない fn
 - 戻り値の型の中に節を省いた関数型がある fn
-- use 節のない fn
+- uses 節のない fn
 - 型を書いていない const
 
 規則:
 
 - まとまりの中では単相の型で参照し、まとまりを推論し終えてから汎化します。まとまりの中で同じ定義を別の型に使うと型が合いません（多相再帰は持ちません）。
-- use 節のない fn は、T と E が宣言のとおりで、R についてだけこの規則に従います。
-- 汎化するとき、引数の関数型の E と R にあって下界も上界もない集合変数は、集合の型引数として量化します。`fn caller() { fn(g) { g() } }` は `∀ A, E. fn() -> fn(fn() -> A fails E) -> A fails E` です。
+- uses 節のない fn は、T と E が宣言のとおりで、R についてだけこの規則に従います。
+- 汎化するとき、引数の関数型の E と R にあって下界も上界もない集合変数は、集合の型引数として量化します。`fn caller() { |g| g() }` は `∀ A, E. fn() -> fn(fn() -> A fails E) -> A fails E` です。
 - それ以外の集合変数は制約を満たす最小の集合に決めます。
 - 型引数が値の型（`err: E`）とエラーの集合（`fails E`）の両方に使われたとき、その型引数は1つのエラーの型として推論します。`fn raise(err) { fail err }` の型は `∀ E, A. fn(E) -> A fails E` です。エラーでない型を `fail` に渡したとき、また1つのエラーの型の型引数をエラーでない型で具体化したときは E0319 です。
 
@@ -179,12 +181,12 @@ error NotFound(id: Int)
 fn or_fail[A, E](opt: Option[A], err: E) -> A fails E {
   opt match {
     Some(a) -> a
-    None -> fail err
+    None    -> fail err
   }
 }
 
 fn find(id: Int) -> Int fails NotFound {
-  or_fail(None, NotFound(id:))      # E = NotFound
+  or_fail(None, NotFound(id:)) # E = NotFound
 }
 ```
 
@@ -195,15 +197,15 @@ LSP と診断は型を次の形で表示します。
 - 汎化した型引数は現れた順に `A`、`B`、…、`Z`、その後は `T26`、`T27`、… と名付けます。制約は `∀ A: Ord + Show, B. T` の形で量化子に書きます。
 - 汎化した集合の型引数は `E`、`E1`、…（エラー）、`R`、`R1`、…（効果）と名付け、ふつうの型引数の後ろに並べます。
 - 引数の型の中の見えない集合は、引数の名前から `E(f)`、`R(f)` と表示します。同じ引数の2つ目以降は `E(f, 2)` です。
-- 空の E と R は省きます。ただし関数型の引数の型の中では、省くと「何でもよい」と読めるので `fails {}`、`use {}` と書きます。
+- 空の E と R は省きます。ただし関数型の引数の型の中では、省くと「何でもよい」と読めるので `fails {}`、`uses {}` と書きます。
 - 効果の集合は、要素が1つならそのまま、2つ以上なら `{ A, B }`、空なら `{}` と書きます。エフェクトを先、集合の型引数を後に並べます。
-- `fails` 節の後に `use` 節を書きます。
+- `fails` 節の後に `uses` 節を書きます。
 - 外側に節のある関数型の戻り値が関数型なら、戻り値を括弧で囲みます。
 - 能力の値の型は `use Logger` と表示します。
 - 型の食い違いの診断にはまだ決まっていない集合変数を出しません。
 
 ```emela check=error
-fn now_only[R: Immediate](f: fn() -> () use R) -> () use R { f() }
+fn now_only[R: Immediate](f: fn() -> () uses { R }) -> () uses { R } { f() }
 
 fn pass(g: fn() -> ()) {
   now_only(g)    # error[E0416]: effect set `R(g)` may suspend ...
@@ -224,7 +226,7 @@ fn pass(g: fn() -> ()) {
 | `e escape { Ti -> ei }` | e の型と各腕の型の共通の型（Never は合流で消える） | (Ee ∖ {Ti}) ∪ Eei（Ti は腕が値をすべて受けるタグ。集合変数からは消さない） | Re ∪ Rei |
 | `use X` | X の能力 | {} | { X } |
 | `with H { e }` | e の型 | Ee ∪ (init の E) | (Re ∖ 供給(H)) ∪ 依存(H) |
-| `fn(x) { e }` | `fn(..) -> T fails Ee use Re` | {} | {} |
+| `\|x\| e` | `fn(..) -> T fails Ee uses Re` | {} | {} |
 | `if c { a } else { b }` | a と b の共通の型 | Ec ∪ Ea ∪ Eb | Rc ∪ Ra ∪ Rb |
 | `e match { pi -> ei }` | 腕の共通の型 | Ee ∪ Eei | Re ∪ Rei |
 
@@ -233,18 +235,19 @@ fn pass(g: fn() -> ()) {
 - 無名関数は本体の E と R を関数型の中に閉じ込めます。それらが表に出るのは関数を呼んだときです。
 - Never はどの型とも共通の型を作れます。if や match の一方の分岐が fail でも、全体の型はもう一方の型になります。
 - Never が他の型として扱われるのは、分岐の合流と、期待される型の位置に置かれたときの最上位だけです。`List[Never]` と `List[Int]` は一致しません。
-- 呼び出しの引数は仮引数の順に検査します。期待する型がある位置（引数、戻り値の型、束縛の型注釈）では、その型をブロックの最後の式、if と match の各分岐、リストの要素、無名関数の引数と本体へ先に渡します。`List.map(users, fn(u) { u.name })` では、u の型は先に検査した users から決まります。
+- 呼び出しの引数は仮引数の順に検査します。期待する型がある位置（引数、戻り値の型、束縛の型注釈）では、その型をブロックの最後の式、if と match の各分岐、リストの要素、無名関数の引数と本体へ先に渡します。`List.map(users, |u| u.name)` では、u の型は先に検査した users から決まります。
 - 供給(H) は H が実装するエフェクト、依存(H) は H の init と操作が要求するエフェクトです。ラベルの項目の供給と依存は下の「[ラベル](#ラベル)」にあります。
 
 ```emela check
 type User(name: String)
 
 fn names(users: List[User]) -> List[String] {
-  List.map(users, fn(u) { u.name })    # u の型は users から決まる
+  List.map(users, |u| u.name) # u の型は users から決まる
 }
 
 fn main() {
   dbg(names([User(name: "alice")]))
+  ()
 }
 ```
 
@@ -266,7 +269,7 @@ fn main() {
 type User(name: String)
 
 fn main() {
-  get = fn(u) { u.name }    # error[E0314]: u の型が決まっていない
+  get = |u| u.name    # error[E0314]: u の型が決まっていない
   dbg(get(User(name: "a")))
 }
 ```
@@ -298,11 +301,12 @@ error Refused
 fn run(f: fn() -> Int fails Timeout | Refused) -> Int fails Timeout | Refused { f() }
 
 fn main() {
-  n = run(fn() { 1 }) escape {
+  n = run(|| 1) escape {
     Timeout -> 0
     Refused -> 0
   }
   dbg(n)
+  ()
 }
 ```
 
@@ -322,13 +326,14 @@ const ADMIN_ID = 0
 fn describe(n: Int) -> String {
   n match {
     ADMIN_ID -> "admin"
-    0 -> "zero"           # warning[W0301]: ADMIN_ID が 0 を覆っている
-    _ -> "other"
+    0        -> "zero" # warning[W0301]: ADMIN_ID が 0 を覆っている
+    _        -> "other"
   }
 }
 
 fn main() {
-  dbg(describe(0))      # "admin"
+  dbg(describe(0)) # "admin"
+  ()
 }
 ```
 
@@ -369,7 +374,7 @@ fn retry[A](f: fn() -> A) -> A {
 }
 
 fn flaky() -> Int {
-  retry(fn() { fail Timeout })    # error[E0318]: unhandled error `Timeout`
+  retry(|| fail Timeout)    # error[E0318]: unhandled error `Timeout`
 }
 ```
 
@@ -378,7 +383,7 @@ error Timeout
 
 # Timeout を書き出すと、1回目の呼び出しの Timeout は型からも消える
 fn retry[A, E](f: fn() -> A fails Timeout | E) -> A fails Timeout | E {
-  f() escape { Timeout -> f() }    # escape の E は E、2回目の f() で Timeout | E
+  f() escape { Timeout -> f() } # escape の E は E、2回目の f() で Timeout | E
 }
 ```
 
@@ -387,14 +392,14 @@ fn retry[A, E](f: fn() -> A fails Timeout | E) -> A fails Timeout | E {
 ### with
 
 - 供給したエフェクトは本体の R から消えます。ただし escape と同じく、中身の分からない効果の集合（引数の関数型の見えない集合など）からは消しません。
-- 型の上でも正確に消したいときは、供給するエフェクトを関数型に書き出します（`use { Logger, R }`）。書き出したエフェクトは集合変数の外にあるので、with で消えます。
+- 型の上でも正確に消したいときは、供給するエフェクトを関数型に書き出します（`uses { Logger, R }`）。書き出したエフェクトは集合変数の外にあるので、with で消えます。
 
 ```emela check=error
 effect Log {
   fn info(msg: String) -> ()
 }
 
-handler QuietLog implements Log {
+handler QuietLog: Log {
   fn info(msg) { () }
 }
 
@@ -402,8 +407,8 @@ fn run(f: fn() -> ()) {
   with QuietLog { f() }       # R は f の効果の集合のまま
 }
 
-fn caller() -> () use {} {
-  run(fn() { (use Log).info("x") })    # error[E0402]: Log が残る
+fn caller() -> () uses {} {
+  run(|| (use Log).info("x"))    # error[E0402]: Log が残る
 }
 ```
 
@@ -412,16 +417,16 @@ effect Log {
   fn info(msg: String) -> ()
 }
 
-handler QuietLog implements Log {
+handler QuietLog: Log {
   fn info(msg) { () }
 }
 
-fn run[R](f: fn() -> () use { Log, R }) -> () use R {
-  with QuietLog { f() }       # R は R だけ。Log は消える
+fn run[R](f: fn() -> () uses { Log, R }) -> () uses { R } {
+  with QuietLog { f() } # R は R だけ。Log は消える
 }
 
 fn main() {
-  run(fn() { (use Log).info("x") })
+  run(|| (use Log).info("x"))
 }
 ```
 
@@ -431,10 +436,10 @@ fn main() {
 - 能力の値の操作を呼ぶと、R にそのエフェクトが載り、E に操作の `fails` が載ります。能力の値を捕まえたクロージャの型にもそのエフェクトが載ります。
 - 能力の値の操作を呼ばずに `log.info` と書くと関数の値になります。能力の値はその位置で評価され、関数の値の型には能力のエフェクトが載ります。
 - 能力の値の型はソースに書けません。能力の値を引数に渡す（E0408）、データ構造に入れる（E0409）、関数から返す（E0410）はどれもエラーです。値の最上位の型だけを見ます。
-- R の中で同じエフェクトかどうかは、型引数まで比べます。`State[Int]` と `State[String]` は別のエフェクトです。型引数がまだ決まっていなければ単一化して比べます。R に残った型変数は汎化します（`fn peek() { modify(fn(x) { x }) }` は `∀ A. fn() -> A use State[A]`）。
+- R の中で同じエフェクトかどうかは、型引数まで比べます。`State[Int]` と `State[String]` は別のエフェクトです。型引数がまだ決まっていなければ単一化して比べます。R に残った型変数は汎化します（`fn peek() { modify(|x| x) }` は `∀ A. fn() -> A uses { State[A] }`）。
 - with で後ろの項目が優先されるのも、型引数まで同じエフェクトのあいだだけです。
 - `use Store[S]` の型引数には囲む fn の型引数を書けます。
-- 型引数を持つエフェクトのハンドラは、具体的な型を書きます（`implements Store[Int]`）。どの型でも実装する汎用のハンドラはありません。
+- 型引数を持つエフェクトのハンドラは、具体的な型を書きます（`handler H: Store[Int]`）。どの型でも実装する汎用のハンドラはありません。
 
 ## 効果への制約
 
@@ -442,7 +447,7 @@ fn main() {
 
 ```emela
 @external(js, "./dom.mjs", "onClick")
-fn on_click[R: Immediate](id: String, handler: fn() -> () use R) -> ()
+fn on_click[R: Immediate](id: String, handler: fn() -> () uses { R }) -> ()
 ```
 
 Immediate は「中断せず、呼んだその場で完了する」ことを表す組み込みの制約です。コンパイラが宣言から自動で判定するので、実装は書きません。
@@ -457,10 +462,10 @@ effect Ticker {
   suspend fn tick() -> ()
 }
 
-fn now_only[R: Immediate](f: fn() -> () use R) -> () use R { f() }
+fn now_only[R: Immediate](f: fn() -> () uses { R }) -> () uses { R } { f() }
 
-fn bad() -> () use Ticker {
-  now_only(fn() { (use Ticker).tick() })    # error[E0416]: Ticker は中断しうる
+fn bad() -> () uses { Ticker } {
+  now_only(|| (use Ticker).tick())    # error[E0416]: Ticker は中断しうる
 }
 ```
 
@@ -469,7 +474,7 @@ fn bad() -> () use Ticker {
 - `R: Immediate` の制約は、その定義（fn か構成子）を参照したところで、具体化した集合について確かめます（E0416）。型の注釈（`Ticker[Clock]`）では確かめません。値は構成子からしか作れないためです。
 - 効果の集合でない型引数に Immediate を付けるとエラーです（E0322）。
 - 引数の型の中の見えない効果の集合は Immediate の制約を持たないので、`R: Immediate` の引数には渡せません。制約が要るときは、名前を付けた型引数に `: Immediate` を書きます。
-- 外部関数の引数の型の中の見えない効果の集合は、Immediate の制約を持ちます。外部関数の宣言の引数の関数型に書いた use 節は、Immediate でなければエラーになります。
+- 外部関数の引数の型の中の見えない効果の集合は、Immediate の制約を持ちます。外部関数の宣言の引数の関数型に書いた uses 節は、Immediate でなければエラーになります。
 - 型を推論する定義で、Immediate を要求する位置に渡した集合変数を汎化するときは、その型引数に Immediate の制約を付けます。
 - エフェクトが Immediate かどうかは宣言だけで決まり、ハンドラにも型引数にも左右されません。ラベルが Immediate かどうかは元のエフェクトで決まります。
 - fn の操作の実装は、本体の R が Immediate か、中断しうる呼び出しを含まないかのどちらかを満たさなければなりません（E0417）。そのため fn の操作の呼び出しはどのハンドラに当たっても中断せず、Immediate なエフェクトの操作が中断することはありません。
@@ -479,10 +484,10 @@ effect Log {
   fn info(msg: String) -> ()
 }
 
-fn now_only[R: Immediate](f: fn() -> () use R) -> () use R { f() }
+fn now_only[R: Immediate](f: fn() -> () uses { R }) -> () uses { R } { f() }
 
-fn ok() -> () use Log {
-  now_only(fn() { (use Log).info("x") })    # Log は Immediate
+fn ok() -> () uses { Log } {
+  now_only(|| (use Log).info("x")) # Log は Immediate
 }
 ```
 
@@ -494,11 +499,11 @@ E0417 の判定で、呼び出しが中断しうるかは次で決めます。
 - 関数と関数の値の呼び出しは、呼ばれる側の型の R で決まります。R が Immediate でなければ中断しうる呼び出しです。能力を捕まえたクロージャや、値として取り出した操作（`g = clock.now`）を呼ぶのも関数の値の呼び出しです。
 - `@external suspend fn` の呼び出しは中断しうる呼び出しです。
 
-関数を挟むと、その関数が fn の操作しか呼ばなくても中断しうるとみなします（`fn stamp() -> Instant use { Clock }` を呼ぶ本体は E0417）。外側の Clock の `now` と、内側の `with InstantClock` の中の `sleep` を同じ本体に混ぜた場合も、どちらの条件も満たさず E0417 です。
+関数を挟むと、その関数が fn の操作しか呼ばなくても中断しうるとみなします（`fn stamp() -> Instant uses { Clock }` を呼ぶ本体は E0417）。外側の Clock の `now` と、内側の `with InstantClock` の中の `sleep` を同じ本体に混ぜた場合も、どちらの条件も満たさず E0417 です。
 
 ## suspend fn の実装
 
-- suspend fn の実装は最後の引数に resume を受け取ります。resume の型は `fn(T) -> () fails {} use {}` です（T は操作の戻り値の型）。
+- suspend fn の実装は最後の引数に resume を受け取ります。resume の型は `fn(T) -> () fails {} uses {}` です（T は操作の戻り値の型）。
 - 実装の本体の値は捨てるので、本体の型は `()` でなければなりません。
 - 実装の本体で `resume` を直接呼ぶ（`resume(v)`）以外の使い方をすると、後から呼びうるとみなしてハンドラの依存に Async を足します。直接呼ぶ以外の使い方とは、変数に入れる、クロージャで捕まえる、引数に渡す、などです。この判定は構文だけで行い、安全側に倒します。
 

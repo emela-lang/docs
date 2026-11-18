@@ -8,13 +8,13 @@ description: if 式、&& と || の短絡、再帰と List の関数による繰
 ```emela check
 fn sum(xs: List[Int], acc: Int) -> Int {
   xs match {
-    [] -> acc
-    [x, ..rest] -> sum(rest, acc + x)    # 末尾呼び出し
+    []          -> acc
+    [x, ..rest] -> sum(rest, acc + x) # 末尾呼び出し
   }
 }
 
 fn main() {
-  dbg(sum(List.range(1, 10001), 0))    # 50005000
+  dbg(sum(List.range(1, 10001), 0)) # 50005000
 }
 ```
 
@@ -35,10 +35,10 @@ fn validate(input: String) -> String fails Invalid {
 }
 
 fn main() {
-  dbg(sign(-3))                               # "negative"
+  dbg(sign(-3)) # "negative"
   label = if 3 > 0 { "あり" } else { "なし" }
-  dbg(label)                                  # "あり"
-  dbg(validate("ok") escape { Invalid(_) -> "?" })   # "ok"
+  dbg(label) # "あり"
+  dbg(validate("ok") escape { Invalid(_) -> "?" }) # "ok"
 }
 ```
 
@@ -66,8 +66,8 @@ fn crash() -> Bool {
 }
 
 fn main() {
-  dbg(False && crash())     # False   crash は呼ばれない
-  dbg(True || crash())      # True
+  dbg(False && crash()) # False   crash は呼ばれない
+  dbg(True || crash()) # True
 }
 ```
 
@@ -81,19 +81,23 @@ fn main() {
 type Item(name: String, price: Int)
 
 fn main() {
-  items = [Item(name: "pen", price: 120), Item(name: "book", price: 1500), Item(name: "cup", price: 800)]
+  items = [
+    Item(name: "pen", price: 120),
+    Item(name: "book", price: 1500),
+    Item(name: "cup", price: 800),
+  ]
 
-  names = List.map(items, fn(i) { i.name })
-  dbg(names)                          # ["pen", "book", "cup"]
+  names = List.map(items, |i| i.name)
+  dbg(names) # ["pen", "book", "cup"]
 
-  cheap = List.filter(items, fn(i) { i.price < 1000 })
-  dbg(List.length(cheap))             # 2
+  cheap = List.filter(items, |i| i.price < 1000)
+  dbg(List.length(cheap)) # 2
 
-  total = List.fold(items, from: 0, f: fn(acc, i) { acc + i.price })
-  dbg(total)                          # 2420
+  total = List.fold(items, from: 0, f: |acc, i| acc + i.price)
+  dbg(total) # 2420
 
-  dbg(List.any(items, fn(i) { i.price > 1000 }))   # True
-  dbg(List.range(0, 5))               # [0, 1, 2, 3, 4]
+  dbg(List.any(items, |i| i.price > 1000)) # True
+  dbg(List.range(0, 5)) # [0, 1, 2, 3, 4]
 }
 ```
 
@@ -111,8 +115,8 @@ fn gcd(a: Int, b: Int) -> Int {
 }
 
 fn main() {
-  dbg(count_down(5, []))      # [1, 2, 3, 4, 5]
-  dbg(gcd(48, 18))            # 6
+  dbg(count_down(5, [])) # [1, 2, 3, 4, 5]
+  dbg(gcd(48, 18)) # 6
 }
 ```
 
@@ -129,14 +133,14 @@ fn count(n: Int, acc: Int) -> Int {
 
 fn all_positive(xs: List[Int]) -> Bool {
   xs match {
-    [] -> True
-    [x, ..rest] -> x > 0 && all_positive(rest)   # && の右辺も末尾位置
+    []          -> True
+    [x, ..rest] -> x > 0 && all_positive(rest) # && の右辺も末尾位置
   }
 }
 
 fn main() {
-  dbg(count(1000000, 0))                       # 1000000
-  dbg(all_positive(List.range(1, 1000000)))    # True
+  dbg(count(1000000, 0)) # 1000000
+  dbg(all_positive(List.range(1, 1000000))) # True
 }
 ```
 
@@ -153,12 +157,12 @@ fn attempt(n: Int) -> Int fails Retry {
 
 fn retry(n: Int) -> Int {
   attempt(n) escape {
-    Retry -> retry(n + 1)        # 腕の本体は末尾位置
+    Retry -> retry(n + 1) # 腕の本体は末尾位置
   }
 }
 
 fn main() {
-  dbg(retry(0))     # 3
+  dbg(retry(0)) # 3
 }
 ```
 
@@ -174,7 +178,7 @@ fn is_odd(n: Int) -> Bool {
 }
 
 fn main() {
-  dbg(is_even(10))      # True
+  dbg(is_even(10)) # True
 }
 ```
 
@@ -193,14 +197,14 @@ fn main() {
 ```emela check
 fn describe(n: Int) -> String {
   n match {
-    0 -> "zero"
+    0          -> "zero"
     n if n < 0 -> "negative"
-    _ -> "positive"
+    _          -> "positive"
   }
 }
 
 fn main() {
-  dbg(describe(-2))     # "negative"
+  dbg(describe(-2)) # "negative"
 }
 ```
 

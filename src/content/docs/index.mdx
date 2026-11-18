@@ -37,7 +37,7 @@ fn main() {
   with Platform {
     console = use Console
     [10, -4, 7]
-      |> List.map(fn(n) { Int.to_string(half(n)) escape { Negative(n:) -> "#{n} は負" } })
+      |> List.map(|n| Int.to_string(half(n)) escape { Negative(n:) -> "#{n} は負" })
       |> String.join(", ")
       |> console.print_line
   }

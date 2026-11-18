@@ -8,9 +8,9 @@ Prelude と core は import なしで使える標準ライブラリです。Prel
 ```emela check
 fn main() {
   words = String.split("emela is a functional language", " ")
-  dbg(List.length(words))                         # 5
-  dbg(words |> List.filter(fn(w) { String.length(w) > 2 }))
-  dbg(Int.parse("42") escape { ParseError(..) -> 0 })
+  dbg(List.length(words)) # 5
+  dbg(words |> List.filter(|w| String.length(w) > 2))
+  _ = dbg(Int.parse("42") escape { ParseError(..) -> 0 })
 }
 ```
 
@@ -71,10 +71,10 @@ const READ: Int = 4
 const WRITE: Int = 2
 
 fn main() {
-  dbg(2147483647 + 1)                          # -2147483648（巻き戻る）
-  dbg(Int.checked_add(2147483647, 1))          # None
+  dbg(2147483647 + 1) # -2147483648（巻き戻る）
+  dbg(Int.checked_add(2147483647, 1)) # None
   dbg(Int.bit_or(READ, WRITE) |> Int.bit_and(WRITE)) # 2
-  dbg(Int.parse(" 42") escape { ParseError(input:) -> String.length(input) }) # 3
+  _ = dbg(Int.parse(" 42") escape { ParseError(input:) -> String.length(input) }) # 3
 }
 ```
 
@@ -99,7 +99,7 @@ fn main() {
 fn main() {
   big = Int64.from_int(2147483647) + Int64.from_int(1)
   dbg(Int64.to_string(big)) # "2147483648"
-  dbg(Int64.to_int(big))    # -2147483648（下位32ビット）
+  _ = dbg(Int64.to_int(big)) # -2147483648（下位32ビット）
 }
 ```
 
@@ -123,15 +123,15 @@ IEEE 754 の倍精度（binary64）です。
 
 ```emela check
 fn average(xs: List[Int]) -> Float {
-  sum = List.fold(xs, from: 0, f: fn(acc, x) { acc + x })
+  sum = List.fold(xs, from: 0, f: |acc, x| acc + x)
   Float.from_int(sum) / Float.from_int(List.length(xs))
 }
 
 fn main() {
-  dbg(average([1, 2, 4]))         # 2.3333333333333335
-  dbg(Float.round(2.5))           # 3
-  dbg(Float.truncate(-2.7))       # -2
-  dbg(Float.to_string(0.1 + 0.2)) # "0.30000000000000004"
+  dbg(average([1, 2, 4])) # 2.3333333333333335
+  dbg(Float.round(2.5)) # 3
+  dbg(Float.truncate(-2.7)) # -2
+  _ = dbg(Float.to_string(0.1 + 0.2)) # "0.30000000000000004"
 }
 ```
 
@@ -164,17 +164,17 @@ Unicode 文字の列です。内部の符号化は観測できません。文字
 ```emela check
 fn initials(name: String) -> String {
   String.split(String.trim(name), " ")
-    |> List.filter(fn(w) { w != "" })
-    |> List.map(fn(w) { Option.or(List.head(String.chars(w)), "") })
+    |> List.filter(|w| w != "")
+    |> List.map(|w| Option.or(List.head(String.chars(w)), ""))
     |> String.concat
 }
 
 fn main() {
-  dbg(initials("  Ada  Lovelace "))       # "AL"
-  dbg(String.length("👍"))                # 1
-  dbg(String.byte_size("👍"))             # 4
-  dbg(String.split("a,b,,c", ","))        # ["a", "b", "", "c"]
-  dbg(String.code_points("A"))            # [65]
+  dbg(initials("  Ada  Lovelace ")) # "AL"
+  dbg(String.length("👍")) # 1
+  dbg(String.byte_size("👍")) # 4
+  dbg(String.split("a,b,,c", ",")) # ["a", "b", "", "c"]
+  _ = dbg(String.code_points("A")) # [65]
 }
 ```
 
@@ -208,12 +208,12 @@ fn main() {
 
 ```emela check
 fn main() {
-  (evens, odds) = List.range(1, 7) |> List.partition(fn(x) { x % 2 == 0 })
-  dbg(evens)                               # [2, 4, 6]
-  dbg(odds)                                # [1, 3, 5]
-  dbg(List.zip(evens, ["a", "b"]))         # [(2, "a"), (4, "b")]
-  dbg(List.get(evens, 5))                  # None
-  dbg(List.fold(odds, from: 0, f: fn(acc, x) { acc + x })) # 9
+  (evens, odds) = List.range(1, 7) |> List.partition(|x| x % 2 == 0)
+  dbg(evens) # [2, 4, 6]
+  dbg(odds) # [1, 3, 5]
+  dbg(List.zip(evens, ["a", "b"])) # [(2, "a"), (4, "b")]
+  dbg(List.get(evens, 5)) # None
+  _ = dbg(List.fold(odds, from: 0, f: |acc, x| acc + x)) # 9
 }
 ```
 
@@ -236,10 +236,10 @@ fn main() {
 error MissingName(key: String)
 
 fn lookup(pairs: List[(String, String)], key: String) -> Option[String] {
-  List.find(pairs, fn(p) {
+  List.find(pairs, |p| {
     (k, _) = p
     k == key
-  }) |> Option.map(fn(p) {
+  }) |> Option.map(|p| {
     (_, v) = p
     v
   })
@@ -247,12 +247,12 @@ fn lookup(pairs: List[(String, String)], key: String) -> Option[String] {
 
 fn main() {
   pairs = [("name", "emela"), ("version", "0.20")]
-  dbg(lookup(pairs, "name") |> Option.or("unknown"))  # "emela"
-  dbg(lookup(pairs, "license") |> Option.is_none)      # True
+  dbg(lookup(pairs, "name") |> Option.or("unknown")) # "emela"
+  dbg(lookup(pairs, "license") |> Option.is_none) # True
   name = lookup(pairs, "author") |> Option.or_fail(MissingName(key: "author")) escape {
     MissingName(key:) -> "no #{key}"
   }
-  dbg(name)                                            # "no author"
+  _ = dbg(name) # "no author"
 }
 ```
 
@@ -263,8 +263,8 @@ fn main() {
 ```emela check
 fn main() {
   ready = True
-  dbg(!ready || List.is_empty([1]))  # False
-  dbg("ready: #{ready}")             # "ready: True"
+  dbg(!ready || List.is_empty([1])) # False
+  _ = dbg("ready: #{ready}") # "ready: True"
 }
 ```
 

@@ -12,7 +12,7 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler ConsoleLogger implements Logger {
+handler ConsoleLogger: Logger {
   fn info(msg) { (use Console).print_line("[info] #{msg}") }
 }
 
@@ -68,7 +68,7 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler ConsoleLogger implements Logger {
+handler ConsoleLogger: Logger {
   fn info(msg) { (use Console).print_line("[info] #{msg}") }
 }
 
@@ -103,7 +103,7 @@ $ emela run main.emel
 - `log.info` と呼ばずに書くと関数の値になり、`List.map` などに渡せます。
 - 呼び出し側には副作用や中断を示す印（`await` や `!`）を付けません。
 
-能力の値そのものは関数の引数に渡すことも、データ構造に入れることも、関数から返すこともできません。特定のハンドラの能力を別の関数に使わせたいときは、その能力を捕まえたクロージャを渡します。
+能力の値は、ほかの値と同じく関数の引数に渡すことも、データ構造に入れることも、関数から返すこともできます。特定のハンドラの能力を別の関数に使わせたいときは、その能力の値を渡します。型は `use Db` と書きます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -113,18 +113,18 @@ effect Db {
   fn execute(rows: List[String]) -> ()
 }
 
-handler PrimaryDb implements Db {
+handler PrimaryDb: Db {
   fn query(sql) { ["primary row"] }
   fn execute(rows) { (use Console).print_line("primary <- #{rows}") }
 }
 
-handler ReplicaDb implements Db {
+handler ReplicaDb: Db {
   fn query(sql) { ["replica row"] }
   fn execute(rows) { (use Console).print_line("replica <- #{rows}") }
 }
 
-fn copy(read: fn() -> List[String] use { Db }, write: fn(List[String]) -> () use { Db }) {
-  write(read())
+fn copy(from: use Db, to: use Db) {
+  to.execute(from.query("select *"))
 }
 
 fn main() {
@@ -132,7 +132,7 @@ fn main() {
     primary = use Db
     with ReplicaDb {
       replica = use Db
-      copy(fn() { replica.query("select *") }, fn(rows) { primary.execute(rows) })
+      copy(replica, primary)
     }
   }
 }
@@ -143,7 +143,7 @@ $ emela run main.emel
 primary <- ["replica row"]
 ```
 
-レプリカから読んでプライマリに書いています。クロージャを with の中で下の関数へ渡すのはかまいませんが、with の外へ持ち出すことはできません（[状態と資源](/guide/resources/)）。
+レプリカから読んでプライマリに書いています。能力の値（やそれを捕まえたクロージャ）を with の中で下の関数へ渡すのはかまいませんが、with の外へ持ち出すことはできません（[状態と資源](/guide/resources/)）。
 
 ## with でハンドラを供給する
 
@@ -168,11 +168,11 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler Outer implements Logger {
+handler Outer: Logger {
   fn info(msg) { (use Console).print_line("outer: #{msg}") }
 }
 
-handler Inner implements Logger {
+handler Inner: Logger {
   fn info(msg) { (use Console).print_line("inner: #{msg}") }
 }
 
@@ -201,18 +201,18 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler Outer implements Logger {
+handler Outer: Logger {
   fn info(msg) { (use Console).print_line("outer: #{msg}") }
 }
 
-handler Inner implements Logger {
+handler Inner: Logger {
   fn info(msg) { (use Console).print_line("inner: #{msg}") }
 }
 
 fn main() {
-  say = fn(m) { (use Logger).info(m) }    # 囲む with がない
+  say = |m| (use Logger).info(m)          # 囲む with がない
   with SystemConsole, Outer {
-    near = fn(m) { (use Logger).info(m) } # Outer に囲まれている
+    near = |m| (use Logger).info(m)       # Outer に囲まれている
     with Inner {
       say("a")     # inner: a（呼んだ場所の Logger）
       near("b")    # outer: b
@@ -237,7 +237,7 @@ effect Users {
   fn count() -> Int
 }
 
-handler SampleUsers implements Users {
+handler SampleUsers: Users {
   fn find(id) {
     id match {
       1 -> User(id: 1, name: "alice")
@@ -257,23 +257,23 @@ fn main() {
 }
 ```
 
-- ハンドラは1つのエフェクトのすべての操作をちょうど1回ずつ実装します。
+- ハンドラは `handler 名前: エフェクト` と書き、そのエフェクトのすべての操作をちょうど1回ずつ実装します。`handler H: A + B` と書けば、1つのハンドラで複数のエフェクトを実装できます。
 - 操作の引数と戻り値の型はエフェクトの宣言から決まるので、ハンドラには書きません。
 - 操作の本体で使うエフェクト（`ConsoleLogger` の Console など）はハンドラの依存になり、with の場所で満たします。`with ConsoleLogger { ... }` だけでは Console が R に残り、`main` ではエラーになります。
 
 フィールドを持つハンドラと、`init`、`release` は[状態と資源](/guide/resources/)で扱います。
 
-## use 節で R を書く
+## uses 節で R を書く
 
-関数が使うエフェクトの集合 R は、戻り値の型を書いていても常に推論されます。決まった集合に固定したいときは use 節を書きます。
+関数が使うエフェクトの集合 R は、戻り値の型を書いていても常に推論されます。決まった集合に固定したいときは uses 節を書きます。
 
 ```emela
-fn greet(name: String) -> () use Logger { ... }
-fn copy(...) -> () use { Db, Logger } { ... }
-fn pure_part(x: Int) -> Int use {} { ... }
+fn greet(name: String) -> () uses { Logger } { ... }
+fn copy(...) -> () uses { Db, Logger } { ... }
+fn pure_part(x: Int) -> Int uses {} { ... }
 ```
 
-要素が1つなら `use Logger`、2つ以上なら `use { A, B }`、空なら `use {}` と書きます。use 節を書くと、本体がそこにないエフェクトを使ったときにエラーになります。引数の関数型での省略の意味はエラーの `fails` と同じで、`f: fn() -> ()` はどんな効果の関数でも受け取り、`use {}` を書けば効果のない関数に限ります。
+要素の数によらず波括弧で `uses { Logger }`、`uses { A, B }`、空なら `uses {}` と書きます。uses 節を書くと、本体がそこにないエフェクトを使ったときにエラーになります。引数の関数型での省略の意味はエラーの `fails` と同じで、`f: fn() -> ()` はどんな効果の関数でも受け取り、`uses {}` を書けば効果のない関数に限ります。
 
 `main` の R は Async を除いて空でなければなりません。使うエフェクトはすべて `main` の中の with で供給します。
 
@@ -302,26 +302,26 @@ effect Store[S] {
   fn load() -> S
 }
 
-handler IntStore implements Store[Int] {
+handler IntStore: Store[Int] {
   fn load() { 42 }
 }
 
-handler NameStore implements Store[String] {
+handler NameStore: Store[String] {
   fn load() { "alice" }
 }
 
-fn read_both() -> (Int, String) use { Store[Int], Store[String] } {
+fn read_both() -> (Int, String) uses { Store[Int], Store[String] } {
   ((use Store[Int]).load(), (use Store[String]).load())
 }
 
 fn main() {
   with IntStore, NameStore {
-    dbg(read_both())    # (42, "alice")
+    _ = dbg(read_both())    # (42, "alice")
   }
 }
 ```
 
-`Store[Int]` と `Store[String]` は別のエフェクトとして扱うので、同じ with に並べても上書きし合いません。`use Store[Int]` の型引数は省けません。ハンドラは `implements Store[Int]` のように具体的な型について実装します。同梱の `State[S]` がこの形です（[状態と資源](/guide/resources/)）。
+`Store[Int]` と `Store[String]` は別のエフェクトとして扱うので、同じ with に並べても上書きし合いません。`use Store[Int]` の型引数は省けません。ハンドラは `handler IntStore: Store[Int]` のように具体的な型について実装します。同梱の `State[S]` がこの形です（[状態と資源](/guide/resources/)）。
 
 ## テストでハンドラを差し替える
 
@@ -338,7 +338,7 @@ effect Users {
   fn find(id: Int) -> User fails NotFound
 }
 
-handler SampleUsers implements Users {
+handler SampleUsers: Users {
   fn find(id) {
     id match {
       1 -> User(id: 1, name: "alice")
@@ -358,7 +358,7 @@ fn main() {
   }
 }
 
-handler NoUsers implements Users {
+handler NoUsers: Users {
   fn find(id) { fail NotFound(id:) }
 }
 

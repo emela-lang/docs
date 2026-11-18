@@ -7,7 +7,9 @@ description: HTTP のクライアント Std.Http の型、エラー、send の�
 
 ```emela check
 import Std.Http
-import Std.Http.{Http, Get, Request, ConnectionFailed, UnexpectedStatus, TestHttp, TestServer}
+import Std.Http.{Http, ConnectionFailed, TestHttp, TestServer}
+import Std.Http.Request.{Request, Get}
+import Std.Http.Response.{UnexpectedStatus}
 import Std.State.{State}
 
 const BASE: String = "https://search.example.com"
@@ -30,8 +32,8 @@ fn the_query_is_encoded() {
 
 @test
 fn a_404_is_not_a_failure_until_require_ok() {
-  server = TestServer(respond: fn(req, n) { Some(Http.response(404, "")) }, sent: [])
-  (text, after) = State.run(server, fn() {
+  server = TestServer(respond: |req, n| Some(Http.response(404, "")), sent: [])
+  (text, after) = State.run(server, || {
     with TestHttp {
       first_result("x") escape {
         UnexpectedStatus(status:, body: _) -> "status #{status}"
@@ -60,6 +62,8 @@ pub type Response(status: Int, headers: List[(String, String)], body: String)
 
 構成子とフィールドは公開されているので、`Request(body: text, ..Http.request(Post, url))` のように更新の構文で作り変えられます。
 
+`Method` と `Request` は `Std.Http.Request` に、`Response` と `UnexpectedStatus` は `Std.Http.Response` にあります（`import Std.Http.Request.{Request, Get}`）。
+
 ## エラー
 
 | error | 意味 |
@@ -86,8 +90,8 @@ pub effect Http {
 |---|---|---|
 | `request` | `request(method: Method, url: String) -> Request` | ヘッダなし、本文なしの要求 |
 | `add_header` | `add_header(req: Request, name: String, value: String) -> Request` | ヘッダを末尾に足す |
-| `get` | `get(url: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText use Http` | GET を送る |
-| `post` | `post(url: String, body: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText use Http` | 本文つきの POST を送る |
+| `get` | `get(url: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText uses { Http }` | GET を送る |
+| `post` | `post(url: String, body: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText uses { Http }` | 本文つきの POST を送る |
 | `header` | `header(res: Response, name: String) -> Option[String]` | 名前の合う最初のヘッダの値 |
 | `headers` | `headers(res: Response, name: String) -> List[String]` | 名前の合うすべてのヘッダの値を順に |
 | `encode_query` | `encode_query(pairs: List[(String, String)]) -> String` | 各部分をパーセント符号化したクエリ（`q=%E6%9D%B1&page=2`） |
@@ -106,26 +110,22 @@ pub effect Http {
 - GET と HEAD の空の本文は本文なしで送ります。GET と HEAD に空でない本文を書いたときと、正しくないヘッダは ConnectionFailed です。
 - タイムアウトの設定はありません。`Fiber.timeout` か `Fiber.race` で書きます。`send` を待っている fiber が中断されると、通信を止めます（AbortSignal）。
 
-`Fiber.timeout` で包んだ `Http.get` のエラーを escape で受けるときも、腕にはエラーの構成子を書きます。`_` で全部は受けられません。
+`Fiber.timeout` で包んだ `Http.get` のエラーは escape で受けます。どのエラーも同じ値にするなら、`_` の腕1つで全部を受けられます。
 
-```emela check=error
+```emela check
 import Std.Clock.{Clock}
 import Std.Fiber
 import Std.Http
 import Std.Http.{Http}
 
-fn fetch_with_deadline(url: String) -> Option[String] use { Http, Clock, Async } {
-  Fiber.timeout(2000, fn() { Http.get(url).body }) escape {
+fn fetch_with_deadline(url: String) -> Option[String] uses { Http, Clock, Async } {
+  Fiber.timeout(2000, || Http.get(url).body) escape {
     _ -> None
   }
 }
 ```
 
-```text
-escape arms must match an error constructor
-```
-
-受けるエラーを並べて書きます。
+エラーごとに分けるときは、受けるエラーの構成子を並べて書きます。
 
 ```emela check
 import Std.Clock.{Clock}
@@ -134,8 +134,8 @@ import Std.Http
 import Std.Http.{Http, InvalidUrl, ConnectionFailed, ResponseNotText}
 
 ## 2秒で間に合わなければ None。
-fn fetch_with_deadline(url: String) -> Option[String] use { Http, Clock, Async } {
-  Fiber.timeout(2000, fn() { Http.get(url).body }) escape {
+fn fetch_with_deadline(url: String) -> Option[String] uses { Http, Clock, Async } {
+  Fiber.timeout(2000, || Http.get(url).body) escape {
     InvalidUrl(..)       -> None
     ConnectionFailed(..) -> None
     ResponseNotText(..)  -> None
@@ -155,7 +155,7 @@ import Std.Console.{Console}
 import Std.Http
 import Std.Http.{Http, InvalidUrl, ConnectionFailed, ResponseNotText}
 
-fn status_of(url: String) -> String use Http {
+fn status_of(url: String) -> String uses { Http } {
   "#{Http.get(url).status}" escape {
     InvalidUrl(url:)                   -> "InvalidUrl(#{url})"
     ConnectionFailed(url: _, message:) -> "ConnectionFailed(#{message})"
@@ -193,7 +193,9 @@ pub type TestServer(respond: fn(Request, Int) -> Option[Response], sent: List[Re
 
 ```emela check
 import Std.Http
-import Std.Http.{Http, Post, Request, Response, ConnectionFailed, UnexpectedStatus, TestHttp, TestServer}
+import Std.Http.{Http, ConnectionFailed, TestHttp, TestServer}
+import Std.Http.Request.{Request, Post}
+import Std.Http.Response.{Response, UnexpectedStatus}
 import Std.State.{State}
 
 const API: String = "https://api.example.com"
@@ -213,15 +215,15 @@ fn created(req: Request, n: Int) -> Option[Response] {
 @test
 fn returns_the_location() {
   server = TestServer(respond: created, sent: [])
-  (url, after) = State.run(server, fn() { with TestHttp { create_todo("buy milk") } })
+  (url, after) = State.run(server, || with TestHttp { create_todo("buy milk") })
   assert url == "https://api.example.com/todos/1"
-  assert List.map(after.sent, fn(r) { r.body }) == ["buy milk"]
+  assert List.map(after.sent, |r| r.body) == ["buy milk"]
 }
 
 @test
 fn a_500_fails_with_unexpected_status() {
-  server = TestServer(respond: fn(req, n) { Some(Http.response(500, "oops")) }, sent: [])
-  (result, _) = State.run(server, fn() {
+  server = TestServer(respond: |req, n| Some(Http.response(500, "oops")), sent: [])
+  (result, _) = State.run(server, || {
     with TestHttp {
       create_todo("x") escape {
         UnexpectedStatus(status:, body: _) -> "status #{status}"
@@ -233,8 +235,8 @@ fn a_500_fails_with_unexpected_status() {
 
 @test
 fn no_answer_is_connection_failed() {
-  server = TestServer(respond: fn(req, n) { None }, sent: [])
-  (result, _) = State.run(server, fn() {
+  server = TestServer(respond: |req, n| None, sent: [])
+  (result, _) = State.run(server, || {
     with TestHttp {
       create_todo("x") escape {
         ConnectionFailed(url: _, message:) -> message

@@ -14,8 +14,8 @@ fn swap[A, B](p: Pair[A, B]) -> Pair[B, A] {
 
 fn main() {
   p = Pair(first: 1, second: "one")
-  dbg(swap(p))                  # Pair(first: "one", second: 1)
-  dbg(swap(Pair(first: True, second: 2.5)))   # Pair(first: 2.5, second: True)
+  dbg(swap(p)) # Pair(first: "one", second: 1)
+  dbg(swap(Pair(first: True, second: 2.5))) # Pair(first: 2.5, second: True)
 }
 ```
 
@@ -29,14 +29,14 @@ enum Tree[A] {
 
 fn size[A](t: Tree[A]) -> Int {
   t match {
-    Leaf -> 0
+    Leaf          -> 0
     Node(l, _, r) -> size(l) + 1 + size(r)
   }
 }
 
 fn main() {
   t = Node(Node(Leaf, 1, Leaf), 2, Leaf)
-  dbg(size(t))      # 2
+  dbg(size(t)) # 2
 }
 ```
 
@@ -46,12 +46,12 @@ fn main() {
 fn group_first[Key, Value](pairs: List[(Key, Value)]) -> Option[Key] {
   pairs match {
     [(k, _), ..] -> Some(k)
-    [] -> None
+    []           -> None
   }
 }
 
 fn main() {
-  dbg(group_first([("a", 1), ("b", 2)]))    # Some("a")
+  dbg(group_first([("a", 1), ("b", 2)])) # Some("a")
 }
 ```
 
@@ -60,12 +60,12 @@ fn main() {
 ```emela check
 type Item(name: String)
 
-fn first[Item](xs: List[Item]) -> Option[Item] {   # type parameter `Item` shadows an outer definition
+fn first[Item](xs: List[Item]) -> Option[Item] { # type parameter `Item` shadows an outer definition
   List.head(xs)
 }
 
 fn main() {
-  dbg(first([1, 2]))    # Some(1)
+  dbg(first([1, 2])) # Some(1)
 }
 ```
 
@@ -75,17 +75,17 @@ fn main() {
 
 ```emela check
 fn wrap[A](x: A) {
-  [x]                   # 戻り値の型 List[A] は推論する
+  [x] # 戻り値の型 List[A] は推論する
 }
 
 const EMPTY = []
 
 fn main() {
-  dbg(wrap(1))          # [1]
-  dbg(wrap("s"))        # ["s"]
+  dbg(wrap(1)) # [1]
+  dbg(wrap("s")) # ["s"]
   ints: List[Int] = EMPTY
   strings: List[String] = EMPTY
-  dbg(ints)             # []
+  dbg(ints) # []
 }
 ```
 
@@ -95,7 +95,7 @@ fn main() {
 
 ```emela check=error
 fn main() {
-  id = fn(x) { x }
+  id = |x| x
   a = id(1)
   b = id("s")
 }
@@ -139,38 +139,38 @@ type Response(status: Int, body: String)
 
 error NotFound(path: String)
 
-type Handler[E, R](run: fn(Request) -> Response fails E use R)
+type Handler[E, R](run: fn(Request) -> Response fails E uses { R })
 
 fn hello(req: Request) -> Response {
   Response(status: 200, body: "hello #{req.path}")
 }
 
-fn logged(req: Request) -> Response fails NotFound use Console {
+fn logged(req: Request) -> Response fails NotFound uses { Console } {
   out = use Console
   out.print_line("GET #{req.path}")
   if req.path == "/" { Response(status: 200, body: "ok") } else { fail NotFound(path: req.path) }
 }
 
-fn serve[E, R](h: Handler[E, R], req: Request) -> Response fails E use R {
+fn serve[E, R](h: Handler[E, R], req: Request) -> Response fails E uses { R } {
   h.run(req)
 }
 
 fn main() {
   pure: Handler[{}, {}] = Handler(run: hello)
-  dbg(serve(pure, Request(path: "/a")))     # Response(status: 200, body: "hello /a")
+  dbg(serve(pure, Request(path: "/a"))) # Response(status: 200, body: "hello /a")
 
   noisy: Handler[NotFound, Console] = Handler(run: logged)
   with SystemConsole {
     r = serve(noisy, Request(path: "/x")) escape {
       NotFound(path:) -> Response(status: 404, body: path)
     }
-    dbg(r)                                  # Response(status: 404, body: "/x")
+    dbg(r) # Response(status: 404, body: "/x")
   }
 }
 ```
 
-type のフィールドに書いた関数型で `fails` と `use` を省くと、「失敗せず、効果も持たない」の意味になります。効果のある関数を持たせるときは、上の `Handler[E, R]` のように型引数で受けます。`E` がエラーの集合で `R` が効果の集合だということは、`fails E` と `use R` という使われ方から推論されます。
+type のフィールドに書いた関数型で `fails` と `uses` を省くと、「失敗せず、効果も持たない」の意味になります。効果のある関数を持たせるときは、上の `Handler[E, R]` のように型引数で受けます。`E` がエラーの集合で `R` が効果の集合だということは、`fails E` と `uses { R }` という使われ方から推論されます。
 
-集合を渡すときは fails 節と use 節と同じ形で、`Handler[NotFound | Timeout, { Db, Log }]` と書きます。空なら `Handler[{}, {}]`、要素が1つなら `Handler[NotFound, Console]` のように囲まずに書けます。
+集合を渡すときは fails 節と uses 節と同じ形で、`Handler[NotFound | Timeout, { Db, Log }]` と書きます。空なら `Handler[{}, {}]`、要素が1つなら `Handler[NotFound, Console]` のように囲まずに書けます。
 
 細かい規則は [型と効果の体系](/reference/type-system/) にあります。
