@@ -24,7 +24,7 @@ fn main() {
 }
 ```
 
-```console
+```console no-check
 $ emela run main.emel
 started at 2026-10-17T05:30:33.049Z
 took True
