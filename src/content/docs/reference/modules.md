@@ -56,7 +56,7 @@ fn main() {
 - 宣言は既定で非公開です。`pub` を付けられるのはトップレベルの宣言（`fn` `type` `enum` `error` `effect` `handler` `layer` `const` `trait`）だけです。
 - 非公開の定義をほかのモジュールから参照すると E0214 です。
 - フィールドやバリアントを個別に公開・非公開にする指定はありません。type の構成子と enum のバリアントは、親の型の `pub` と `opaque` に従います。
-- 公開する関数の戻り値の型、`fails` 節、`use` 節は省けますが、省くと linter が警告します。LSP は推論した型を挿入できます。
+- 公開する関数の戻り値の型、`fails` 節、`uses` 節は省けますが、省くと linter が警告します。LSP は推論した型を挿入できます。
 
 ## opaque
 
@@ -97,11 +97,12 @@ fn main() {
 
 ```emela check
 enum Maybe {
-  Some(Int)       # warning[W0202]: `Some` shadows the prelude's `Some`
+  Some(Int) # warning[W0202]: `Some` shadows the prelude's `Some`
   Nothing
 }
 
 fn main() {
-  dbg(Some(1))    # このモジュールの Some
+  dbg(Some(1)) # このモジュールの Some
+  ()
 }
 ```

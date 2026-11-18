@@ -61,7 +61,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | `errors.As` / `errors.Is` | `escape { NotFound(..) -> ... }` |
 | `fmt.Errorf("...: %w", err)` | `escape { A(..) -> fail B(..) }` |
 | `defer conn.Close()` | ハンドラの `release` |
-| `go f()` | `Fiber.fork(fn() { f() })`（`Fiber.scope` の中だけ） |
+| `go f()` | `Fiber.fork(|| f())`（`Fiber.scope` の中だけ） |
 | `errgroup.Group` | `Fiber.scope`、`Fiber.all`、`Fiber.map` |
 | `context.WithTimeout` | `Fiber.timeout` |
 | `select` で最初の1つ | `Fiber.race` |
@@ -120,12 +120,13 @@ fn greet(user: User) -> String {
 fn main() {
   count = 0
   count = count + 1 # 再代入でなく、同じ名前で束縛し直す
-  sum = List.range(1, 11) |> List.fold(0, fn(acc, n) { acc + n })
+  sum = List.range(1, 11) |> List.fold(0, |acc, n| acc + n)
   first = List.get([10, 20, 30], 0)
   user = User(id: 1, name: "alice")
   dbg(user |> greet)
   dbg("#{count} #{sum}")
   dbg(first)
+  ()
 }
 ```
 

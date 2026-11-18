@@ -16,6 +16,7 @@ fn main() {
   count = count + 1 # 同じ名前で束縛し直す
   (major, minor) = (0, 20)
   dbg("#{name} #{VERSION}, count = #{count}, #{major}.#{minor}")
+  ()
 }
 ```
 
@@ -43,8 +44,9 @@ fn main() {
   dbg(connect("localhost", 5432))
   dbg(connect("localhost", port: 5432))
   dbg(connect(host: "db", port: 5432))
-  dbg(twice(fn(n) { n * 3 }, 2))
+  dbg(twice(|n| n * 3, 2))
   dbg(List.map([1, 2, 3], Some))
+  ()
 }
 ```
 
@@ -57,7 +59,7 @@ $ emela run main.emel
 [Some(1), Some(2), Some(3)]
 ```
 
-本体の最後の式が戻り値で、`return` はありません。仮引数の名前はそのまま引数名になり、`port: 5432` のように名前付きでも渡せます。無名関数は `fn(x) { ... }` と書き、`Some` のような構成子も名前だけで関数の値になります。
+本体の最後の式が戻り値で、`return` はありません。仮引数の名前はそのまま引数名になり、`port: 5432` のように名前付きでも渡せます。無名関数は `|x| 式` と書き、`Some` のような構成子も名前だけで関数の値になります。
 
 詳しくは [束縛と関数](/guide/functions/)。
 
@@ -69,9 +71,10 @@ fn is_even(n: Int) -> Bool { n % 2 == 0 }
 fn main() {
   List.range(1, 11)
     |> List.filter(is_even)
-    |> List.map(fn(n) { n * n })
-    |> List.fold(0, fn(acc, n) { acc + n })
+    |> List.map(|n| n * n)
+    |> List.fold(0, |acc, n| acc + n)
     |> dbg
+  ()
 }
 ```
 
@@ -101,6 +104,7 @@ fn main() {
   dbg(promoted)
   dbg(promoted.name)
   dbg([Circle(radius: 1.0), Rect(2.0, 3.0), Empty])
+  ()
 }
 ```
 
@@ -146,6 +150,7 @@ fn main() {
   dbg(describe([7, 8, 9]))
   label = if List.length([1]) > 0 { "some" } else { "none" }
   dbg(label)
+  ()
 }
 ```
 
@@ -187,6 +192,7 @@ fn main() {
   found = Some(find(3)) escape { NotFound(_) -> None }
   dbg(found)
   dbg(name_of(-1)) # Invalid は main まで伝わる
+  ()
 }
 ```
 
@@ -195,7 +201,7 @@ $ emela run main.emel
 "alice"
 "no user 2"
 None
-error: Invalid(reason: "negative id")
+error: Invalid
 ```
 
 `fail` で計算を終わらせると、エラーは何も書かなくても呼び出し元へ伝わります。`式 escape { 腕 }` は受けたいエラーだけを値に戻し、受けなかった `Invalid` はそのまま `main` まで伝わります。起こしうるエラーの集合は型の一部で、戻り値の型を省けば推論され、`-> T` と書けば「失敗しない」、`-> T fails NotFound` と書けば「ちょうどこの集合」の意味になります。
@@ -211,19 +217,19 @@ effect Greeter {
   fn greeting(name: String) -> String
 }
 
-handler English implements Greeter {
+handler English: Greeter {
   fn greeting(name) { "Hello, #{name}!" }
 }
 
-handler Japanese implements Greeter {
+handler Japanese: Greeter {
   fn greeting(name) { "こんにちは、#{name}さん" }
 }
 
-# 推論される: use { Greeter, Console }
+# 推論される: uses { Greeter, Console }
 fn welcome(names: List[String]) {
   greeter = use Greeter
   console = use Console
-  List.map(names, fn(n) { console.print_line(greeter.greeting(n)) })
+  List.each(names, |n| console.print_line(greeter.greeting(n)))
 }
 
 fn main() {
@@ -255,7 +261,7 @@ fn greet(name: String) {
 
 @test
 fn greets_everyone() {
-  (_, lines) = State.run([], fn() {
+  (_, lines) = State.run([], || {
     with TestConsole {
       greet("alice")
       greet("bob")
@@ -295,9 +301,9 @@ fn fetch(id: Int, ms: Int) -> String {
 
 fn main() {
   with Platform {
-    (a, b) = Fiber.both(fn() { fetch(1, 200) }, fn() { fetch(2, 100) })
+    (a, b) = Fiber.both(|| fetch(1, 200), || fetch(2, 100))
     (use Console).print_line("#{a}, #{b}")
-    late = Fiber.timeout(50, fn() { fetch(3, 1000) })
+    late = Fiber.timeout(50, || fetch(3, 1000))
     (use Console).print_line("timeout: #{late}")
   }
 }

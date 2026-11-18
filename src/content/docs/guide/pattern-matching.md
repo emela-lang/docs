@@ -15,16 +15,16 @@ enum Shape {
 fn area(shape: Shape) -> Float {
   shape match {
     Circle(radius:) if radius > 0.0 -> 3.14 * radius * radius
-    Circle(_) -> 0.0
-    Rect(w, h) -> w * h
-    Empty -> 0.0
+    Circle(_)                       -> 0.0
+    Rect(w, h)                      -> w * h
+    Empty                           -> 0.0
   }
 }
 
 fn main() {
-  dbg(area(Circle(radius: 1.0)))    # 3.14
-  dbg(area(Rect(2.0, 3.0)))         # 6.0
-  dbg(area(Empty))                  # 0.0
+  dbg(area(Circle(radius: 1.0))) # 3.14
+  dbg(area(Rect(2.0, 3.0))) # 6.0
+  dbg(area(Empty)) # 0.0
 }
 ```
 
@@ -53,11 +53,11 @@ type User(id: Int, name: String)
 fn main() {
   users = [User(id: 1, name: "alice"), User(id: 2, name: "bob")]
   id = 2
-  name = users |> List.find(fn(u) { u.id == id }) match {
+  name = users |> List.find(|u| u.id == id) match {
     Some(u) -> u.name
-    None -> "guest"
+    None    -> "guest"
   }
-  dbg(name)         # "bob"
+  dbg(name) # "bob"
 }
 ```
 
@@ -85,10 +85,10 @@ const ADMIN_ID = 0
 
 fn describe(n: Int) -> String {
   n match {
-    ADMIN_ID -> "admin"
-    -1 -> "minus one"
+    ADMIN_ID   -> "admin"
+    -1         -> "minus one"
     n if n < 0 -> "negative"
-    _ -> "positive"
+    _          -> "positive"
   }
 }
 
@@ -96,15 +96,15 @@ fn command(s: String) -> String {
   s match {
     "q" -> "quit"
     "h" -> "help"
-    _ -> "unknown"
+    _   -> "unknown"
   }
 }
 
 fn main() {
-  dbg(describe(0))      # "admin"
-  dbg(describe(-1))     # "minus one"
-  dbg(describe(-5))     # "negative"
-  dbg(command("q"))     # "quit"
+  dbg(describe(0)) # "admin"
+  dbg(describe(-1)) # "minus one"
+  dbg(describe(-5)) # "negative"
+  dbg(command("q")) # "quit"
 }
 ```
 
@@ -123,8 +123,8 @@ fn greet(u: User) -> String {
 }
 
 fn main() {
-  dbg(greet(User(id: 0, name: "root", email: "r@example.com")))   # "hello, admin"
-  dbg(greet(User(id: 2, name: "bob", email: "b@example.com")))    # "hello, bob"
+  dbg(greet(User(id: 0, name: "root", email: "r@example.com"))) # "hello, admin"
+  dbg(greet(User(id: 2, name: "bob", email: "b@example.com"))) # "hello, bob"
 }
 ```
 
@@ -158,7 +158,7 @@ fn fizzbuzz(n: Int) -> String {
     (0, 0) -> "FizzBuzz"
     (0, _) -> "Fizz"
     (_, 0) -> "Buzz"
-    _ -> Int.to_string(n)
+    _      -> Int.to_string(n)
   }
 }
 
@@ -173,7 +173,7 @@ fn main() {
 ```emela check
 fn sum(xs: List[Int]) -> Int {
   xs match {
-    [] -> 0
+    []          -> 0
     [x, ..rest] -> x + sum(rest)
   }
 }
@@ -181,15 +181,15 @@ fn sum(xs: List[Int]) -> Int {
 fn first_two(xs: List[String]) -> String {
   xs match {
     [a, b, ..] -> "#{a}, #{b}"
-    [a] -> a
-    [] -> "none"
+    [a]        -> a
+    []         -> "none"
   }
 }
 
 fn main() {
-  dbg(sum([1, 2, 3]))                 # 6
-  dbg(first_two(["a", "b", "c"]))     # "a, b"
-  dbg(first_two(["a"]))               # "a"
+  dbg(sum([1, 2, 3])) # 6
+  dbg(first_two(["a", "b", "c"])) # "a, b"
+  dbg(first_two(["a"])) # "a"
 }
 ```
 
@@ -202,15 +202,15 @@ fn main() {
 ```emela check
 fn classify(n: Int) -> String {
   n match {
-    0 -> "zero"
+    0               -> "zero"
     n if n % 2 == 0 -> "even"
-    _ -> "odd"
+    _               -> "odd"
   }
 }
 
 fn main() {
-  dbg(classify(4))      # "even"
-  dbg(classify(7))      # "odd"
+  dbg(classify(4)) # "even"
+  dbg(classify(7)) # "odd"
 }
 ```
 
@@ -221,12 +221,12 @@ fn grade(score: Int) -> String {
   score match {
     s if s >= 90 -> "A"
     s if s >= 70 -> "B"
-    _ -> "C"
+    _            -> "C"
   }
 }
 
 fn main() {
-  dbg(grade(75))    # "B"
+  dbg(grade(75)) # "B"
 }
 ```
 
@@ -244,7 +244,7 @@ enum Shape {
 fn area(shape: Shape) -> Float {
   shape match {
     Circle(radius:) -> 3.14 * radius * radius
-    Empty -> 0.0
+    Empty           -> 0.0
   }
 }
 ```
@@ -268,14 +268,14 @@ non-exhaustive match: pattern `Rect(_, _)` not covered
 ```emela check
 fn f(b: Bool) -> Int {
   b match {
-    True -> 1
+    True  -> 1
     False -> 0
-    _ -> 2        # unreachable match arm の警告
+    _     -> 2 # unreachable match arm の警告
   }
 }
 
 fn main() {
-  dbg(f(True))    # 1
+  dbg(f(True)) # 1
 }
 ```
 
@@ -289,7 +289,7 @@ type Point(x: Int, y: Int)
 fn main() {
   (a, b) = (1, 2)
   Point(x:, ..) = Point(x: 3, y: 4)
-  dbg(a + b + x)    # 6
+  dbg(a + b + x) # 6
 }
 ```
 
@@ -324,15 +324,15 @@ fn load(id: Int) -> Option[User] fails NotFound {
 fn name_of(id: Int) -> String {
   load(id) match {
     Some(user) -> user.name
-    None -> "guest"
+    None       -> "guest"
   } escape {
     NotFound(_) -> "unavailable"
   }
 }
 
 fn main() {
-  dbg(name_of(1))     # "alice"
-  dbg(name_of(2))     # "guest"
-  dbg(name_of(-1))    # "unavailable"
+  dbg(name_of(1)) # "alice"
+  dbg(name_of(2)) # "guest"
+  dbg(name_of(-1)) # "unavailable"
 }
 ```

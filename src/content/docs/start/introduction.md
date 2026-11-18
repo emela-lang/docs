@@ -17,13 +17,13 @@ effect Users {
   fn find(id: Int) -> User fails NotFound
 }
 
-handler SampleUsers implements Users {
+handler SampleUsers: Users {
   fn find(id) {
     if id == 1 { User(id: 1, name: "alice") } else { fail NotFound(id:) }
   }
 }
 
-# 推論される型: fn(Int) -> String fails NotFound use { Users }
+# 推論される型: fn(Int) -> String fails NotFound uses { Users }
 fn greeting(id: Int) {
   user = (use Users).find(id)
   "Hello, #{user.name}!"
@@ -64,7 +64,7 @@ fn greeting(id: Int) {
   "Hello, #{user.name}!"
 }
 
-fn banner(id: Int) -> String use { Users } {
+fn banner(id: Int) -> String uses { Users } {
   greeting(id)
 }
 

@@ -16,13 +16,13 @@ enum Shape {
 
 fn main() {
   user = User(id: 1, name: "alice")
-  dbg(user.name)                        # "alice"
+  dbg(user.name) # "alice"
 
   shapes = [Circle(radius: 1.0), Rect(2.0, 3.0), Empty]
-  dbg(List.length(shapes))              # 3
+  dbg(List.length(shapes)) # 3
 
   pair = (user.id, "admin")
-  dbg(pair)                             # (1, "admin")
+  dbg(pair) # (1, "admin")
 }
 ```
 
@@ -33,18 +33,14 @@ type User(id: Int, name: String)
 
 type Pair[A, B](first: A, second: B)
 
-type Todo(
-  id:        Int,
-  title:     String,
-  completed: Bool,
-)
+type Todo(id: Int, title: String, completed: Bool)
 
 fn main() {
   todo = Todo(id: 1, title: "Write docs", completed: False)
-  dbg(todo.title)                       # "Write docs"
+  dbg(todo.title) # "Write docs"
   dbg(Todo(2, "Review", completed: True))
   # Todo(id: 2, title: "Review", completed: True)
-  dbg(Pair(first: 1, second: "one"))    # Pair(first: 1, second: "one")
+  dbg(Pair(first: 1, second: "one")) # Pair(first: 1, second: "one")
 }
 ```
 
@@ -85,12 +81,12 @@ type Pair[A, B](first: A, second: B)
 fn main() {
   todo = Todo(id: 1, title: "Write docs", completed: False)
   done = Todo(completed: True, ..todo)
-  dbg(done)       # Todo(id: 1, title: "Write docs", completed: True)
-  dbg(todo)       # Todo(id: 1, title: "Write docs", completed: False)
+  dbg(done) # Todo(id: 1, title: "Write docs", completed: True)
+  dbg(todo) # Todo(id: 1, title: "Write docs", completed: False)
 
   p = Pair(first: 1, second: True)
   q = Pair(first: "s", ..p)
-  dbg(q)          # Pair(first: "s", second: True)
+  dbg(q) # Pair(first: "s", second: True)
 }
 ```
 
@@ -119,9 +115,9 @@ cannot update enum variant `Circle` with `..`
 
 ```emela check
 enum Shape {
-  Circle(radius: Float)     # 名前付き
-  Rect(Float, Float)        # 位置引数
-  Empty                     # 中身なし
+  Circle(radius: Float) # 名前付き
+  Rect(Float, Float) # 位置引数
+  Empty # 中身なし
 }
 
 enum Color { Red, Green, Blue }
@@ -129,14 +125,14 @@ enum Color { Red, Green, Blue }
 fn area(shape: Shape) -> Float {
   shape match {
     Circle(radius:) -> 3.14 * radius * radius
-    Rect(w, h) -> w * h
-    Empty -> 0.0
+    Rect(w, h)      -> w * h
+    Empty           -> 0.0
   }
 }
 
 fn main() {
-  dbg(area(Rect(2.0, 3.0)))     # 6.0
-  dbg([Red, Green])             # [Red, Green]
+  dbg(area(Rect(2.0, 3.0))) # 6.0
+  dbg([Red, Green]) # [Red, Green]
 }
 ```
 
@@ -196,16 +192,16 @@ enum Option[A] {
 ```emela check
 fn main() {
   xs = [10, 20, 30]
-  dbg(List.get(xs, 0))                            # Some(10)
-  dbg(List.get(xs, 5))                            # None
-  dbg(List.head(xs) |> Option.map(fn(n) { n + 1 }))   # Some(11)
-  dbg(List.get(xs, 5) |> Option.or(0))            # 0
+  dbg(List.get(xs, 0)) # Some(10)
+  dbg(List.get(xs, 5)) # None
+  dbg(List.head(xs) |> Option.map(|n| n + 1)) # Some(11)
+  dbg(List.get(xs, 5) |> Option.or(0)) # 0
 
-  label = List.find(xs, fn(n) { n > 15 }) match {
+  label = List.find(xs, |n| n > 15) match {
     Some(n) -> "found #{n}"
-    None -> "none"
+    None    -> "none"
   }
-  dbg(label)                                      # "found 20"
+  dbg(label) # "found 20"
 }
 ```
 
@@ -217,7 +213,7 @@ fn main() {
 
 ```emela check
 fn min_max(xs: List[Int]) -> (Int, Int) {
-  List.fold(xs, from: (0, 0), f: fn(acc, x) {
+  List.fold(xs, from: (0, 0), f: |acc, x| {
     (lo, hi) = acc
     (if x < lo { x } else { lo }, if x > hi { x } else { hi })
   })
@@ -225,11 +221,11 @@ fn min_max(xs: List[Int]) -> (Int, Int) {
 
 fn main() {
   (lo, hi) = min_max([3, -1, 4])
-  dbg(lo)                       # -1
-  dbg(hi)                       # 4
+  dbg(lo) # -1
+  dbg(hi) # 4
   t: (Int, String, Bool) = (1, "x", True)
-  dbg(t)                        # (1, "x", True)
-  dbg(())                       # ()
+  dbg(t) # (1, "x", True)
+  dbg(()) # ()
 }
 ```
 
@@ -245,9 +241,9 @@ const DEFAULT_CONFIG = Config(host: "localhost", port: 8080)
 const LIMITS = [10, 100, 1000]
 
 fn main() {
-  dbg(MAX_RETRY + 1)            # 4
-  dbg(DEFAULT_CONFIG.port)      # 8080
-  dbg(List.length(LIMITS))      # 3
+  dbg(MAX_RETRY + 1) # 4
+  dbg(DEFAULT_CONFIG.port) # 8080
+  dbg(List.length(LIMITS)) # 3
 }
 ```
 
@@ -317,13 +313,13 @@ fn where_is(p: (Int, Int)) -> String {
   p match {
     ORIGIN -> "origin"
     (0, _) -> "on the y axis"
-    _ -> "elsewhere"
+    _      -> "elsewhere"
   }
 }
 
 fn main() {
-  dbg(where_is((0, 0)))     # "origin"
-  dbg(where_is((0, 5)))     # "on the y axis"
+  dbg(where_is((0, 0))) # "origin"
+  dbg(where_is((0, 5))) # "on the y axis"
 }
 ```
 

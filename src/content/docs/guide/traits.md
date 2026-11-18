@@ -3,10 +3,6 @@ title: Trait と導出
 description: trait と impl、Trait の関数の呼び方、制約、derive と導出規則、組み込みの Trait、Show と Ord の規則
 ---
 
-:::caution[0.21 で入る予定]
-`trait`、`impl`、`derive` と Trait の制約の検査は 0.21 で入ります。このページは仕様の形を書いています。0.20 で今どう動くかは、最後の「0.20 での動き」にまとめました。
-:::
-
 Trait は型への制約で、その型にどの関数が用意されているかを検査します。`==` は Eq を、文字列の補間は Show を使うというように、言語の決まった場所が Trait を求めます。環境によって差し替えたい振る舞いを書くのは Trait でなく [エフェクト](/guide/effects/) です。
 
 ```emela
@@ -17,7 +13,7 @@ trait Describe {
   fn describe(self) -> String
 }
 
-impl Describe for User {
+impl User: Describe {
   fn describe(self) { "user #{self.id}: #{self.name}" }
 }
 
@@ -58,7 +54,7 @@ trait Decode {
 ## impl
 
 ```emela
-impl Show for User {
+impl User: Show {
   fn show(self) { "User(#{self.name})" }
 }
 ```
@@ -70,7 +66,7 @@ impl を書けるのは、その型を定義したモジュールか、その Tr
 ```emela
 type MyDate(inner: ThirdParty.Date)
 
-impl Encode for MyDate { ... }
+impl MyDate: Encode { ... }
 ```
 
 フィールドが1つの型は、実行時のコストを持ちません。
@@ -87,7 +83,7 @@ fn report[A: Ord + Show](xs: List[A]) -> String { ... }
 
 Trait の関数は `Show.show(user)` のように `Trait名.関数名(値)` の形で呼び、パイプにもそのままつなげます。`user.show()` のようなメソッド呼び出しの構文はありません。型引数への制約は `[A: Ord]` と書きます（[型引数](/guide/generics/)）。
 
-Trait の関数は既定では純粋です。宣言に `fails E` や `use R` を書けば、実装はその範囲でエラーと効果を持てます。実装が宣言の範囲を超えられないので、`[A: Decode]` を使う関数のエラーと効果は、どの型の実装が選ばれても変わりません。
+Trait の関数は既定では純粋です。宣言に `fails E` や `uses { R }` を書けば、実装はその範囲でエラーと効果を持てます。実装が宣言の範囲を超えられないので、`[A: Decode]` を使う関数のエラーと効果は、どの型の実装が選ばれても変わりません。
 
 ## derive
 
@@ -142,9 +138,10 @@ enum Shape {
   Circle(radius: Float)
   Rect(Float, Float)
   Empty
-}
+} derive Show
 
 type User(id: Int, name: String)
+  derive Show
 
 fn main() {
   with SystemConsole {
@@ -155,7 +152,7 @@ fn main() {
     console.print_line("#{"plain"} #{["a\"b", "c\\d", "x\#{y}"]}")
     console.print_line("#{True} #{2.0} #{-0.0} #{1.0e21} #{-0.000000025} #{0.1 + 0.2}")
     console.print_line("#{Int64.from_int(5)}")
-    dbg("plain")
+    _ = dbg("plain")
   }
 }
 ```
@@ -173,29 +170,30 @@ True 2.0 0.0 1e+21 -2.5e-8 0.30000000000000004
 
 補間に引用符なしで埋め込むのは、最上位の String だけです。リストや構成子の中の String と、`dbg` の String は `"` で囲んでエスケープします。Float は往復できる最短の桁数で表し、整数の値には `.0` を付けます。この文字列はどのターゲットでも同じです。
 
-## 0.20 での動き
+### Eq と Ord の形
 
-0.20 には Trait の検査がまだありません。かわりに `==`、`!=`、補間、`dbg` が型の構造のまますべての型で動くので、derive を書かなくても自分で定義した型を比べたり表示したりできます。
+自分で定義した型は、derive か impl を書かないと Eq、Ord、Show のどれも満たしません。`dbg` だけは Show がなくても値を表示します。
 
 ```emela check
 type User(id: Int, name: String)
+  derive Eq
 
 enum Shape {
   Circle(radius: Float)
   Empty
-}
+} derive Eq
 
 fn main() {
   a = User(id: 1, name: "alice")
-  dbg(a == User(id: 1, name: "alice"))                               # True
-  dbg(a != User(id: 2, name: "alice"))                               # True
-  dbg([Circle(radius: 1.0), Empty] == [Circle(radius: 1.0), Empty])  # True
-  dbg(Some(1) == None)                                               # False
+  dbg(a == User(id: 1, name: "alice")) # True
+  dbg(a != User(id: 2, name: "alice")) # True
+  dbg([Circle(radius: 1.0), Empty] == [Circle(radius: 1.0), Empty]) # True
+  dbg(Some(1) == None) # False
   nan = 0.0 / 0.0
-  dbg(nan == nan)                                                    # False
-  dbg(0.0 == -0.0)                                                   # True
-  dbg("apple" < "banana")                                            # True
-  dbg(False < True)                                                  # True
+  dbg(nan == nan) # False
+  dbg(0.0 == -0.0) # True
+  dbg("apple" < "banana") # True
+  dbg(False < True) # True
 }
 ```
 

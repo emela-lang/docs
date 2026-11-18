@@ -15,10 +15,10 @@ type Point(x: Int, y: Int)
 fn point(x: Int, y: Int) -> Point { Point(x:, y:) }
 
 fn main() {
-  p = point(y: dbg(2), x: dbg(1))      # 2、1 の順に出る
-  q = Point(y: dbg(20), ..dbg(p))      # 20 の後に p
-  xs = [dbg(10), ..dbg([30])]          # 10 の後に [30]
-  ok = False && dbg(True)              # 右辺は評価しない
+  p = point(y: dbg(2), x: dbg(1)) # 2、1 の順に出る
+  q = Point(y: dbg(20), ..dbg(p)) # 20 の後に p
+  xs = [dbg(10), ..dbg([30])] # 10 の後に [30]
+  ok = False && dbg(True) # 右辺は評価しない
   ()
 }
 ```
@@ -53,7 +53,7 @@ effect Log {
   fn info(msg: String) -> ()
 }
 
-handler FixedConfig implements Config {
+handler FixedConfig: Config {
   init {
     dbg("init FixedConfig")
     FixedConfig
@@ -64,7 +64,7 @@ handler FixedConfig implements Config {
   fn name() { "app" }
 }
 
-handler NamedLog implements Log {
+handler NamedLog: Log {
   init {
     dbg("init NamedLog #{(use Config).name()}")
     NamedLog
@@ -115,14 +115,14 @@ effect Db {
   fn query(sql: String) -> String
 }
 
-handler FixedConfig implements Config {
+handler FixedConfig: Config {
   release {
     dbg("release FixedConfig")
   }
   fn url() { "db://down" }
 }
 
-handler FailingDb implements Db {
+handler FailingDb: Db {
   init {
     fail ConnectFailed(reason: (use Config).url())
   }
@@ -136,13 +136,14 @@ fn main() {
   with FixedConfig, FailingDb {
     dbg((use Db).query("select 1"))
   }
+  ()
 }
 ```
 
 ```console
 $ emela run main.emel
 "release FixedConfig"
-error: ConnectFailed(reason: "db://down")
+error: ConnectFailed
 $ echo $?
 1
 ```
@@ -158,18 +159,18 @@ FailingDb の release と本体は実行されません。
 ### main の終わり方
 
 - main が正常に終わったときは、戻り値を表示せずに捨て、終了コード 0 で終わります。値を見たいときは `dbg` を使います。
-- main まで達したエラーは、プログラムの異常終了になります。標準エラーに `error: <エラーの値の表示>` を1行出し、終了コード 1 で終わります。表示は dbg と同じです（`error: DbError(message: "down")`）。
-- 関数型のフィールドを持つ error は、エラーの名前だけを表示します（`error: Retry`）。
+- main まで達したエラーは、プログラムの異常終了になります。標準エラーに `error: <エラーの値の表示>` を1行出し、終了コード 1 で終わります。エラーの型が Show を満たすときは inspect と同じ表示です（`error DbError(message: String) derive Show` なら `error: DbError(message: "down")`）。満たさないときは、エラーの名前だけを表示します（`error: Retry`）。main の E に Show は要りません。
 - main の E は空でなくて構いません。
-- main の R は、Async を除いて空でなければなりません（E0402）。main に use 節を書いていても同じです。main はエントリのモジュールの `main` という名前の fn です。
+- main の R は、Async を除いて空でなければなりません（E0402）。main に uses 節を書いていても同じです。main はエントリのモジュールの `main` という名前の fn です。
 
 ```emela check
-error DbError(message: String)
+error DbError(message: String) derive Show
 
 fn load() -> Int fails DbError { fail DbError(message: "down") }
 
 fn main() {
   dbg(load())
+  ()
 }
 ```
 
@@ -197,7 +198,7 @@ defect はプログラムの誤りや回復できない異常です。型には�
 メッセージの文面は仕様の一部ではなく、改善のために変えてよいものです。
 
 - defect は escape を素通りし、境界まで巻き戻ります。途中の with では release を実行します。
-- 境界とはプログラムの最上位、テストランナー、`Fiber.attempt` です。defect を観測できるのは境界だけです。
+- 境界とはプログラムの最上位、テストランナー、`Exit.attempt` です。defect を観測できるのは境界だけです。
 - `emela run` は最上位に達した defect を標準エラーに `defect: <message>` と1行出し、終了コード 101 で終わります。
 - 期待されるエラーを defect に変えるには、escape の腕で panic を呼びます。逆方向の変換は境界でしかできません。
 - 外部関数が投げた例外の defect は、例外の名前を前に付けたメッセージになります（`defect: TypeError: bad`）。Error でない値を投げたときは `defect: uncaught exception: oops` の形です。
@@ -219,7 +220,7 @@ effect Log {
   fn info(msg: String) -> ()
 }
 
-handler NoisyLog implements Log {
+handler NoisyLog: Log {
   init { NoisyLog }
   release {
     panic("close failed")
@@ -261,7 +262,7 @@ effect Wait {
   suspend fn wait() -> Int
 }
 
-handler After implements Wait {
+handler After: Wait {
   suspend fn wait(resume) {
     resume(1)
     dbg("after resume")
@@ -274,6 +275,7 @@ fn main() {
     n = (use Wait).wait()
     dbg(n)
   }
+  ()
 }
 ```
 
@@ -299,11 +301,11 @@ effect Wait {
   suspend fn wait() -> Int
 }
 
-handler Dropping implements Wait {
+handler Dropping: Wait {
   release {
     dbg("release Dropping")
   }
-  suspend fn wait(resume) { () }    # resume しない
+  suspend fn wait(resume) { () } # resume しない
 }
 
 fn main() {
@@ -311,6 +313,7 @@ fn main() {
     n = (use Wait).wait()
     dbg(n)
   }
+  ()
 }
 ```
 
@@ -363,14 +366,14 @@ fn main() {
   with SystemConsole, SystemClock {
     console = use Console
     clock = use Clock
-    Fiber.scope(fn() {
+    Fiber.scope(|| {
       outer = use Scope
-      Fiber.scope(fn() {
-        outer.fork(fn() {
+      Fiber.scope(|| {
+        outer.fork(|| {
           clock.sleep(100)
           console.print_line("outer child")
         })
-        Fiber.fork(fn() {
+        Fiber.fork(|| {
           clock.sleep(100)
           console.print_line("inner child")
         })
@@ -418,21 +421,21 @@ fiber が正常に終わらなかったときの原因は3種類で、監視す�
 
 ```emela check
 import Std.Cause
-import Std.Fiber.{Fiber, Exit, Success, Failure}
+import Std.Exit.{Exit, Success, Failure}
 
 error Boom
 
 fn describe[A, E](exit: Exit[A, E]) -> String {
   exit match {
-    Success(_) -> "success"
+    Success(_)     -> "success"
     Failure(cause) -> Cause.to_string(cause)
   }
 }
 
 fn main() {
-  dbg(describe(Fiber.attempt(fn() { 1 })))                  # "success"
-  dbg(describe(Fiber.attempt(fn() { fail Boom })))          # "error: Boom"
-  dbg(describe(Fiber.attempt(fn() { panic("broken") })))    # "defect: broken"
+  dbg(describe(Exit.attempt(|| 1))) # "success"
+  dbg(describe(Exit.attempt(|| fail Boom))) # "error: Boom"
+  dbg(describe(Exit.attempt(|| panic("broken")))) # "defect: broken"
   ()
 }
 ```
@@ -447,18 +450,19 @@ fn main() {
 ```emela check
 import Std.Clock.{Clock, SystemClock}
 import Std.Cause
-import Std.Fiber.{Fiber, Success, Failure}
+import Std.Exit.{Success, Failure}
+import Std.Fiber.{Fiber}
 
 fn main() {
   with SystemClock {
-    Fiber.scope(fn() {
-      child = Fiber.fork(fn() { (use Clock).sleep(1000) })
+    Fiber.scope(|| {
+      child = Fiber.fork(|| (use Clock).sleep(1000))
       Fiber.interrupt(child)
       Fiber.await(child) match {
-        Success(_) -> dbg("success")
-        Failure(cause) -> dbg(Cause.to_string(cause))    # "interrupted"
+        Success(_)     -> dbg("success")
+        Failure(cause) -> dbg(Cause.to_string(cause)) # "interrupted"
       }
-      Fiber.join(child)    # defect: fiber was interrupted
+      Fiber.join(child) # defect: fiber was interrupted
     })
   }
 }
@@ -498,6 +502,7 @@ const RATIO = 1 / ZERO
 fn main() {
   dbg("start")
   dbg(RATIO)
+  ()
 }
 ```
 
@@ -524,7 +529,8 @@ const A = next()
 fn next() -> Int { A + 1 }
 
 fn main() {
-  dbg(A)    # defect: const A refers to itself while being evaluated
+  dbg(A) # defect: const A refers to itself while being evaluated
+  ()
 }
 ```
 

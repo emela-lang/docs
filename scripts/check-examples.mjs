@@ -11,7 +11,8 @@
 // ```console block, every `$ command` line in it is run with `sh` in the
 // block's directory, and what the command prints (stdout and stderr) must
 // equal the lines below it up to the next `$` line. Trailing whitespace and
-// trailing blank lines are ignored; the exit status is not checked. A console
+// trailing blank lines are ignored, and so is the ``running `...` `` line that
+// `emela run` prints; the exit status is not checked. A console
 // block marked `no-check` is not run.
 //
 // Usage: node scripts/check-examples.mjs [files...]
@@ -30,6 +31,9 @@ const SPLIT = '--- emela-docs: end of command ---';
 
 // Console commands call `emela` by name, so an explicit EMELA goes first on PATH.
 const ENV = { ...process.env, NO_COLOR: '1' };
+// `emela test` switches to a terse reporter under a coding agent; the docs show the plain one.
+delete ENV.AI_AGENT;
+delete ENV.CLAUDECODE;
 if (EMELA.includes('/')) ENV.PATH = dirname(resolve(EMELA)) + delimiter + ENV.PATH;
 
 function walk(dir) {
@@ -124,7 +128,9 @@ for (const file of files) {
     const outputs = (result.stdout ?? '').split(`\n${SPLIT}\n`);
     for (const [n, { command, expected }] of runs.entries()) {
       ran++;
-      const actual = normalize((outputs[n] ?? '').split('\n'));
+      // `emela run` prints the command it runs (with a temporary absolute path) to stderr; the
+      // docs leave that line out.
+      const actual = normalize((outputs[n] ?? '').split('\n').filter((line) => !line.startsWith('running `')));
       const want = normalize(expected);
       if (result.error || actual !== want) {
         const why = result.error ? `${result.error.message}\n` : '';

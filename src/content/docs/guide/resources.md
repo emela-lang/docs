@@ -16,11 +16,11 @@ effect Store {
   fn get(key: String) -> String
 }
 
-handler EnvConfig implements Config {
+handler EnvConfig: Config {
   fn prefix() { "v1" }
 }
 
-handler MemoryStore(prefix: String) implements Store {
+handler MemoryStore(prefix: String): Store {
   init {
     prefix = (use Config).prefix()
     (use Console).print_line("open store #{prefix}")
@@ -68,7 +68,7 @@ effect Store {
   fn get(key: String) -> String
 }
 
-handler MemoryStore(prefix: String) implements Store {
+handler MemoryStore(prefix: String): Store {
   init {
     (use Console).print_line("open")
     MemoryStore(prefix: "v1")
@@ -110,7 +110,7 @@ effect Counter {
   fn next() -> Int
 }
 
-handler Fixed(n: Int) implements Counter {
+handler Fixed(n: Int): Counter {
   init { Fixed(n: 1) }
   fn next() { self.n }
 }
@@ -123,7 +123,7 @@ handler `Fixed` can only be constructed in its own `init`
   = help: use `with Fixed { ... }`; `init` and `release` run there
 ```
 
-ハンドラは引数を取りません。設定を外から渡すときは、最初の例の `Config` のようなエフェクトを init で use します。
+init は引数を取れます。`init(prefix: String) { MemoryStore(prefix:) }` と書き、with では `with MemoryStore(prefix: "v1") { ... }` のように渡します。引数は with に入る前、with の外で評価されます。設定をエフェクトから受け取るときは、最初の例の `Config` のように init で use します。
 
 ### 依存と初期化の順序
 
@@ -144,7 +144,7 @@ effect Db {
   fn query(sql: String) -> String
 }
 
-handler EnvConfig implements Config {
+handler EnvConfig: Config {
   init {
     (use Console).print_line("init config")
     EnvConfig
@@ -153,7 +153,7 @@ handler EnvConfig implements Config {
   fn url() { "db://down" }
 }
 
-handler LocalDb(url: String) implements Db {
+handler LocalDb(url: String): Db {
   init {
     url = (use Config).url()
     if url == "db://down" { fail ConnectFailed(url:) }
@@ -204,7 +204,7 @@ effect Cache {
   fn get(key: String) -> String
 }
 
-handler EnvConfig implements Config {
+handler EnvConfig: Config {
   init {
     (use Console).print_line("init config")
     EnvConfig
@@ -213,7 +213,7 @@ handler EnvConfig implements Config {
   fn url() { "db://local" }
 }
 
-handler LocalDb(url: String) implements Db {
+handler LocalDb(url: String): Db {
   init {
     url = (use Config).url()
     (use Console).print_line("connect #{url}")
@@ -223,7 +223,7 @@ handler LocalDb(url: String) implements Db {
   fn query(sql) { "#{sql} @ #{self.url}" }
 }
 
-handler DbCache implements Cache {
+handler DbCache: Cache {
   init {
     (use Console).print_line("init cache")
     DbCache
@@ -238,7 +238,7 @@ layer AppLive {
   EnvConfig
 }
 
-handler TestConfig implements Config {
+handler TestConfig: Config {
   fn url() { "db://test" }
 }
 
@@ -315,8 +315,8 @@ pub effect State[S] {
 
 pub fn run[S, A, E, R](
   initial: S,
-  body: fn() -> A fails E use { State[S], R },
-) -> (A, S) fails E use R
+  body: fn() -> A fails E uses { State[S], R },
+) -> (A, S) fails E uses { R }
 ```
 
 ```emela check
@@ -324,14 +324,14 @@ import Std.State.{State}
 
 fn count_words(words: List[String]) {
   st = use State[Int]
-  List.map(words, fn(w) { st.update(fn(n) { n + 1 }) })
+  List.map(words, |w| st.update(|n| n + 1))
   st.get()
 }
 
 fn main() {
-  (result, final) = State.run(10, fn() { count_words(["a", "b", "c"]) })
-  dbg(result)    # 13
-  dbg(final)     # 13
+  (result, final) = State.run(10, || count_words(["a", "b", "c"]))
+  dbg(result)        # 13
+  _ = dbg(final)     # 13
 }
 ```
 
@@ -356,7 +356,7 @@ fn push(x: Int) {
 
 fn main() {
   # 外で受けると、状態は残らない
-  r1 = State.run([], fn() {
+  r1 = State.run([], || {
     push(1)
     push(2)
     push(3)
@@ -366,12 +366,12 @@ fn main() {
   dbg(r1)    # ((), [3])
 
   # body の中で受けると、そこまでの状態が残る
-  r2 = State.run([], fn() {
+  r2 = State.run([], || {
     push(1)
     push(2)
     push(3) escape { TooMany(_) -> () }
   })
-  dbg(r2)    # ((), [1, 2, 3])
+  _ = dbg(r2)    # ((), [1, 2, 3])
 }
 ```
 
@@ -387,20 +387,20 @@ type Misses(n: Int)
 
 fn look(key: String) {
   if key == "a" {
-    (use State[Hits]).update(fn(h) { Hits(n: h.n + 1) })
+    (use State[Hits]).update(|h| Hits(n: h.n + 1))
   } else {
-    (use State[Misses]).update(fn(m) { Misses(n: m.n + 1) })
+    (use State[Misses]).update(|m| Misses(n: m.n + 1))
   }
 }
 
 fn main() {
-  ((_, misses), hits) = State.run(Hits(n: 0), fn() {
-    State.run(Misses(n: 0), fn() {
+  ((_, misses), hits) = State.run(Hits(n: 0), || {
+    State.run(Misses(n: 0), || {
       List.map(["a", "b", "a"], look)
     })
   })
-  dbg(hits)      # Hits(n: 2)
-  dbg(misses)    # Misses(n: 1)
+  dbg(hits)          # Hits(n: 2)
+  _ = dbg(misses)    # Misses(n: 1)
 }
 ```
 
@@ -417,7 +417,7 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler RecordingLogger implements Logger {
+handler RecordingLogger: Logger {
   fn info(msg) {
     st = use State[List[String]]
     st.set(List.append(st.get(), [msg]))
@@ -429,13 +429,13 @@ fn greet(name: String) {
 }
 
 fn main() {
-  (_, lines) = State.run([], fn() {
+  (_, lines) = State.run([], || {
     with RecordingLogger {
       greet("alice")
       greet("bob")
     }
   })
-  dbg(lines)    # ["hello alice", "hello bob"]
+  _ = dbg(lines)    # ["hello alice", "hello bob"]
 }
 ```
 
@@ -443,7 +443,7 @@ fn main() {
 
 ## 能力を with の外へ持ち出さない
 
-能力の値と、それを捕まえたクロージャは、供給元の with の外へ出せません。外へ出たクロージャを呼ぶと、release 済みのハンドラを使うことになるためです。
+能力の値と、それを抱えた値（捕まえたクロージャや、能力を入れたデータ）は、供給元の with の外へ出せません。外へ出たクロージャを呼ぶと、release 済みのハンドラを使うことになるためです。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -452,20 +452,20 @@ effect Logger {
   fn info(msg: String) -> ()
 }
 
-handler FileLogger(name: String) implements Logger {
+handler FileLogger(name: String): Logger {
   init { FileLogger(name: "app.log") }
   release { () }
   fn info(msg) { (use Console).print_line("#{self.name}: #{msg}") }
 }
 
-handler QuietLogger implements Logger {
+handler QuietLogger: Logger {
   fn info(msg) { () }
 }
 
 fn make_greeter() {
   with FileLogger {
     log = use Logger
-    fn() { log.info("hi") }    # log を抱えたまま with の外に出る
+    || log.info("hi")    # log を抱えたまま with の外に出る
   }
 }
 
@@ -479,13 +479,24 @@ fn main() {
 
 ```console
 $ emela run main.emel
+warning[W0402]: a value that holds `log` leaves the `with` that provides it
+    ╭─[ main.emel:20:5 ]
+    │
+ 18 │   with FileLogger {
+    │        ─────┬────
+    │             ╰────── `log` is released at the end of this `with`
+    │
+ 20 │     || log.info("hi")    # log を抱えたまま with の外に出る
+    │     ────────┬────────
+    │             ╰────────── the value of the body holds `log`
+────╯
+
+1 warning
 defect: handler FileLogger was used after release
 ```
 
-:::caution[0.22 で静的に検査する予定]
-仕様では、上の `make_greeter` はコンパイルの時点でエラーになります。コンパイラが、値がどの能力を抱えているかを型とともに追跡し（capture set）、with の本体の値がその with の供給した能力を抱えていれば止めます。capture set は推論され、ソースには書きません。
+コンパイラは、値がどの能力を抱えているかを型とともに追跡し（capture set）、with の本体の値がその with の供給した能力を抱えていれば W0402 の警告を出します。capture set は推論され、ソースには書きません。`--experimental-capture-checking` を付けると、この警告はエラー（E0444）になります。
 
-0.20 と 0.21 では、この検査を実行時に行います。release 済みのハンドラの操作を呼ぶと `handler <名前> was used after release` の defect になります。この検査が掛かるのは、フィールド、init、release のどれかを持つハンドラだけです。状態を持たないハンドラは、with の外へ持ち出しても動きます。
-:::
+警告のままなので、実行時にも検査します。release 済みのハンドラの操作を呼ぶと `handler <名前> was used after release` の defect になります。この検査が掛かるのは、フィールド、init、release のどれかを持つハンドラだけです。状態を持たないハンドラは、with の外へ持ち出しても動きます。
 
-能力の値そのものを返す、引数に渡す、データに入れるのは、今もコンパイル時に止まります（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, fn(n) { log.info(n) })`）は問題ありません。Scope の能力、fiber のハンドル、Deferred の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。
+能力の値そのものを返したり、データに入れて返したりしても同じ扱いです。with の中で引数に渡す、データに入れるのはかまいません（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, |n| log.info(n))`）も問題ありません。Scope の能力、fiber のハンドル、Deferred の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。

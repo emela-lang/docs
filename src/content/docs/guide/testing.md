@@ -17,13 +17,13 @@ effect Users {
   fn find(id: Int) -> User fails NotFound
 }
 
-fn greet(id: Int) -> String fails NotFound use { Users, Console } {
+fn greet(id: Int) -> String fails NotFound uses { Users, Console } {
   user = (use Users).find(id)
   (use Console).print_line("Hello, #{user.name}!")
   user.name
 }
 
-handler FakeUsers implements Users {
+handler FakeUsers: Users {
   fn find(id) {
     if id == 1 { User(id:, name: "alice") } else { fail NotFound(id:) }
   }
@@ -38,7 +38,7 @@ fn main() {
 
 @test
 fn greet_returns_the_name() {
-  (name, lines) = State.run([], fn() {
+  (name, lines) = State.run([], || {
     with TestConsole, FakeUsers { greet(1) }
   })
   assert name == "alice"
@@ -73,6 +73,7 @@ test result: ok. 2 passed; 0 failed; 0 filtered out
 
 ```emela check
 error NotFound(id: Int)
+  derive Show
 
 fn find(id: Int) -> String fails NotFound {
   if id == 1 { "alice" } else { fail NotFound(id:) }
@@ -121,6 +122,7 @@ test crashes ... FAILED
 failures:
 
 ---- add_works ----
+ --> main.emel:14:3
 defect: assertion failed: add(1, 2) == 3
   left: 4
  right: 3
@@ -129,6 +131,7 @@ defect: assertion failed: add(1, 2) == 3
 error: NotFound(id: 2)
 
 ---- not_empty ----
+ --> main.emel:30:3
 defect: assertion failed: List.is_empty(xs)
 
 ---- crashes ----
@@ -170,7 +173,7 @@ import Std.Fiber.{Fiber}
 import Std.Instant.{Instant}
 import Std.State.{State}
 
-fn slow() -> Int use { Clock } {
+fn slow() -> Int uses { Clock } {
   (use Clock).sleep(5000)
   1
 }
@@ -178,8 +181,8 @@ fn slow() -> Int use { Clock } {
 @test
 fn gives_up_after_100ms() {
   start = Instant.from_unix_milliseconds(0)
-  (result, end) = State.run(start, fn() {
-    with TestClock { Fiber.timeout(100, fn() { slow() }) }
+  (result, end) = State.run(start, || {
+    with TestClock { Fiber.timeout(100, || slow()) }
   })
   assert result == None
   assert Instant.to_unix_milliseconds(end) == 100

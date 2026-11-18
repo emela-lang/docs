@@ -18,7 +18,7 @@ fn main() {
   user = find_user(2) escape {
     NotFound(_) -> User(id: 0, name: "guest")
   }
-  dbg(user)    # User(id: 0, name: "guest")
+  dbg(user) # User(id: 0, name: "guest")
 }
 ```
 
@@ -33,8 +33,8 @@ error DbError(message: String)
 
 fn main() {
   e = NotFound(id: 3)
-  dbg(e)                                   # NotFound(id: 3)
-  dbg([NotFound(id: 1), NotFound(id: 2)])  # [NotFound(id: 1), NotFound(id: 2)]
+  dbg(e) # NotFound(id: 3)
+  dbg([NotFound(id: 1), NotFound(id: 2)]) # [NotFound(id: 1), NotFound(id: 2)]
 }
 ```
 
@@ -48,6 +48,7 @@ fn main() {
 
 ```emela check
 error NotFound(id: Int)
+  derive Show
 
 fn find_name(names: List[String], id: Int) {
   List.get(names, id) match {
@@ -57,8 +58,8 @@ fn find_name(names: List[String], id: Int) {
 }
 
 fn main() {
-  dbg(find_name(["alice", "bob"], 1))    # "bob"
-  dbg(find_name(["alice", "bob"], 5))
+  dbg(find_name(["alice", "bob"], 1)) # "bob"
+  _ = find_name(["alice", "bob"], 5)
 }
 ```
 
@@ -72,7 +73,7 @@ $ echo $?
 
 - `fail` の式の型は Never なので、match の片方の腕が `fail` でも、全体の型はもう片方の腕の型（ここでは String）になります。
 - `find_name` には戻り値の型を書いていませんが、E は `NotFound` と推論されます。
-- `main` まで届いたエラーは標準エラーに `error: <値>` を1行出して終了コード 1 で終わります。
+- `main` まで届いたエラーは標準エラーに `error: <値>` を1行出して終了コード 1 で終わります。値を出すのはエラーの型が Show を満たすとき（ここでは `derive Show`）で、満たさなければ `error: NotFound` のように名前だけを出します。
 
 ## escape で受ける
 
@@ -90,8 +91,8 @@ fn load(id: Int) -> Int fails NotFound | DbError {
 # 通常の値に戻す。E はなし
 fn load_or_zero(id: Int) -> Int {
   load(id) escape {
-    NotFound(_)   -> 0
-    DbError(_)    -> 0
+    NotFound(_) -> 0
+    DbError(_)  -> 0
   }
 }
 
@@ -117,9 +118,9 @@ fn try_load(id: Int) {
 }
 
 fn main() {
-  dbg(load_or_zero(20))           # 0
-  dbg(try_load(20))               # None
-  dbg(load_or_unavailable(-1))    # error: Unavailable(reason: "down")
+  dbg(load_or_zero(20)) # 0
+  dbg(try_load(20)) # None
+  dbg(load_or_unavailable(-1)) # error: Unavailable(reason: "down")
 }
 ```
 
@@ -154,9 +155,9 @@ error Boom
 fn twice(f: fn() -> Int) -> Int { f() + f() }
 
 fn main() {
-  dbg(twice(fn() { 2 }))    # 4
-  n = twice(fn() { fail Boom }) escape { Boom -> 0 }
-  dbg(n)                    # 0
+  dbg(twice(|| 2)) # 4
+  n = twice(|| fail Boom) escape { Boom -> 0 }
+  dbg(n) # 0
 }
 ```
 
@@ -174,7 +175,7 @@ fn lookup(names: List[String], id: Int) -> String fails NotFound {
 }
 
 fn main() {
-  dbg(lookup(["a", "b"], 1))    # "b"
+  dbg(lookup(["a", "b"], 1)) # "b"
 }
 ```
 
@@ -208,7 +209,7 @@ fn must_find(id: Int) -> Int {
 }
 
 fn main() {
-  dbg(must_find(3))
+  _ = must_find(3)
 }
 ```
 
@@ -232,7 +233,7 @@ effect Db {
   fn query(sql: String) -> Int
 }
 
-handler FakeDb implements Db {
+handler FakeDb: Db {
   init {
     (use Console).print_line("open")
     FakeDb
@@ -245,7 +246,7 @@ handler FakeDb implements Db {
 
 fn main() {
   with SystemConsole, FakeDb {
-    (use Db).query("select 1")
+    _ = (use Db).query("select 1")
   }
 }
 ```

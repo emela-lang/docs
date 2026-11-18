@@ -3,7 +3,7 @@ title: Console・Clock・Random・Env
 description: platform のエフェクト Console、Clock、Random、Env と、そのハンドラ、Instant と Duration、Platform
 ---
 
-Console、Clock、Random、Env は、ホストの標準出力、時計、乱数源、環境変数をエフェクトとして表します。どれも操作を宣言したエフェクトと、ホストを使う `System*` のハンドラを同じモジュールに持ち、`Std.Platform` の `Platform` でまとめて供給できます。
+Console、Clock、Random、Env は、ホストの標準出力、時計、乱数源、環境変数をエフェクトとして表します。どれも操作を宣言したエフェクトと、ホストを使う `System*` のハンドラを同じモジュールに持ちます。Console、Clock、Random は `Std.Platform` の `Platform` で、プロセスが要る Env は `Std.Process` の `Process` でまとめて供給できます。
 
 ```emela check
 import Std.Platform.{Platform}
@@ -48,7 +48,7 @@ pub effect Console {
 | `print_line(text: String) -> ()` | 標準出力に、改行を付けて書く |
 | `print_error_line(text: String) -> ()` | 標準エラーに、改行を付けて書く |
 
-どちらも失敗しません。改行なしで書く操作と、入力を読む操作はまだありません。
+どちらも失敗しません。改行なしで書く操作と入力を読む操作は Console になく、`Std.Process` の `Stdout` と `Stdin` にあります。
 
 | ハンドラ | 依存 | 説明 |
 |---|---|---|
@@ -63,13 +63,13 @@ import Std.State.{State}
 
 fn greet(names: List[String]) {
   console = use Console
-  List.map(names, fn(name) { console.print_line("Hello, #{name}!") })
+  List.map(names, |name| console.print_line("Hello, #{name}!"))
   console.print_error_line("done")
 }
 
 @test
 fn greets_everyone() {
-  (_, lines) = State.run([], fn() {
+  (_, lines) = State.run([], || {
     with TestConsole { greet(["alice", "bob"]) }
   })
   assert lines == ["Hello, alice!", "Hello, bob!"]
@@ -122,16 +122,19 @@ fn stamp(label: String) {
 @test
 fn wakes_in_time_order() {
   start = Instant.from_unix_milliseconds(0)
-  ((_, lines), end) = State.run(start, fn() {
-    State.run([], fn() {
+  ((_, lines), end) = State.run(start, || {
+    State.run([], || {
       with TestClock, TestConsole {
-        Fiber.both(fn() {
-          (use Clock).sleep(200)
-          stamp("slow")
-        }, fn() {
-          (use Clock).sleep(100)
-          stamp("fast")
-        })
+        Fiber.both(
+          || {
+            (use Clock).sleep(200)
+            stamp("slow")
+          },
+          || {
+            (use Clock).sleep(100)
+            stamp("fast")
+          },
+        )
       }
     })
   })
@@ -142,9 +145,9 @@ fn wakes_in_time_order() {
 @test
 fn times_out_without_waiting() {
   start = Instant.from_unix_milliseconds(0)
-  (result, _) = State.run(start, fn() {
+  (result, _) = State.run(start, || {
     with TestClock {
-      Fiber.timeout(100, fn() { (use Clock).sleep(1000) })
+      Fiber.timeout(100, || (use Clock).sleep(1000))
     }
   })
   assert result == None
@@ -153,7 +156,7 @@ fn times_out_without_waiting() {
 
 ## Instant と Duration
 
-`Std.Instant` はある時点を、`Std.Duration` は時間の長さを表す値の型です。どちらも中身がミリ秒の Int64 の opaque な型で、構成子やフィールドには触れず、モジュールの関数で作って取り出します。
+`Std.Instant` はある時点を、`Std.Duration` は時間の長さを表す値の型です。どちらも中身がミリ秒の Int64 の opaque な型で、構成子やフィールドには触れず、モジュールの関数で作って取り出します。どちらも Eq と Ord を導出しているので、`==`、`<`、`Ord.compare` で比べます。早い方、短い方が小さくなります。
 
 Instant は Unix エポック（1970-01-01T00:00:00Z）からのミリ秒で、閏秒は数えません。Duration は負の長さも表します。単位の変換と足し算のあふれは Int64 の規則で巻き戻ります。現在の時点は `Std.Instant` からは取れず、Clock の `now` が返します。
 
@@ -166,7 +169,6 @@ Instant は Unix エポック（1970-01-01T00:00:00Z）からのミリ秒で、�
 | `add` | `add(t: Instant, d: Duration) -> Instant` | `d` だけ後。`d` が負なら前 |
 | `subtract` | `subtract(t: Instant, d: Duration) -> Instant` | `d` だけ前 |
 | `since` | `since(t: Instant, earlier: Instant) -> Duration` | `earlier` から `t` までの長さ。`earlier` の方が後なら負 |
-| `compare` | `compare(t: Instant, other: Instant) -> Ordering` | 早い方が小さい |
 | `to_string` | `to_string(t: Instant) -> String` | UTC の ISO 8601（`2026-10-12T03:04:05.678Z`）。JS の `Date.prototype.toISOString` と同じ形で、0〜9999 年の外は符号と6桁（`+010000`） |
 
 `from_unix_milliseconds` は、テストで時刻を固定するときと、自分で Clock のハンドラを書くときに使います。`now |> Instant.since(start)` のようにパイプで読めます。
@@ -183,7 +185,6 @@ Instant は Unix エポック（1970-01-01T00:00:00Z）からのミリ秒で、�
 | `to_seconds` | `to_seconds(d: Duration) -> Int64` | 秒の数。端数は 0 の方向へ切り捨てる |
 | `add` | `add(d: Duration, other: Duration) -> Duration` | 和 |
 | `subtract` | `subtract(d: Duration, other: Duration) -> Duration` | 差。負になりうる |
-| `compare` | `compare(d: Duration, other: Duration) -> Ordering` | 短い方が小さい |
 | `to_string` | `to_string(d: Duration) -> String` | ミリ秒に `ms` を付けた形（`1500ms`） |
 
 ```emela check
@@ -193,10 +194,10 @@ import Std.Duration
 fn main() {
   start = Instant.from_unix_milliseconds(0)
   later = Instant.add(start, Duration.minutes(90))
-  dbg(Instant.to_string(later))                                     # "1970-01-01T01:30:00.000Z"
-  dbg(Duration.to_string(Instant.since(start, later)))              # "-5400000ms"
-  dbg(Duration.to_seconds(Duration.milliseconds(-1500)))            # -1
-  dbg(Duration.compare(Duration.seconds(1), Duration.milliseconds(999))) # Greater
+  dbg(Instant.to_string(later)) # "1970-01-01T01:30:00.000Z"
+  dbg(Duration.to_string(Instant.since(start, later))) # "-5400000ms"
+  dbg(Duration.to_seconds(Duration.milliseconds(-1500))) # -1
+  _ = dbg(Ord.compare(Duration.seconds(1), Duration.milliseconds(999))) # Greater
 }
 ```
 
@@ -230,11 +231,11 @@ pub effect Random {
 import Std.Random.{Random}
 
 ## 1 から 6 の目。
-fn roll() -> Int use Random {
+fn roll() -> Int uses { Random } {
   Float.floor((use Random).float() * 6.0) + 1
 }
 
-handler FixedRandom implements Random {
+handler FixedRandom: Random {
   fn int() { 4 }
   fn float() { 0.5 }
 }
@@ -263,19 +264,19 @@ pub effect Env {
 
 | ハンドラ | 依存 | 説明 |
 |---|---|---|
-| `SystemEnv` | なし | ホストの環境変数（JS の `process.env`、C の `getenv`）。状態を持たない |
+| `SystemEnv` | `ProcessHost` | ホストの環境変数（JS の `process.env`、C の `getenv`）。状態を持たない。`Std.Process` の `Process` に入っている |
 
 `get` は失敗しません。全部の変数を返す操作はまだありません。テスト用のハンドラは Random と同じく自分で書きます。
 
 ```emela check
 import Std.Env.{Env}
 
-fn port() -> Int use Env {
+fn port() -> Int uses { Env } {
   text = (use Env).get("PORT") |> Option.or("8080")
   Int.parse(text) escape { ParseError(..) -> 8080 }
 }
 
-handler FakeEnv implements Env {
+handler FakeEnv: Env {
   fn get(name) {
     name match {
       "PORT" -> Some("3000")
@@ -294,20 +295,20 @@ fn reads_the_port() {
 
 ## Platform
 
-`Std.Platform` の `Platform` は、System のハンドラを全部束ねた layer です。
+`Std.Platform` の `Platform` は、どのホストにもある System のハンドラを束ねた layer です。
 
 ```emela
 pub layer Platform {
   SystemConsole
   SystemClock
   SystemRandom
-  SystemEnv
-  SystemFileSystem
   SystemHttp
 }
 ```
 
-SystemClock、SystemFileSystem、SystemHttp が Async に依存するので、Platform も Async に依存します。`main` では Async が供給されているので、そのまま `with Platform { ... }` と書けます。
+SystemClock と SystemHttp が Async に依存するので、Platform も Async に依存します。`main` では Async が供給されているので、そのまま `with Platform { ... }` と書けます。
+
+SystemEnv と SystemFileSystem はプロセスが要るので、Platform でなく `Std.Process` の layer `Process` に入っています。`Process` は Platform も含むので、Env や FileSystem を使う `main` は `with Process { ... }` と書きます。
 
 一部を差し替えるときは、差し替えるハンドラを後ろに並べます。後に書いたハンドラが同じエフェクトのハンドラを置き換えます。
 
@@ -320,13 +321,13 @@ import Std.State.{State}
 
 fn main() {
   start = Instant.from_unix_milliseconds(1000)
-  (_, end) = State.run(start, fn() {
+  (_, end) = State.run(start, || {
     with Platform, TestClock {
       (use Clock).sleep(500)
       (use Console).print_line("woke at #{Instant.to_unix_milliseconds((use Clock).now())}")
     }
   })
-  dbg(Instant.to_unix_milliseconds(end))
+  _ = dbg(Instant.to_unix_milliseconds(end))
 }
 ```
 

@@ -6,7 +6,7 @@ description: テキストのファイルを読み書きする FileSystem エフ�
 `Std.FileSystem` はファイルとディレクトリをテキスト（UTF-8）で扱うエフェクトです。操作はどれも `suspend fn` で、操作ごとに起こりうるエラーだけを `fails` に書いているので、escape で受けたエラーは型から消えます。パスの文字列は `Std.Path` の純粋な関数で組み立てます。
 
 ```emela check
-import Std.Platform.{Platform}
+import Std.Process.{Process}
 import Std.Console.{Console}
 import Std.FileSystem.{FileSystem, FileNotFound}
 import Std.Path
@@ -19,7 +19,7 @@ fn note(day: String, text: String) {
   fs.create_directory(DIR)
   path = Path.join(DIR, "#{day}.txt")
   fs.append_text(path, "#{text}\n")
-  String.split(fs.read_text(path), "\n") |> List.filter(fn(l) { l != "" }) |> List.length
+  String.split(fs.read_text(path), "\n") |> List.filter(|l| l != "") |> List.length
 }
 
 ## `notes/<day>.txt` の中身。なければその旨を返す。
@@ -30,7 +30,7 @@ fn show(day: String) {
 }
 
 fn main() {
-  with Platform {
+  with Process {
     console = use Console
     console.print_line(String.trim(show("monday")))
     n = note("monday", "buy milk")
@@ -47,7 +47,7 @@ no notes in notes/monday.txt
 ["monday.txt"]
 ```
 
-`note` の推論される型は `fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | InvalidText | FileSystemFailure use FileSystem` です。`show` は FileNotFound を escape で受けるので、残りの4つ（FileAccessDenied、IsADirectory、InvalidText、FileSystemFailure）だけが残ります。
+`note` の推論される型は `fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | InvalidText | FileSystemFailure uses { FileSystem }` です。`show` は FileNotFound を escape で受けるので、残りの4つ（FileAccessDenied、IsADirectory、InvalidText、FileSystemFailure）だけが残ります。
 
 ## エフェクト
 
@@ -111,7 +111,7 @@ pub effect FileSystem {
 実際に SystemFileSystem で試すと、次のようになります。
 
 ```emela check
-import Std.Platform.{Platform}
+import Std.Process.{Process}
 import Std.Console.{Console}
 import Std.FileSystem.{
   FileSystem,
@@ -123,40 +123,53 @@ import Std.FileSystem.{
   FileSystemFailure,
 }
 
-fn attempt(f: fn() -> String fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | DirectoryNotEmpty | FileSystemFailure use FileSystem) -> String use FileSystem {
+fn attempt(
+  f: fn(
+  ) -> String fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | DirectoryNotEmpty | FileSystemFailure uses {
+    FileSystem,
+  },
+) -> String uses { FileSystem } {
   f() escape {
-    FileNotFound(path:)      -> "FileNotFound(#{path})"
-    NotADirectory(path:)     -> "NotADirectory(#{path})"
-    IsADirectory(path:)      -> "IsADirectory(#{path})"
-    DirectoryNotEmpty(path:) -> "DirectoryNotEmpty(#{path})"
-    FileAccessDenied(path:)  -> "FileAccessDenied(#{path})"
+    FileNotFound(path:)                -> "FileNotFound(#{path})"
+    NotADirectory(path:)               -> "NotADirectory(#{path})"
+    IsADirectory(path:)                -> "IsADirectory(#{path})"
+    DirectoryNotEmpty(path:)           -> "DirectoryNotEmpty(#{path})"
+    FileAccessDenied(path:)            -> "FileAccessDenied(#{path})"
     FileSystemFailure(path:, message:) -> "FileSystemFailure(#{path}, #{message})"
   }
 }
 
 fn main() {
-  with Platform {
+  with Process {
     say = (use Console).print_line
     fs = use FileSystem
-    say(attempt(fn() {
-      fs.write_text("missing/a.txt", "x")
-      "written"
-    }))
-    say(attempt(fn() {
-      fs.create_directory("out/sub/deep")
-      fs.create_directory("out/sub/deep")
-      fs.write_text("out/b.txt", "b")
-      fs.write_text("out/a.txt", "a")
-      "#{fs.list_directory("out")}"
-    }))
-    say(attempt(fn() {
-      fs.create_directory("out/a.txt/x")
-      "created"
-    }))
-    say(attempt(fn() {
-      fs.remove("out/sub")
-      "removed"
-    }))
+    say(
+      attempt(|| {
+        fs.write_text("missing/a.txt", "x")
+        "written"
+      }),
+    )
+    say(
+      attempt(|| {
+        fs.create_directory("out/sub/deep")
+        fs.create_directory("out/sub/deep")
+        fs.write_text("out/b.txt", "b")
+        fs.write_text("out/a.txt", "a")
+        "#{fs.list_directory("out")}"
+      }),
+    )
+    say(
+      attempt(|| {
+        fs.create_directory("out/a.txt/x")
+        "created"
+      }),
+    )
+    say(
+      attempt(|| {
+        fs.remove("out/sub")
+        "removed"
+      }),
+    )
     say("#{fs.exists("out")} #{fs.is_directory("out/a.txt")} #{fs.exists("nothing")}")
   }
 }
@@ -173,7 +186,7 @@ True False False
 
 ## SystemFileSystem
 
-`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、Platform に入っています。
+`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、`Std.Process` の layer `Process` に入っています。
 
 | ターゲット | 実装 |
 |---|---|
@@ -210,7 +223,7 @@ fn copy(from: String, to: String) {
 @test
 fn copies_a_file() {
   start = TestFiles(files: [("in/a.txt", "x\ny")], directories: ["out"])
-  (n, TestFiles(files:, directories:)) = State.run(start, fn() {
+  (n, TestFiles(files:, directories:)) = State.run(start, || {
     with TestFileSystem { copy("in/a.txt", "out/a.txt") }
   })
   assert n == 2
@@ -221,7 +234,7 @@ fn copies_a_file() {
 @test
 fn a_missing_file_is_reported() {
   start = TestFiles(files: [], directories: [])
-  (result, _) = State.run(start, fn() {
+  (result, _) = State.run(start, || {
     with TestFileSystem {
       Some(copy("in/a.txt", "out/a.txt")) escape { FileNotFound(..) -> None }
     }

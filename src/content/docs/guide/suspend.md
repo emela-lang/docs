@@ -13,7 +13,7 @@ import Std.Instant.{Instant}
 fn countdown(n: Int) {
   console = use Console
   clock = use Clock
-  List.map(List.range(0, n), fn(i) {
+  List.map(List.range(0, n), |i| {
     clock.sleep(100)
     console.print_line("#{n - i}")
   })
@@ -27,7 +27,7 @@ fn main() {
 }
 
 # その場で再開するので、テストは待たない
-handler InstantClock implements Clock {
+handler InstantClock: Clock {
   suspend fn sleep(ms, resume) { resume(()) }
   fn now() { Instant.from_unix_milliseconds(0) }
 }
@@ -59,7 +59,7 @@ pub effect Clock {
 }
 ```
 
-ホストのタイマーや通信を待つ操作、ほかの suspend な操作を呼ぶ操作は、エフェクトの側で `suspend fn` と宣言します。中断しうることを示す印はここにだけ付き、関数のシグネチャ（`use Clock`）にも呼び出し（`clock.sleep(100)`）にも付きません。呼ぶ側はエフェクトの宣言を見て、中断しうるかを知ります。ハンドラの側でも、宣言と同じく `suspend fn` と書きます。
+ホストのタイマーや通信を待つ操作、ほかの suspend な操作を呼ぶ操作は、エフェクトの側で `suspend fn` と宣言します。中断しうることを示す印はここにだけ付き、関数のシグネチャ（`uses { Clock }`）にも呼び出し（`clock.sleep(100)`）にも付きません。呼ぶ側はエフェクトの宣言を見て、中断しうるかを知ります。ハンドラの側でも、宣言と同じく `suspend fn` と書きます。
 
 ## resume
 
@@ -72,7 +72,7 @@ effect Ask {
   suspend fn ask(question: String) -> Int
 }
 
-handler LengthAnswer implements Ask {
+handler LengthAnswer: Ask {
   suspend fn ask(question, resume) {
     (use Console).print_line("before resume")
     resume(String.length(question))
@@ -108,7 +108,7 @@ effect Ask {
   suspend fn ask(question: String) -> Int
 }
 
-handler Twice implements Ask {
+handler Twice: Ask {
   suspend fn ask(question, resume) {
     resume(1)
     resume(2)
@@ -117,7 +117,7 @@ handler Twice implements Ask {
 
 fn main() {
   with Twice {
-    dbg((use Ask).ask("x"))
+    _ = dbg((use Ask).ask("x"))
   }
 }
 ```
@@ -143,9 +143,9 @@ effect Timer {
 @external(js, "setTimeout")
 fn set_timeout(f: fn() -> (), ms: Int) -> ()
 
-handler JsTimer implements Timer {
+handler JsTimer: Timer {
   suspend fn wait(ms, resume) {
-    set_timeout(fn() { resume(()) }, ms)    # 後から resume する
+    set_timeout(|| resume(()), ms) # 後から resume する
   }
 }
 
@@ -166,7 +166,7 @@ Async は「後から再開される」ことを表す組み込みのエフェ�
 
 resume を後から呼ぶ手段（外部関数のコールバック、`@external suspend fn`、fiber の fork）は Async を要求します。コンパイラは、suspend fn の実装で `resume` を `resume(v)` と直接呼ぶ以外の使い方（変数に入れる、クロージャで捕まえる、引数に渡す）を見ると、後から呼びうるとみなしてハンドラの依存に Async を足します。上の JsTimer も同梱の SystemClock も Async に依存するので、`with JsTimer { ... }` の R には Async が残ります。
 
-`main` とテスト関数の R は Async を除いて空であればよいので、Async が残っても動きます。use 節で効果がないと宣言した関数の中では、エラーになります。
+`main` とテスト関数の R は Async を除いて空であればよいので、Async が残っても動きます。uses 節で効果がないと宣言した関数の中では、エラーになります。
 
 ```emela check=error
 effect Timer {
@@ -176,19 +176,19 @@ effect Timer {
 @external(js, "setTimeout")
 fn set_timeout(f: fn() -> (), ms: Int) -> ()
 
-handler JsTimer implements Timer {
+handler JsTimer: Timer {
   suspend fn wait(ms, resume) {
-    set_timeout(fn() { resume(()) }, ms)
+    set_timeout(|| resume(()), ms)
   }
 }
 
-fn pause() -> () use {} {
+fn pause() -> () uses {} {
   with JsTimer { (use Timer).wait(10) }
 }
 ```
 
 ```text
-effect `Async` is not declared in `use`
+effect `Async` is not declared in `uses`
 ```
 
 ### その場で resume するハンドラ
@@ -200,13 +200,13 @@ import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock}
 import Std.Instant.{Instant}
 
-handler InstantClock implements Clock {
+handler InstantClock: Clock {
   suspend fn sleep(ms, resume) { resume(()) }
   fn now() { Instant.from_unix_milliseconds(0) }
 }
 
-# use {} と書いても通る
-fn nap() -> () use {} {
+# uses {} と書いても通る
+fn nap() -> () uses {} {
   with InstantClock {
     (use Clock).sleep(1000)
   }
@@ -230,12 +230,12 @@ Immediate は「中断せず、呼んだその場で完了する」ことを表�
 import Std.Clock.{Clock, SystemClock}
 import Std.Console.{Console, SystemConsole}
 
-fn run_now[R: Immediate](f: fn() -> () use R) -> () use R { f() }
+fn run_now[R: Immediate](f: fn() -> () uses { R }) -> () uses { R } { f() }
 
 fn main() {
   with SystemConsole, SystemClock {
-    run_now(fn() { (use Console).print_line("ok") })    # 通る
-    run_now(fn() { (use Clock).sleep(10) })             # Clock は中断しうる
+    run_now(|| (use Console).print_line("ok")) # 通る
+    run_now(|| (use Clock).sleep(10)) # Clock は中断しうる
   }
 }
 ```
@@ -260,7 +260,7 @@ effect Stamp {
   fn stamp() -> Instant
 }
 
-handler Slow implements Stamp {
+handler Slow: Stamp {
   fn stamp() {
     (use Clock).sleep(10)
     (use Clock).now()
@@ -279,7 +279,7 @@ operation `sleep` of `Clock` is a `suspend fn` and may suspend, but operation `s
 import Std.Clock.{Clock}
 import Std.Instant.{Instant}
 
-handler InstantClock implements Clock {
+handler InstantClock: Clock {
   suspend fn sleep(ms, resume) { resume(()) }
   fn now() { Instant.from_unix_milliseconds(0) }
 }
@@ -289,7 +289,7 @@ effect Stamp {
 }
 
 # 本体の R が Immediate なので通る
-handler Settled implements Stamp {
+handler Settled: Stamp {
   fn stamp() {
     with InstantClock {
       (use Clock).sleep(10)
@@ -299,7 +299,7 @@ handler Settled implements Stamp {
 }
 
 fn main() {
-  with Settled { dbg((use Stamp).stamp()) }
+  with Settled { _ = dbg((use Stamp).stamp()) }
 }
 ```
 
@@ -314,13 +314,13 @@ effect Ask {
   suspend fn ask(question: String) -> Int
 }
 
-handler Silent implements Ask {
+handler Silent: Ask {
   suspend fn ask(question, resume) { () }
 }
 
 fn main() {
   with Silent {
-    dbg((use Ask).ask("x"))
+    _ = dbg((use Ask).ask("x"))
   }
 }
 ```

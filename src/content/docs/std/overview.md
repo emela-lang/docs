@@ -6,16 +6,16 @@ description: Prelude、core、std の区分と、ハンドラの名前、API の
 Emela の標準ライブラリはコンパイラに同梱された `.emel` のソースです。import なしで使える小さな core と、`Std` の下に置いた std に分かれていて、ホストに触れる機能はすべて std のエフェクトとして提供されます。
 
 ```emela check
-import Std.Platform.{Platform}
+import Std.Process.{Process}
 import Std.Console.{Console}
 import Std.Env.{Env}
 
 fn greeting(name: Option[String]) -> String {
-  name |> Option.map(fn(n) { "Hello, #{n}!" }) |> Option.or("Hello!")
+  name |> Option.map(|n| "Hello, #{n}!") |> Option.or("Hello!")
 }
 
 fn main() {
-  with Platform {
+  with Process {
     (use Console).print_line(greeting((use Env).get("USER")))
   }
 }
@@ -26,7 +26,7 @@ $ USER=emela emela run main.emel
 Hello, emela!
 ```
 
-`Option.map` と `Option.or` は core なので import が要りません。`Console` と `Env` は std のエフェクトで、`Std.Platform` の `Platform` がホストのハンドラを供給します。
+`Option.map` と `Option.or` は core なので import が要りません。`Console` と `Env` は std のエフェクトで、`Std.Process` の `Process` がホストのハンドラを供給します。
 
 ## Prelude、core、std
 
@@ -75,18 +75,18 @@ import Std.Clock.{Clock, SystemClock, TestClock}
 
 ## Platform
 
-`Std.Platform` の `Platform` は、System のハンドラを全部束ねた layer です。
+`Std.Platform` の `Platform` は、どのホストにもある System のハンドラを束ねた layer です。
 
 ```emela
 pub layer Platform {
   SystemConsole
   SystemClock
   SystemRandom
-  SystemEnv
-  SystemFileSystem
   SystemHttp
 }
 ```
+
+プロセスが要るハンドラ（`SystemEnv`、`SystemFileSystem` など）は、`Std.Process` の layer `Process` に Platform と一緒に入っています。Env や FileSystem を使う `main` は `with Process { ... }` と書きます。
 
 `main` はふつう `with Platform { ... }` と書きます。一部だけ差し替えるときは、差し替えるハンドラを後ろに並べます（`with Platform, TestClock { ... }`）。後に書いたハンドラが同じエフェクトのハンドラを置き換えます。
 
@@ -102,18 +102,18 @@ core と std の関数は次の約束に従って名前と引数を決めてい�
 
 ```emela check
 fn main() {
-  dbg([1, 2, 3] |> List.map(fn(x) { x * 2 }) |> List.filter(fn(x) { x > 2 }))
-  dbg(["a", "b"] |> String.join(", "))
+  dbg([1, 2, 3] |> List.map(|x| x * 2) |> List.filter(|x| x > 2))
+  _ = dbg(["a", "b"] |> String.join(", "))
 }
 ```
 
 ### 関数を受ける引数は f
 
-関数を受ける引数の名前は `f` で、名前でなく位置で渡します（`List.map(xs, fn(x) { ... })`）。畳み込みの初期値の引数名は `from` です。
+関数を受ける引数の名前は `f` で、名前でなく位置で渡します（`List.map(xs, |x| ...)`）。畳み込みの初期値の引数名は `from` です。
 
 ```emela check
 fn main() {
-  dbg(List.fold([1, 2, 3], from: 0, f: fn(acc, x) { acc + x }))
+  _ = dbg(List.fold([1, 2, 3], from: 0, f: |acc, x| acc + x))
 }
 ```
 
@@ -147,7 +147,7 @@ fn port(text: String) -> Option[Int] {
 
 fn main() {
   dbg(port("8080")) # Some(8080)
-  dbg(port("80a"))  # None
+  _ = dbg(port("80a")) # None
 }
 ```
 

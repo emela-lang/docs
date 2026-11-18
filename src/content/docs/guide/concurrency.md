@@ -10,8 +10,8 @@ import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
 import Std.Fiber.{Fiber}
 
-fn tick(name: String, n: Int, ms: Int) -> Int use { Clock, Console } {
-  List.map(List.range(0, n), fn(i) {
+fn tick(name: String, n: Int, ms: Int) -> Int uses { Clock, Console } {
+  List.map(List.range(0, n), |i| {
     (use Clock).sleep(ms)
     (use Console).print_line("#{name} #{i}")
   })
@@ -20,7 +20,7 @@ fn tick(name: String, n: Int, ms: Int) -> Int use { Clock, Console } {
 
 fn main() {
   with SystemConsole, SystemClock {
-    (a, b) = Fiber.both(fn() { tick("a", 3, 100) }, fn() { tick("b", 2, 150) })
+    (a, b) = Fiber.both(|| tick("a", 3, 100), || tick("b", 2, 150))
     (use Console).print_line("done #{a + b}")
   }
 }
@@ -50,16 +50,16 @@ import Std.Clock.{Clock, SystemClock}
 import Std.Fiber.{Fiber}
 import Std.State.{State}
 
-fn pause() -> () use { Clock } { (use Clock).sleep(0) }
+fn pause() -> () uses { Clock } { (use Clock).sleep(0) }
 
 # 中断点がないので一息に進む
-fn safe() -> () use { State[Int] } {
+fn safe() -> () uses { State[Int] } {
   st = use State[Int]
   st.set(st.get() + 1)
 }
 
 # get と set の間に中断点があるので、他の fiber が割り込む
-fn racy() -> () use { State[Int], Clock } {
+fn racy() -> () uses { State[Int], Clock } {
   st = use State[Int]
   x = st.get()
   pause()
@@ -68,8 +68,8 @@ fn racy() -> () use { State[Int], Clock } {
 
 fn main() {
   with SystemConsole, SystemClock {
-    (_, a) = State.run(0, fn() { Fiber.map(List.range(0, 10), fn(i) { safe() }) })
-    (_, b) = State.run(0, fn() { Fiber.map(List.range(0, 10), fn(i) { racy() }) })
+    (_, a) = State.run(0, || Fiber.map(List.range(0, 10), |i| safe()))
+    (_, b) = State.run(0, || Fiber.map(List.range(0, 10), |i| racy()))
     (use Console).print_line("safe: #{a}, racy: #{b}")
   }
 }
@@ -80,7 +80,7 @@ $ emela run main.emel
 safe: 10, racy: 1
 ```
 
-`racy` では10個の fiber が全員 0 を読んでから書くので、結果は 1 です。読んで書く処理は `st.update(fn(n) { n + 1 })` にすれば一息になります（`update` の `f` は純粋です）。細かい規則は [意味論](/reference/semantics/) にあります。
+`racy` では10個の fiber が全員 0 を読んでから書くので、結果は 1 です。読んで書く処理は `st.update(|n| n + 1)` にすれば一息になります（`update` の `f` は純粋です）。細かい規則は [意味論](/reference/semantics/) にあります。
 
 ## 組み合わせ関数
 
@@ -92,7 +92,7 @@ safe: 10, racy: 1
 - `Fiber.race(fs)` は最初に終わったものを採り、残りを中断します。最初に終わったものがエラーなら、そのエラーで失敗します。
 - `Fiber.timeout(ms, f)` は `f` を `ms` ミリ秒まで待ちます。間に合えば `Some`、間に合わなければ `f` を中断して `None` です。時間は Clock で測ります。
 
-どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `fn() { ... }` で包んで渡します（引数なしの関数の短い書き方はありません）。型は [State・Fiber・Deferred](/std/state-fiber/) にあります。
+どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `|| ...` で包んで渡します。型は [State・Fiber・Deferred](/std/state-fiber/) にあります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -101,7 +101,7 @@ import Std.Fiber.{Fiber}
 
 error NotFound(id: Int)
 
-fn fetch(id: Int, ms: Int) -> String fails NotFound use { Clock, Console } {
+fn fetch(id: Int, ms: Int) -> String fails NotFound uses { Clock, Console } {
   (use Clock).sleep(ms)
   (use Console).print_line("fetched #{id}")
   if id < 0 { fail NotFound(id:) } else { "user #{id}" }
@@ -110,13 +110,13 @@ fn fetch(id: Int, ms: Int) -> String fails NotFound use { Clock, Console } {
 fn main() {
   with SystemConsole, SystemClock {
     console = use Console
-    (a, b) = Fiber.both(fn() { fetch(1, 200) }, fn() { fetch(2, 100) })
+    (a, b) = Fiber.both(|| fetch(1, 200), || fetch(2, 100))
     console.print_line("both: #{a}, #{b}")
-    names = Fiber.map([3, 4, 5], fn(id) { fetch(id, 100 * (6 - id)) })
+    names = Fiber.map([3, 4, 5], |id| fetch(id, 100 * (6 - id)))
     console.print_line("map: #{names}")
-    first = Fiber.race([fn() { fetch(6, 300) }, fn() { fetch(7, 100) }])
+    first = Fiber.race([|| fetch(6, 300), || fetch(7, 100)])
     console.print_line("race: #{first}")
-    late = Fiber.timeout(100, fn() { fetch(8, 1000) })
+    late = Fiber.timeout(100, || fetch(8, 1000))
     console.print_line("timeout: #{late}")
   }
 }
@@ -145,14 +145,14 @@ import Std.Fiber.{Fiber}
 
 error TooSlow(ms: Int)
 
-fn slow() -> Int use { Clock } {
+fn slow() -> Int uses { Clock } {
   (use Clock).sleep(500)
   1
 }
 
 fn main() {
   with SystemConsole, SystemClock {
-    r = Fiber.timeout(100, fn() { slow() }) |> Option.or_fail(TooSlow(ms: 100))
+    r = Fiber.timeout(100, || slow()) |> Option.or_fail(TooSlow(ms: 100))
     (use Console).print_line("#{r}")
   }
 }
@@ -160,7 +160,7 @@ fn main() {
 
 ```console
 $ emela run main.emel
-error: TooSlow(ms: 100)
+error: TooSlow
 $ echo $?
 1
 ```
@@ -181,9 +181,9 @@ import Std.Fiber.{Fiber}
 fn main() {
   with SystemConsole, SystemClock {
     console = use Console
-    n = Fiber.scope(fn() {
-      Fiber.fork(fn() { console.print_line("child runs") })
-      Fiber.fork(fn() {
+    n = Fiber.scope(|| {
+      Fiber.fork(|| console.print_line("child runs"))
+      Fiber.fork(|| {
         (use Clock).sleep(1000)
         console.print_line("never printed")
       })
@@ -222,7 +222,7 @@ effect Job {
   fn name() -> String
 }
 
-handler Tracked(name: String) implements Job {
+handler Tracked(name: String): Job {
   init {
     (use Console).print_line("start job")
     Tracked(name: "job")
@@ -235,7 +235,7 @@ handler Tracked(name: String) implements Job {
 
 error Boom(id: Int)
 
-fn work(id: Int, ms: Int) -> Int fails Boom use { Clock, Console } {
+fn work(id: Int, ms: Int) -> Int fails Boom uses { Clock, Console } {
   with Tracked {
     (use Clock).sleep(ms)
     if id == 2 { fail Boom(id:) }
@@ -246,9 +246,9 @@ fn work(id: Int, ms: Int) -> Int fails Boom use { Clock, Console } {
 
 fn main() {
   with SystemConsole, SystemClock {
-    r = Fiber.scope(fn() {
-      a = Fiber.fork(fn() { work(1, 300) })
-      b = Fiber.fork(fn() { work(2, 100) })
+    r = Fiber.scope(|| {
+      a = Fiber.fork(|| work(1, 300))
+      b = Fiber.fork(|| work(2, 100))
       Fiber.join(a) + Fiber.join(b)
     }) escape {
       Boom(id:) -> 0 - id
@@ -267,7 +267,7 @@ release job
 result -2
 ```
 
-子の fails はスコープの fails に合流します。上の `Fiber.scope(...)` の型は `Int fails Boom` で、escape で受けられます。中断された `work(1, 300)` は途中の with の release を実行して巻き戻り、`work 1 done` は出ません。子のエラーをスコープに伝えたくないときは、子の中を `Fiber.attempt` で包みます（[エラーを値にする](#エラーを値にする)）。
+子の fails はスコープの fails に合流します。上の `Fiber.scope(...)` の型は `Int fails Boom` で、escape で受けられます。中断された `work(1, 300)` は途中の with の release を実行して巻き戻り、`work 1 done` は出ません。子のエラーをスコープに伝えたくないときは、子の中を `Exit.attempt` で包みます（[エラーを値にする](#エラーを値にする)）。
 
 ### 子が使うハンドラ
 
@@ -281,16 +281,16 @@ effect Users {
   fn find(id: Int) -> String
 }
 
-handler PostgresUsers implements Users {
+handler PostgresUsers: Users {
   fn find(id) { "user #{id}" }
 }
 
 fn main() {
   with SystemClock {
-    Fiber.scope(fn() {
+    Fiber.scope(|| {
       s = use Scope
       with PostgresUsers {
-        s.fork(fn() { (use Users).find(1) })
+        s.fork(|| (use Users).find(1))
       }
       ()
     })
@@ -303,7 +303,7 @@ error: effect `Users` is not provided in `main`
   = note: fibers forked in `Fiber.scope` get their handlers from where `Fiber.scope` is called, so `with` inside it does not reach them
 ```
 
-直すには、with をスコープの外に出します（`with PostgresUsers { Fiber.scope(fn() { ... }) }`）。子が使うエフェクトは Fiber.scope の外で供給するので、子より先に終わる with のハンドラを子が使うことは、型の上では起きません。
+直すには、with をスコープの外に出します（`with PostgresUsers { Fiber.scope(|| { ... }) }`）。子が使うエフェクトは Fiber.scope の外で供給するので、子より先に終わる with のハンドラを子が使うことは、型の上では起きません。
 
 ## 中断
 
@@ -312,11 +312,12 @@ error: effect `Users` is not provided in `main`
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber, Success, Failure}
+import Std.Fiber.{Fiber}
+import Std.Exit.{Success, Failure}
 import Std.Cause.{Cause}
 
-fn heartbeat() -> () use { Clock, Console } {
-  List.map(List.range(0, 100), fn(i) {
+fn heartbeat() -> () uses { Clock, Console } {
+  List.map(List.range(0, 100), |i| {
     (use Clock).sleep(100)
     (use Console).print_line("beat #{i}")
   })
@@ -325,12 +326,12 @@ fn heartbeat() -> () use { Clock, Console } {
 
 fn main() {
   with SystemConsole, SystemClock {
-    Fiber.scope(fn() {
-      beat = Fiber.fork(fn() { heartbeat() })
+    Fiber.scope(|| {
+      beat = Fiber.fork(|| heartbeat())
       (use Clock).sleep(350)
       Fiber.interrupt(beat)
       Fiber.await(beat) match {
-        Success(_) -> (use Console).print_line("finished")
+        Success(_)     -> (use Console).print_line("finished")
         Failure(cause) -> (use Console).print_line("stopped: #{Cause.to_string(cause)}")
       }
     })
@@ -352,11 +353,11 @@ stopped: interrupted
 
 ## エラーを値にする
 
-fiber が正常に終わらなかったときの原因は、`Std.Cause` の `Cause[E]` で表します。原因は fail によるエラー（Fail）、defect（Die）、中断（Interrupt）の3種類で、型の E に現れるのは Fail だけです。`Fiber.attempt(f)` は `f` をその場で実行し、Fail と Die を値（`Exit[A, E]`）に変えます。
+fiber が正常に終わらなかったときの原因は、`Std.Cause` の `Cause[E]` で表します。原因は fail によるエラー（Fail）、defect（Die）、中断（Interrupt）の3種類で、型の E に現れるのは Fail だけです。`Std.Exit` の `Exit.attempt(f)` は `f` をその場で実行し、Fail と Die を値（`Exit[A, E]`）に変えます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
-import Std.Fiber.{Fiber, Success, Failure}
+import Std.Exit.{Exit, Success, Failure}
 import Std.Cause.{Cause, Fail, Die, Interrupt}
 
 error NotFound(id: Int)
@@ -368,11 +369,11 @@ fn find(id: Int) -> String fails NotFound {
 }
 
 fn describe(id: Int) -> String {
-  Fiber.attempt(fn() { find(id) }) match {
+  Exit.attempt(|| find(id)) match {
     Success(name) -> name
     Failure(cause) -> Cause.kind(cause) match {
-      Fail -> "fail: #{Cause.to_string(cause)}"
-      Die -> "die: #{Cause.to_string(cause)}"
+      Fail      -> "fail: #{Cause.to_string(cause)}"
+      Die       -> "die: #{Cause.to_string(cause)}"
       Interrupt -> "interrupt"
     }
   }
@@ -391,17 +392,17 @@ fn main() {
 ```console
 $ emela run main.emel
 user 1
-fail: error: NotFound(id: 0)
+fail: error: NotFound
 die: defect: negative id
 ```
 
-`Exit[A, E]` は `Success(A)` か `Failure(Cause[E])` で、バリアントは `import Std.Fiber.{Success, Failure}` で取り込みます。Cause から中身のエラーは取り出せません。種類を見る（`Cause.kind`）か、文字列にする（`Cause.to_string`）か、`Cause.raise` で起こし直して escape で受けます。attempt の外では、defect は escape を素通りします。
+`Exit[A, E]` は `Success(A)` か `Failure(Cause[E])` で、バリアントは `import Std.Exit.{Success, Failure}` で取り込みます。Cause から中身のエラーは取り出せません。種類を見る（`Cause.kind`）か、文字列にする（`Cause.to_string`）か、`Cause.raise` で起こし直して escape で受けます。attempt の外では、defect は escape を素通りします。
 
 子のエラーでスコープを止めたくないときは、子の中を attempt で包みます。
 
 ```emela
-s.fork(fn() {
-  Fiber.attempt(fn() { handle(conn) }) match {
+s.fork(|| {
+  Exit.attempt(|| handle(conn)) match {
     Success(_) -> ()
     Failure(cause) -> (use Console).print_error_line(Cause.to_string(cause))
   }
@@ -420,7 +421,7 @@ import Std.Clock.{Clock, SystemClock}
 import Std.Fiber.{Fiber}
 import Std.Deferred.{Deferred}
 
-fn poll_loop(n: Int, stop: Deferred[()]) -> Int use { Clock } {
+fn poll_loop(n: Int, stop: Deferred[()]) -> Int uses { Clock } {
   Deferred.poll(stop) match {
     Some(_) -> n
     None -> {
@@ -433,10 +434,10 @@ fn poll_loop(n: Int, stop: Deferred[()]) -> Int use { Clock } {
 fn main() {
   with SystemConsole, SystemClock {
     console = use Console
-    Fiber.scope(fn() {
+    Fiber.scope(|| {
       ready = Fiber.deferred()
       stop = Fiber.deferred()
-      worker = Fiber.fork(fn() {
+      worker = Fiber.fork(|| {
         (use Clock).sleep(50)
         Deferred.complete(ready, "port 8080")
         poll_loop(0, stop)
@@ -470,8 +471,8 @@ import Std.Fiber.{Fiber}
 
 fn main() {
   with SystemClock {
-    f = Fiber.scope(fn() {
-      Fiber.fork(fn() { (use Clock).sleep(10) })
+    f = Fiber.scope(|| {
+      Fiber.fork(|| (use Clock).sleep(10))
     })
     ()
   }
@@ -491,9 +492,9 @@ import Std.Fiber.{Fiber}
 
 fn main() {
   with SystemConsole, SystemClock {
-    later = Fiber.scope(fn() {
-      child = Fiber.fork(fn() { 42 })
-      fn() { Fiber.join(child) }
+    later = Fiber.scope(|| {
+      child = Fiber.fork(|| 42)
+      || Fiber.join(child)
     })
     (use Console).print_line("#{later()}")
   }
@@ -502,12 +503,23 @@ fn main() {
 
 ```console
 $ emela run main.emel
+warning[W0402]: a value that holds `Scope` leaves the `Fiber.scope` that provides it
+   ╭─[ main.emel:9:7 ]
+   │
+ 7 │     later = Fiber.scope(|| {
+   │             ─────┬─────
+   │                  ╰─────── `Scope` is released at the end of this `Fiber.scope`
+   │
+ 9 │       || Fiber.join(child)
+   │       ──────────┬─────────
+   │                 ╰─────────── the value of the scope holds `Scope`
+───╯
+
+1 warning
 defect: fiber was joined after its scope ended
 ```
 
-:::caution[0.22 で静的に止める予定]
-0.22 で capture set が入ると、上の実行時の検査はすべて静的なエラーになります。0.20 でエラーになるプログラムは 0.22 でもエラーです。版を上げて通らなくなるのは、0.20 で実行時の defect だったものだけです。
-:::
+コンパイラは値がどの能力を抱えているか（capture set）を追跡し、スコープの外へ出る値が Scope を抱えていれば W0402 の警告を出します。`--experimental-capture-checking` を付けると、この警告はエラー（E0444）になります。
 
 ## 並列はない
 

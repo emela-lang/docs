@@ -11,7 +11,7 @@ import Std.State.{State}
 
 effect AuditLog of Console
 
-handler StderrConsole implements Console {
+handler StderrConsole: Console {
   fn print_line(text) { (use Console).print_error_line(text) }
   fn print_error_line(text) { (use Console).print_error_line(text) }
 }
@@ -29,7 +29,7 @@ fn main() {
 
 @test
 fn transfers_are_audited() {
-  (_, audit) = State.run([], fn() {
+  (_, audit) = State.run([], || {
     with SystemConsole, AuditLog by TestConsole {
       transfer("alice", "bob", 100)
     }
@@ -74,7 +74,7 @@ import Std.Console.{Console, SystemConsole}
 effect AuditLog of Console
 effect DebugLog of Console default
 
-handler PrefixConsole implements Console {
+handler PrefixConsole: Console {
   fn print_line(text) { (use Console).print_line("[audit] #{text}") }
   fn print_error_line(text) { (use Console).print_error_line("[audit] #{text}") }
 }
@@ -82,13 +82,13 @@ handler PrefixConsole implements Console {
 fn audit() { (use Console).print_line("user 1 logged in") }
 fn debug() { (use Console).print_line("cache miss") }
 
-fn report() -> () use { AuditLog, DebugLog } {
-  with AuditLog { audit() }    # audit の中の Console を AuditLog が担う
+fn report() -> () uses { AuditLog, DebugLog } {
+  with AuditLog { audit() } # audit の中の Console を AuditLog が担う
   with DebugLog { debug() }
 }
 
 fn main() {
-  with SystemConsole, AuditLog by PrefixConsole { report() }    # DebugLog は SystemConsole が担う
+  with SystemConsole, AuditLog by PrefixConsole { report() } # DebugLog は SystemConsole が担う
 }
 ```
 
@@ -114,7 +114,7 @@ fn transfer() {
 }
 
 fn main() {
-  with SystemConsole, AuditLog by Console {    # 監査ログも標準出力へ
+  with SystemConsole, AuditLog by Console { # 監査ログも標準出力へ
     transfer()
   }
 }
@@ -131,18 +131,18 @@ import Std.Console.{Console, SystemConsole}
 
 effect DebugLog of Console default
 
-handler Tagged implements Console {
+handler Tagged: Console {
   fn print_line(text) { (use Console).print_line("[debug] #{text}") }
   fn print_error_line(text) { (use Console).print_error_line(text) }
 }
 
-fn work() -> () use { DebugLog, Console } {
+fn work() -> () uses { DebugLog, Console } {
   (use DebugLog).print_line("step")
   (use Console).print_line("result")
 }
 
 fn main() {
-  with SystemConsole { work() }                     # DebugLog も SystemConsole が担う
+  with SystemConsole { work() } # DebugLog も SystemConsole が担う
   with DebugLog by Tagged, SystemConsole { work() } # 明示の by が優先
 }
 ```
@@ -179,7 +179,7 @@ effect `AuditLog` is not provided in `main`
 
 ## シグネチャにはラベルを書く
 
-関数の use 節にはラベルをそのまま書きます（`use { AuditLog, DebugLog }`）。元のエフェクトに落ちるかどうかは呼ぶ側が決めるので、元のエフェクトは書きません。LSP もラベルのまま表示し、ラベルの名前の上では宣言（`effect DebugLog of Console default`）を出します。
+関数の uses 節にはラベルをそのまま書きます（`uses { AuditLog, DebugLog }`）。元のエフェクトに落ちるかどうかは呼ぶ側が決めるので、元のエフェクトは書きません。LSP もラベルのまま表示し、ラベルの名前の上では宣言（`effect DebugLog of Console default`）を出します。
 
 ## 型引数のあるエフェクトのラベル
 
@@ -195,24 +195,24 @@ effect Misses of State[Int]
 
 fn look(key: String) {
   if key == "a" {
-    (use Hits).update(fn(n) { n + 1 })
+    (use Hits).update(|n| n + 1)
   } else {
-    (use Misses).update(fn(n) { n + 1 })
+    (use Misses).update(|n| n + 1)
   }
 }
 
 fn main() {
-  ((_, misses), hits) = State.run(0, fn() {
+  ((_, misses), hits) = State.run(0, || {
     with Hits by State[Int] {
-      State.run(0, fn() {
+      State.run(0, || {
         with Misses by State[Int] {
           List.map(["a", "b", "a"], look)
         }
       })
     }
   })
-  dbg(hits)      # 2
-  dbg(misses)    # 1
+  dbg(hits) # 2
+  dbg(misses) # 1
 }
 ```
 
