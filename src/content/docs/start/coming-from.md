@@ -13,7 +13,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | throw / try / catch、Result 型と `?` | `error` を宣言して `fail`、受けるのは `escape` |
 | for / while | `List.map`、`List.fold`、再帰 |
 | 再代入する変数 | 同じ名前での束縛し直し、可変な状態は `State` |
-| クラスとメソッド `x.f()` | `type` とモジュールの関数、`x \|> f` |
+| クラスとメソッド `x.f()` | `type` とモジュールの関数、`x.f()` / `x \|> Mod.f` |
 | interface で依存を渡す、DI、モック | `effect`、`handler`、`with` |
 | リソースの後始末（defer、try-with-resources、Drop） | ハンドラの `init` と `release` |
 | async / await | 印なしの呼び出しと `Fiber` |
@@ -55,7 +55,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | Go | Emela |
 |---|---|
 | `type User struct { ID int; Name string }` | `type User(id: Int, name: String)` |
-| `func (u User) Greet() string` | `fn greet(u: User) -> String` と `u \|> greet` |
+| `func (u User) Greet() string` | `fn greet(u: User) -> String` と `u.greet()` |
 | `(T, error)` を返す | `-> T fails E` |
 | `if err != nil { return err }` | 何も書かない（自動で伝わる） |
 | `errors.As` / `errors.Is` | `escape { NotFound(..) -> ... }` |
@@ -80,7 +80,7 @@ goroutine と違い、fiber はスコープより長生きしません。キャ�
 | `User?`、`?.`、`?:`、`Optional` | `Option[User]`、`Option.map`、`Option.or` |
 | 検査例外 `throws NotFoundException` | `fails NotFound` |
 | `RuntimeException` | defect（`panic`） |
-| 拡張関数 / static ユーティリティ | モジュールの関数と `\|>` |
+| 拡張関数 / static ユーティリティ | モジュールの関数と `x.f()` / `\|>` |
 | コンストラクタ注入、Mockito | `effect` / `handler` / `with`、テスト用のハンドラ |
 | `coroutineScope` / `StructuredTaskScope` | `Fiber.scope` |
 | `async` と `await()` | `Fiber.fork` と `Fiber.join` |
@@ -120,10 +120,10 @@ fn greet(user: User) -> String {
 fn main() {
   count = 0
   count = count + 1 # 再代入でなく、同じ名前で束縛し直す
-  sum = List.range(1, 11) |> List.fold(0, |acc, n| acc + n)
-  first = List.get([10, 20, 30], 0)
+  sum = List.range(1, 11).fold(0, |acc, n| acc + n)
+  first = [10, 20, 30].get(0)
   user = User(id: 1, name: "alice")
-  dbg(user |> greet)
+  dbg(user.greet())
   dbg("#{count} #{sum}")
   dbg(first)
   ()
@@ -139,7 +139,7 @@ Some(10)
 
 ループ構文がないので、繰り返しは `List.fold` のような関数か再帰で書きます。自分への末尾呼び出しはスタックを使いません。添字アクセス `xs[0]` もなく、`List.get` が `Option` を返します。
 
-メソッド呼び出しの構文もありません。`.` で書けるのはフィールドの参照と、能力の値の操作（`(use Users).find(1)`）だけです。
+`x.f(a)` はメソッド呼び出しで、x の型を定義するモジュールの関数（第1引数がその型）か、名前で見える Trait の `self` を取る関数を `M.f(x, a)` として呼びます。モジュールの import は要りません。`.` ではこのほか、フィールドの参照と能力の値の操作（`(use Users).find(1)`）も書けます。
 
 `use X` は import とは別物で、エフェクト `X` の能力の値を取り出す式です。能力の値は、引数に渡す、データに入れる、返すのどれもできません。サービスを値として持ち回る書き方はできないので、使わせたいときはクロージャを渡します。`main` に残ってよいエフェクトはなく、使うものは `main` の中の `with` で全部供給します。標準のハンドラは `Std.Platform` の `Platform` にまとまっています。
 

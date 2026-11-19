@@ -20,6 +20,7 @@ impl User: Describe {
 fn main() {
   user = User(id: 1, name: "alice")
   dbg(Describe.describe(user))    # "user 1: alice"
+  dbg(user.describe())            # 同じ（メソッド呼び出し）
   dbg(user)                       # User(id: 1, name: "alice")
 }
 ```
@@ -75,13 +76,14 @@ impl MyDate: Encode { ... }
 
 ```emela
 Show.show(user)
+user.show()
 user |> Show.show
 
 fn largest[A: Ord](xs: List[A]) -> Option[A] { ... }
 fn report[A: Ord + Show](xs: List[A]) -> String { ... }
 ```
 
-Trait の関数は `Show.show(user)` のように `Trait名.関数名(値)` の形で呼び、パイプにもそのままつなげます。`user.show()` のようなメソッド呼び出しの構文はありません。型引数への制約は `[A: Ord]` と書きます（[型引数](/guide/generics/)）。
+Trait の関数は `Show.show(user)` のように `Trait名.関数名(値)` の形で呼び、パイプにもそのままつなげます。呼び出し側で Trait の名前が見えていれば（Prelude、`import L.{Show}`、自モジュールの宣言）、`self` を取る関数は `user.show()` とも書けます。型引数への制約は `[A: Ord]` と書きます（[型引数](/guide/generics/)）。
 
 Trait の関数は既定では純粋です。宣言に `fails E` や `uses { R }` を書けば、実装はその範囲でエラーと効果を持てます。実装が宣言の範囲を超えられないので、`[A: Decode]` を使う関数のエラーと効果は、どの型の実装が選ばれても変わりません。
 

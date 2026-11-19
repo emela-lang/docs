@@ -78,7 +78,7 @@ type HTTP(status: Int)
 この規則から、`.` の左側を見れば意味が分かります。
 
 - 左が型名なら、静的な参照（モジュールの関数、Trait のメソッド）です。例: `List.map`
-- 左が小文字名か大文字名なら、値へのアクセス（フィールド、`use` で得た能力の操作）です。例: `user.name`、`log.info`、`DEFAULT_CONFIG.port`
+- 左が小文字名か大文字名なら、値へのアクセス（フィールド、`use` で得た能力の操作、メソッド呼び出し）です。例: `user.name`、`log.info`、`DEFAULT_CONFIG.port`、`xs.map(f)`
 
 ## リテラル
 
