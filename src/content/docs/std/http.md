@@ -104,7 +104,7 @@ pub effect Http {
 
 - 本文はテキストだけを扱います。送るときは UTF-8 にし、受けるときは UTF-8 として読み、読めなければ ResponseNotText です。本文の先頭の BOM は取り除きます。本文は全部を読み込んでから返します（ストリームは後の版）。
 - content-type を書かなければ `text/plain;charset=UTF-8` で送ります。
-- ヘッダは `List[(String, String)]` で持ちます。Map がまだなのと、同じ名前のヘッダが複数並ぶためです。応答のヘッダは名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます。`set-cookie` だけは1つずつ別の組にします。
+- ヘッダは `List[(String, String)]` で持ちます。同じ名前のヘッダが複数並ぶためです。応答のヘッダは名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます。`set-cookie` だけは1つずつ別の組にします。
 - 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いからで、失敗にしたいときは `require_ok` を挟みます。
 - 失敗にするのは応答を受け取れなかったときだけで、名前解決、接続、TLS、リダイレクトの回数超えはどれも ConnectionFailed にまとめます。リダイレクトは自動で辿ります。
 - GET と HEAD の空の本文は本文なしで送ります。GET と HEAD に空でない本文を書いたときと、正しくないヘッダは ConnectionFailed です。
@@ -250,6 +250,4 @@ fn no_answer_is_connection_failed() {
 
 `main` で `with Platform, TestHttp { ... }` と書けば、Platform の SystemHttp だけを TestHttp に置き換えられます（`State.run` の中で）。
 
-:::caution[0.25 で入る予定]
-Http のサーバーは 0.25 で、fiber の上に作ります。同時に走る数の上限（`Semaphore`）は 0.28 です。いまの `Std.Http` はクライアントだけです。
-:::
+Http のサーバーは 0.25 で入り、`@entry(Http.serve)` で書きます。同時に走る数の上限には 0.28 の `Std.Semaphore` を使います。このページはクライアント（`send` と TestHttp）を扱います。

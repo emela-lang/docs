@@ -174,24 +174,16 @@ Option の既定値は `Option.or(opt, default)`、Option を返す関数をつ�
 
 ただし String への変換だけはどの型も自分のモジュールの `to_string` に置きます（`Int.to_string`、`Duration.to_string`）。同じ変換を両方の型に置くことはしません。
 
-## これから入るもの
+## あとから入ったもの
 
-:::caution[予定]
-次のものはまだ std にありません。
+次のものは、いまの std にあります。入った版の一覧は [実装の状況](/start/status/) にもあります。
 
-- コレクションの `Std.Map`、`Std.Set`、`Std.Array`。Trait（Eq、Ord、Hash、Show）の上に作ります。いまの `==` と表示は Trait でなくランタイムの組み込みの処理で動くので、純粋な Emela で書くと、中身が同じでも作り方で比較や表示が変わりうるためです。コレクションは不変です
-- JSON の変換。導出規則を持つ Trait（Encode、Decode）として入ります
+- コレクションの `Std.Map`、`Std.Set`（0.24）、`Std.Array`（0.27）。Trait（Eq、Ord、Hash、Show）の上に作られ、不変です
+- JSON の変換（`Std.Json` と `derive Encode, Decode`）。0.28
+- Http のサーバー（`@entry(Http.serve)`）。0.25
+- `Std.Semaphore` と `Std.Queue`（同時に走る fiber の数の上限と、fiber の間の受け渡し）。0.28
 
-それまでは、キーと値の組は `List[(String, String)]` のようなタプルのリストで持ちます（Http のヘッダもこの形です）。
-:::
-
-:::caution[0.25 で入る予定]
-Http のサーバーは 0.25 で入ります。
-:::
-
-:::caution[0.28 で入る予定]
-`Semaphore` と `Queue`（同時に走る fiber の数の上限）は 0.28 で入ります。
-:::
+キーと値の組を `List[(String, String)]` のようなタプルのリストで持つ形もそのまま使えます（Http のヘッダなど）。
 
 ## github.com/emela-lang/x
 
