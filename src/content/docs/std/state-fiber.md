@@ -189,6 +189,6 @@ fn main() {
 
 `poll` は、止める合図を区切りごとに見るときに使います。外部関数のコールバックから fiber に合図を送るのにも Deferred を使います（[外部関数](/guide/external/)）。
 
-:::caution[0.21 以降に入る予定]
-`Semaphore` と `Queue` は 0.21 で入ります。`Schedule` と `Stream` は後の版です。
+:::caution[0.28 で入る予定]
+`Semaphore` と `Queue` は 0.28 で入ります。`Schedule` と `Stream` は後の版です。
 :::
