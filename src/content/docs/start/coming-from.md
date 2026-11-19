@@ -121,8 +121,8 @@ fn greet(user: User) -> String {
 fn main() {
   count = 0
   count = count + 1 # 再代入でなく、同じ名前で束縛し直す
-  sum = List.range(1, 11) |> List.fold(0, |acc, n| acc + n)
-  first = List.get([10, 20, 30], 0)
+  sum = List.range(1, 11).fold(0, |acc, n| acc + n)
+  first = [10, 20, 30].get(0)
   user = User(id: 1, name: "alice")
   dbg(user.greet())
   dbg("#{count} #{sum}")

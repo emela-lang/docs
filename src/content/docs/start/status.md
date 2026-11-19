@@ -7,17 +7,17 @@ description: emela 0.28.0 で動くもの、ターゲットごとの違い、実
 
 ## 版ごとに入ったもの
 
-| 版 | 入ったもの |
-|---|---|
-| 0.20 | 言語の土台。データ型、パターンマッチ、モジュール、型付きのエラーとエフェクト、`suspend fn`、状態を持つハンドラ、fiber、ファイル、`Http` のクライアント、`@test` |
-| 0.21 | WebAssembly と C のターゲット、`emela doc`、エフェクトのラベル |
-| 0.22 | 依存（`emela pome`）、`@external` のファイルを出力にコピーする |
-| 0.23 | テストのルート `test/` と `[dev-dependencies]`、言語サーバーの機能の追加 |
-| 0.24 | `trait`、`impl`、`derive`（`Eq`、`Ord`、`Show`）、`Std.Map`、`Std.Set`。テストの補助は Pome の [brix](https://github.com/emela-lang/brix) に移った |
-| 0.25 | HTTP サービス（`@entry(Http.serve)`）、`@export`、ハンドラの `init` の引数、WASM ですべての構文が動く、`emela test --reporter`、`emela new` |
-| 0.26 | メソッド呼び出し `x.f(a)`、`Std.Bytes` |
-| 0.27 | 無名関数 `\|x\| e`、`uses { R }`、`escape` の `_`、`Std.Array`、`Std.Exit` |
-| 0.28 | `--target native`、`Std.Process`（引数、標準入出力、`main` の終了コード）、局所関数、`each`、`Std.Json` と `derive Encode, Decode`、`Semaphore` と `Queue`、能力の型 `use E`、1つのハンドラで複数のエフェクトを実装する、handler member、Bun、`emela doctor`、Windows 向けのリリース、ブラウザで動くコンパイラ（[Playground](/playground/)） |
+| 版 | 入ったもの | ページ |
+|---|---|---|
+| 0.20 | 言語の土台。データ型、パターンマッチ、モジュール、型付きのエラーとエフェクト、`suspend fn`、状態を持つハンドラ、fiber、ファイル、`Http` のクライアント、`@test` | [データ型](/guide/types/)、[エラー](/guide/errors/)、[エフェクト](/guide/effects/) |
+| 0.21 | WebAssembly と C のターゲット、`emela doc`、エフェクトのラベル | [ターゲット](/reference/targets/)、[エフェクトのラベル](/guide/labels/) |
+| 0.22 | 依存（`emela pome`）、`@external` のファイルを出力にコピーする | [プロジェクトと Pome](/tools/pome/) |
+| 0.23 | テストのルート `test/` と `[dev-dependencies]`、言語サーバーの機能の追加 | [テスト](/guide/testing/) |
+| 0.24 | `trait`、`impl`、`derive`（`Eq`、`Ord`、`Show`）、`Std.Map`、`Std.Set`。テストの補助は Pome の [brix](https://github.com/emela-lang/brix) に移った | [Trait と導出](/guide/traits/)、[コレクション](/std/collections/) |
+| 0.25 | HTTP サービス（`@entry(Http.serve)`）、`@export`、ハンドラの `init` の引数、WASM ですべての構文が動く、`emela test --reporter`、`emela new` | [Http](/std/http/)、[emela コマンド](/tools/cli/) |
+| 0.26 | メソッド呼び出し `x.f(a)`、`Std.Bytes` | [メソッド呼び出し](/guide/functions/#メソッド呼び出し) |
+| 0.27 | 無名関数 `\|x\| e`、`uses { R }`、`escape` の `_`、`Std.Array`、`Std.Exit` | [束縛と関数](/guide/functions/)、[エラー](/guide/errors/) |
+| 0.28 | `--target native`、`Std.Process`（引数、標準入出力、`main` の終了コード）、局所関数、`each`、`Std.Json` と `derive Encode, Decode`、`Semaphore` と `Queue`、能力の型 `use E`、1つのハンドラで複数のエフェクトを実装する、handler member、Bun、`emela doctor`、Windows 向けのリリース、ブラウザで動くコンパイラ（[Playground](/playground/)） | [ターゲット](/reference/targets/)、[標準ライブラリ](/std/overview/)、[emela コマンド](/tools/cli/) |
 
 ## ターゲット
 
