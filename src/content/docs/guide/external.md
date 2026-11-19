@@ -22,7 +22,7 @@ handler HostConsole: Console {
 }
 
 fn main() {
-  d = hypot(3.0, 4.0)       # uses {} なので、どこからでも呼べる
+  d = hypot(3.0, 4.0) # uses {} なので、どこからでも呼べる
   with HostConsole {
     (use Console).print_line("distance: #{d}")
   }
@@ -58,7 +58,7 @@ suspend fn fetch_text(url: String) -> String
 
 `(js, "名前")` はグローバルから辿れる JS の関数（`console.log`、`Math.sin`）を指し、`(c, "名前")` はリンクのときに解決する C の関数（libc や OS のライブラリのもの）を指します。
 
-`(ターゲット, "ファイル", "名前")` の形は自分で書いたホスト側のファイルを指します。ファイルは宣言を含むソースのディレクトリからの相対パスで、`./` か `../` で始めます。JS では `.mjs` のファイルから export した関数を指し、出力はそのファイルを絶対パスで読みます（出力の `target/emela/js` をソースと別の場所へ移すと動きません）。C では `.c` のファイルの関数を指し、コンパイラはそのファイルを出力と一緒に `cc` でコンパイルしてリンクします。
+`(ターゲット, "ファイル", "名前")` の形は自分で書いたホスト側のファイルを指します。ファイルは宣言を含むソースのディレクトリからの相対パスで、`./` か `../` で始めます。JS では `.mjs` のファイルから export した関数を指します。出力は、そのファイルを含む Pome のソースのルートの下にある `.emel` 以外のファイルを出力先へ写し、相対パスで読むので、出力のディレクトリごと別の場所へ移しても動きます。`.mjs` から同じ Pome のほかのファイルを相対パスで読んでもかまいません。C では `.c` のファイルの関数を指し、コンパイラはそのファイルを出力と一緒に `cc` でコンパイルしてリンクします。
 
 同梱の std も同じ形で書かれています。`Std.Clock` のソース（`clock.emel`）は隣の `clock.mjs` と `clock.c` を指しています。
 
@@ -69,7 +69,7 @@ suspend fn sleep_milliseconds(ms: Int) -> ()
 ```
 
 :::note
-ビルドのターゲットは `js`、`native`、`wasm` で、使う注釈はそれぞれ `js`、`c`、`wasm` です。ターゲット名の `c` は `native` の古い名前で、0.29 でなくなります（[ターゲット](/reference/targets/)）。
+ビルドのターゲットは `js`、`native`、`wasm` で、使う注釈はそれぞれ `js`、`c`、`wasm` です。ターゲット名の `c` は `native` の古い名前で、使うと警告（W0903）が出ます（[ターゲット](/reference/targets/)）。
 :::
 
 ## 呼べる場所
@@ -78,6 +78,7 @@ suspend fn sleep_milliseconds(ms: Int) -> ()
 |---|---|---|
 | `uses {}` を明記 | 純粋だと宣言する | どこからでも |
 | `uses` を省略 | ホストの副作用を持つ | ハンドラの init、release、操作の本体の中だけ |
+| `uses { ProcessHost }` か `uses { PageHost }` | ホストの副作用を持ち、そのホストでだけ動く | ハンドラの init、release、操作の本体の中だけ |
 | `suspend fn` | 完了を待つ必要がある。Async を要求する | ハンドラの中だけ |
 
 ```emela check=error
@@ -94,6 +95,8 @@ error: external function `console_log` can only be used in handlers
 ```
 
 `uses {}` の宣言が正しいかどうかを、コンパイラは検証できません。宣言した人が責任を持ちます。
+
+uses 節に書けるのはホストのエフェクト ProcessHost と PageHost だけです（ほかは E0445）。`uses { ProcessHost }` は、ホストが OS のプロセスでなければ動かないことを表します。この外部関数を呼ぶハンドラは ProcessHost を要求します。ProcessHost は with で消えずに R に残るので、そのハンドラを使う関数は ProcessHost が与えられる `main` やテスト関数から呼ぶことになります。同梱の SystemArgs や SystemFileSystem がこの形です。
 
 制限は呼び出しだけでなく参照にも掛かります。uses を省略した外部関数を関数の値としてハンドラの外へ持ち出すこともできません。外部関数のホストの副作用は R に載らず、外から見えるのはそれを包んだハンドラのエフェクトです。
 
@@ -116,7 +119,7 @@ host-demo/
 [pome]
 name = "github.com/acme/host-demo"
 version = "0.1.0"
-emela = "0.20.1"
+emela = "0.28.0"
 ```
 
 ```js
@@ -227,7 +230,7 @@ fn stringify(value: JsValue) -> String uses {}
 
 fn main() {
   v = parse("{ \"name\": \"alice\",  \"tags\": [1, 2] }")
-  _ = dbg(stringify(v))    # "{\"name\":\"alice\",\"tags\":[1,2]}"
+  _ = dbg(stringify(v)) # "{\"name\":\"alice\",\"tags\":[1,2]}"
 }
 ```
 
@@ -237,16 +240,17 @@ Emela からは持ち回ることしかできず、中身を見るにはそれ�
 
 外部関数の引数と戻り値に使えるのは、次の型だけです。
 
-- Int、Int64、Float、Bool、String、`()`
+- Int、Int64、Float、Bool、String、Bytes（`Std.Bytes`）、`()`
+- `Array[A]`（`Std.Array`）。A は関数型以外の上の型（`Array[Array[Int]]` や `Array[Bytes]` も渡せます）
 - `@external type` で宣言した型
 - 上の型だけからなる関数型（コールバック）
 
-List や Option、自分で定義した型は直接は渡せません。ハンドラの中で変換します。同梱の SystemEnv は `Option[String]` を返したいので、ホストからは「あるか」（Bool）と「値」（String）を別々の外部関数で受け取り、ハンドラの中で `Some` / `None` に組み立てています。
+List や Option、自分で定義した型は直接は渡せません。ハンドラの中で変換します。並びを渡したいときは Array に変えて渡します。Bytes と Array は境界を越えるときに写されるので、ホスト側で後から書き換えても Emela の値は変わりません。同梱の SystemEnv は `Option[String]` を返したいので、ホストからは「あるか」（Bool）と「値」（String）を別々の外部関数で受け取り、ハンドラの中で `Some` / `None` に組み立てています。
 
 `()` を返す外部関数は、ホストの戻り値を捨てて `()` を返します。上の `host_print` を `console.log` や `puts` に向けられるのはこのためです。
 
-:::caution[実装との違い]
-今のコンパイラ（0.20.1）は、JS のターゲットでは List や利用者の型の引数を拒まず、内部の表現のまま渡してしまいます。C のターゲットでは「cannot cross to C」のエラーになります。どちらのターゲットでも、上の型だけを使ってください。
+:::caution[検査の抜け]
+JS のターゲットでは、コンパイラは List や利用者の型の引数を拒まず、内部の表現のまま渡してしまいます（[emela#263](https://github.com/emela-lang/emela/issues/263)）。native のターゲットでは「cannot cross to C」のエラーになります。どちらのターゲットでも、上の型だけを使ってください。
 :::
 
 ### コールバック
@@ -309,7 +313,9 @@ fn main() {
 error: effect `Clock` may suspend, but callbacks passed to external function `set_timeout` must be `Immediate`
 ```
 
-コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送ります（[並行処理](/guide/concurrency/)）。C のターゲットはまだコールバックを持ちません。
+コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送ります（[並行処理](/guide/concurrency/)）。
+
+native のターゲットは、関数型（コールバック）と Bytes、Array を境界で受け渡せません。エントリからたどれる外部関数がこれらを受け取るか返すと、コンパイルエラー（E0427、E0443）です。
 
 ### C の型
 
@@ -324,7 +330,7 @@ error: effect `Clock` may suspend, but callbacks passed to external function `se
 | String | `const char *`（NUL 終端の UTF-8） | `char *`（NUL 終端。`malloc` で確保したもの） |
 | `()` | 引数にしない | `void` |
 | `@external type` | `void *` | `void *` |
-| 関数型 | まだない | まだない |
+| 関数型 | なし（E0427） | なし（E0427） |
 
 C に渡す String の写しは呼び出しの間だけ有効です。後から使うなら C の側で写します。C から受け取った String は、ランタイムが Emela の文字列に写した後すぐに `free` します。`size_t` や `int` のような表にない型は、C の側に小さな関数を書いて表の型に直します。
 
@@ -345,7 +351,7 @@ counter/
 [pome]
 name = "github.com/acme/counter"
 version = "0.1.0"
-emela = "0.20.1"
+emela = "0.28.0"
 
 [build]
 target = "native"
@@ -469,8 +475,8 @@ C の関数は型の表の引数の後ろに完了を待っている fiber を�
 fn parse_int(text: String) -> Int uses {}
 
 fn main() {
-  dbg(parse_int("42"))       # 42
-  _ = dbg(parse_int("{"))    # defect
+  dbg(parse_int("42")) # 42
+  _ = dbg(parse_int("{")) # defect
 }
 ```
 
@@ -499,7 +505,7 @@ fn js_number(text: String) -> Float uses {}
 handler JsNumbers: Numbers {
   fn parse(text) {
     x = js_number(text)
-    if x != x { fail BadNumber(text:) } else { x }    # NaN は自分自身と等しくない
+    if x != x { fail BadNumber(text:) } else { x } # NaN は自分自身と等しくない
   }
 }
 
@@ -522,8 +528,8 @@ $ emela run main.emel
 
 エラーの名前はエフェクトの操作の `fails` に出るので、呼ぶ側はホストの事情を知らずに `escape` できます。C でも同じで、`errno` を自動で失敗に写すことはしません。同梱の FileSystem はホストから「エラーの名前」を String で受け取り、ハンドラの中で FileNotFound などに変えています。
 
-:::caution[実装との違い]
-今のコンパイラ（0.20.1）は、外部関数の宣言に書いた `fails` を拒みません。書いても、ホストの関数が失敗を返す手段はないので、書かないでください。
+:::caution[検査の抜け]
+コンパイラは、外部関数の宣言に書いた `fails` を拒みません（[emela#263](https://github.com/emela-lang/emela/issues/263)）。書いても、ホストの関数が失敗を返す手段はないので、書かないでください。
 :::
 
 ## ターゲットの注釈がないとき
@@ -555,8 +561,19 @@ error: external function `cbrt` has no `@external(c, ...)` for target `native`
 
 ## 依存の Pome
 
-`@external` を書けるのは、ビルドしているプロジェクトと、同梱の core と std だけです。依存として使う Pome は `@external` を持てません。ライブラリは純粋な Emela と std のエフェクトの上に書き、どのターゲットでも同じ意味で動くようにします。足りないホストの機能は利用者にハンドラを書かせるのでなく、std に platform のエフェクトか値の型として足します（[Pome](/tools/pome/)）。
+依存として使う Pome の `@external` は、ビルドしている側の `Pome.toml` が `[external]` の `allow` で許したときだけ使えます。
 
-:::caution[まだ動かないもの]
-Pome の依存（`[dependencies]`）は、今の CLI ではまだ読みません（入る版は未定）。この規則の検査も、依存と一緒に入ります。
-:::
+```toml
+# アプリの Pome.toml
+[dependencies]
+"github.com/emela-lang/x/platform-cloudflare" = "v0.1.0"
+
+[external]
+allow = ["github.com/emela-lang/x/platform-cloudflare"]
+```
+
+- `allow` には Pome のソースパスを並べ、版は書きません。依存の依存も、ここに書かなければ `@external` を使えません。
+- 許していない依存の `@external` はコンパイルエラー（E0233）です。`@export` も `@external` と同じに数えます。`emela pome add --allow-external <ソースパス>` は、依存を足すときに `allow` にも書き足します。
+- 依存の中の `@external` の関数は `pub` にできません（E0237）。ホストに触れる Pome は、外へはエフェクトか、外部関数を呼ぶ普通の関数として見せます。
+
+ライブラリはふつう純粋な Emela と std のエフェクトの上に書き、どのターゲットでも同じ意味で動くようにします。多くのプログラムが使うホストの機能は、std に platform のエフェクトか値の型として足します。特定のホストにしかない機能は、ターゲット専用の Pome に置きます（[Pome](/tools/pome/)）。

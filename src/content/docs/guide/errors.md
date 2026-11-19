@@ -18,7 +18,7 @@ fn main() {
   user = find_user(2) escape {
     NotFound(_) -> User(id: 0, name: "guest")
   }
-  dbg(user) # User(id: 0, name: "guest")
+  _ = dbg(user) # User(id: 0, name: "guest")
 }
 ```
 
@@ -34,7 +34,7 @@ error DbError(message: String)
 fn main() {
   e = NotFound(id: 3)
   dbg(e) # NotFound(id: 3)
-  dbg([NotFound(id: 1), NotFound(id: 2)]) # [NotFound(id: 1), NotFound(id: 2)]
+  _ = dbg([NotFound(id: 1), NotFound(id: 2)]) # [NotFound(id: 1), NotFound(id: 2)]
 }
 ```
 
@@ -120,13 +120,42 @@ fn try_load(id: Int) {
 fn main() {
   dbg(load_or_zero(20)) # 0
   dbg(try_load(20)) # None
-  dbg(load_or_unavailable(-1)) # error: Unavailable(reason: "down")
+  _ = dbg(load_or_unavailable(-1)) # error: Unavailable(reason: "down")
 }
 ```
 
 腕で受けたタグは E から消え、受けなかったタグはそのまま伝わります。腕をすべてのエラーについて書く必要はありません。腕の中で `fail` したエラーは新しく E に加わります。
 
-`_` や変数で「どのエラーでも」受ける書き方はありません。受けるエラーはいつも構成子の名前で書きます。
+### どのエラーでも受ける
+
+腕のパターンに `_` を書くと、そこに届いたエラーをすべて受けます。エラーそのものが要らないとき、つまり既定の値に戻す、何もしない、`panic` で defect に変える、のどれかに使います。
+
+```emela check
+error NotFound(id: Int)
+error DbError(message: String)
+
+fn load(id: Int) -> Int fails NotFound | DbError {
+  if id < 0 { fail DbError(message: "down") } else if id > 10 { fail NotFound(id:) } else { id }
+}
+
+# E はなし
+fn load_or_zero(id: Int) -> Int {
+  load(id) escape {
+    _ -> 0
+  }
+}
+
+fn main() {
+  dbg(load_or_zero(-1)) # 0
+  dbg(load_or_zero(20)) # 0
+  _ = dbg(load_or_zero(3)) # 3
+}
+```
+
+- `_` の腕は E からすべてのタグを消します。`_` より下の腕は冗長として警告（W0301）になります。
+- `_` にはガードを付けられません。
+- 変数で受けることはできません。「NotFound か DbError のどちらか」という値の型はないためです。エラーの中身を見たいときは構成子の名前で受けます。
+- defect と fiber の中断はエラーではないので、`_` でも受けません。
 
 ガード付きの腕で一部の値だけ受けたときの E や、関数を受け取る関数の中の escape の扱いは、[型と効果の体系](/reference/type-system/)にあります。
 
@@ -157,7 +186,7 @@ fn twice(f: fn() -> Int) -> Int { f() + f() }
 fn main() {
   dbg(twice(|| 2)) # 4
   n = twice(|| fail Boom) escape { Boom -> 0 }
-  dbg(n) # 0
+  _ = dbg(n) # 0
 }
 ```
 
@@ -175,7 +204,7 @@ fn lookup(names: List[String], id: Int) -> String fails NotFound {
 }
 
 fn main() {
-  dbg(lookup(["a", "b"], 1)) # "b"
+  _ = dbg(lookup(["a", "b"], 1)) # "b"
 }
 ```
 
@@ -224,7 +253,7 @@ $ echo $?
 - エラーを defect に変えるには、上のように escape の腕で `panic` を呼びます。
 - 最上位に届いた defect は `defect: <message>` を出して終了コード 101 で終わるので、エラー（終了コード 1）と区別できます。
 
-defect を観測できるのは、プログラムの最上位、テストランナー、[`Fiber.attempt`](/guide/concurrency/) の3か所だけです。途中の with のハンドラの [release](/guide/resources/) は、defect のときも実行されます。
+defect を観測できるのは、プログラムの最上位、テストランナー、[`Exit.attempt`](/guide/concurrency/#エラーを値にする) の3か所だけです。途中の with のハンドラの [release](/guide/resources/) は、defect のときも実行されます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -259,6 +288,38 @@ defect: division by zero
 ```
 
 defect を起こすものの一覧と、release の中で defect が起きたときの扱いは[実行時の意味](/reference/semantics/)にあります。
+
+## 終了コードを選ぶ
+
+`main` の戻り値の型を `ExitCode`（`Std.Process`）にすると、返した値がプログラムの終了コードになります。
+
+```emela check
+import Std.Process.{ExitCode, exit_code, EXIT_SUCCESS}
+
+error Invalid(line: Int)
+
+fn validate(lines: List[String]) -> Int fails Invalid {
+  if List.is_empty(lines) { fail Invalid(line: 0) } else { List.length(lines) }
+}
+
+fn main() -> ExitCode {
+  Some(validate([])) escape { Invalid(_) -> None } match {
+    Some(_) -> EXIT_SUCCESS
+    None    -> exit_code(2)
+  }
+}
+```
+
+```console
+$ emela run main.emel
+$ echo $?
+2
+```
+
+- `exit_code(n)` は 0 から 255 の終了コードを作ります。範囲の外は defect です。`EXIT_SUCCESS`（0）と `EXIT_FAILURE`（1）もあります。
+- ExitCode はただの値で、作るのにエフェクトもハンドラも要りません。
+- 1、101、130 も選べます。その場合、エラー、defect、中断とは終了コードでは見分けられず、標準エラーに出る行でだけ見分けられます。
+- `main` の戻り値の型は `()` か `ExitCode` にします。ほかの型を返す `main` は警告（W0304）になり、値は捨てられます。
 
 ## Result 型と ? 演算子はない
 

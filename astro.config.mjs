@@ -2,8 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import starlightCatppuccin from "@catppuccin/starlight";
 import { rehypeBaseLinks } from './src/rehype/base-links.mjs';
+import { remarkTourProgram } from './src/remark/tour-program.mjs';
 
 // GitHub Pages のカスタムドメイン https://docs.emela.dev/ のルートに配信する。
 // サブパスに戻すときは BASE を変える（内部リンクと静的アセットがその配下になる）。
@@ -16,18 +16,30 @@ const emelaGrammar = JSON.parse(
   readFileSync(new URL('./src/grammars/emela.tmLanguage.json', import.meta.url), 'utf-8'),
 );
 
-// Expressive Code plugin: mark a code block as runnable only when its meta
-// string opts in with `run`, e.g. ```emela run. It sets `data-emela-run="true"`
-// on the block root; the client script (RunButtons.astro) attaches a "▶ Run"
-// button to exactly those blocks — so a plain ```emela block gets no button.
+// コードブロックの配色。ダークは beryl.vim の Beryl、ライトはその色相を濃くした Beryl Light。
+// Playground のエディタ（src/scripts/emela-highlight.ts）も同じ2つを使う。
+const readTheme = (name) =>
+  JSON.parse(readFileSync(new URL(`./src/themes/${name}.json`, import.meta.url), 'utf-8'));
+const berylThemes = [readTheme('beryl'), readTheme('beryl-light')];
+
+// Expressive Code plugin: marks a code block as runnable with
+// `data-emela-run="true"` on the block root; the client script (RunButtons.astro)
+// attaches a "▶ Run" button to exactly those blocks. A block is runnable when its
+// meta says `run` (```emela run), or when it says `check` (a complete program
+// that CI checks, see scripts/check-examples.mjs) and defines `main`. A plain
+// ```emela block or a ```emela check=error block gets no button.
 const emelaRunnablePlugin = {
   name: 'emela-runnable',
   hooks: {
     postprocessRenderedBlock: (context) => {
-      if (context.codeBlock.language !== 'emela') return;
-      if (context.codeBlock.metaOptions.getBoolean('run') !== true) return;
+      const block = context.codeBlock;
+      if (block.language !== 'emela') return;
+      const meta = block.meta.split(/\s+/);
       const root = context.renderData.blockAst;
       root.properties = root.properties || {};
+      const runnable =
+        meta.includes('run') || (meta.includes('check') && /^fn main\(/m.test(block.code));
+      if (!runnable) return;
       root.properties['data-emela-run'] = 'true';
     },
   },
@@ -40,12 +52,18 @@ export default defineConfig({
 	// 本文 Markdown / MDX の root 絶対リンク（例 /reference/values/）に build 時
 	// base を付与する。Astro は base を自動付与しないため、この pass で吸収する。
 	markdown: {
+		remarkPlugins: [remarkTourProgram],
 		rehypePlugins: [[rehypeBaseLinks, { base: BASE }]],
 	},
 	integrations: [
 		starlight({
 			title: 'Emela',
       expressiveCode: {
+        themes: berylThemes,
+        // 枠や背景は Starlight の色（src/styles/starlight-beryl.css）に合わせる。
+        useStarlightUiThemeColors: true,
+        // テーマの色をそのまま使う（どちらも本文の背景で 4.5:1 以上ある）。Playground と揃えるため。
+        minSyntaxHighlightingColorContrast: 0,
         shiki: {
           // ```emela コードブロックをハイライトできるようにする。
           langs: [emelaGrammar],
@@ -53,13 +71,15 @@ export default defineConfig({
         // `run` meta（```emela run）が付いたブロックだけ Run ボタン対象にする。
         plugins: [emelaRunnablePlugin],
       },
-      plugins: [starlightCatppuccin()],
       customCss: [
         '@fontsource/ibm-plex-sans-jp/400.css',
         '@fontsource/ibm-plex-sans-jp/700.css',
         // Monospace face for the Playground editor / Run output.
         '@fontsource/ibm-plex-mono/400.css',
         '@fontsource/ibm-plex-mono/600.css',
+        // Beryl sets keywords and comments in italic; without the face the browser slants the upright one.
+        '@fontsource/ibm-plex-mono/400-italic.css',
+        './src/styles/starlight-beryl.css',
         './src/styles/custom.css',
       ],
       // Override Starlight's Footer to also load the global Run-button script
@@ -76,7 +96,7 @@ export default defineConfig({
 						{ label: 'Emela とは', slug: 'start/introduction' },
 						{ label: 'インストール', slug: 'start/installation' },
 						{ label: '最初のプロジェクト', slug: 'start/first-project' },
-						{ label: '言語ツアー', slug: 'start/tour' },
+						{ label: 'Emela ツアー', link: '/tour/' },
 						{ label: '他の言語との対応', slug: 'start/coming-from' },
 						{ label: '実装の状況', slug: 'start/status' },
 					],
@@ -108,10 +128,18 @@ export default defineConfig({
 					items: [
 						{ label: '全体の構成', slug: 'std/overview' },
 						{ label: 'Prelude と core', slug: 'std/core' },
-						{ label: 'Console・Clock・Random・Env', slug: 'std/platform' },
+						{ label: 'コレクション', slug: 'std/collections' },
+						{ label: 'Process と Platform', slug: 'std/platform' },
 						{ label: 'FileSystem と Path', slug: 'std/file-system' },
 						{ label: 'Http', slug: 'std/http' },
-						{ label: 'State・Fiber・Deferred', slug: 'std/state-fiber' },
+						{ label: 'JSON と Dynamic', slug: 'std/json' },
+						{ label: 'State と Fiber', slug: 'std/state-fiber' },
+						// src/content/docs/std/api/ is generated by scripts/gen-std-api.mjs.
+						{
+							label: 'API リファレンス',
+							collapsed: true,
+							items: [{ autogenerate: { directory: 'std/api' } }],
+						},
 					],
 				},
 				{

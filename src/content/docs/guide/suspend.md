@@ -22,7 +22,7 @@ fn countdown(n: Int) {
 
 fn main() {
   with SystemConsole, SystemClock {
-    countdown(3)    # 100 ミリ秒ごとに 3, 2, 1, liftoff
+    countdown(3) # 100 ミリ秒ごとに 3, 2, 1, liftoff
   }
 }
 
@@ -127,7 +127,7 @@ $ emela run main.emel
 defect: resume called twice in operation `ask` of handler `Twice`
 ```
 
-型で1回を保証する仕組みはありません。同じ経路で2回呼ぶような、目で見て分かる誤りは linter が警告する予定です。
+型で1回を保証する仕組みはありません。
 
 ### その場で、または後から
 
@@ -162,11 +162,11 @@ fn main() {
 
 ## Async
 
-Async は「後から再開される」ことを表す組み込みのエフェクトです。供給できるのはランタイムだけで、ハンドラも `use Async` も書けません。
+Async は「後から再開される」ことを表すホストのエフェクトです。供給できるのはホストだけで、ハンドラも `use Async` も書けません。
 
 resume を後から呼ぶ手段（外部関数のコールバック、`@external suspend fn`、fiber の fork）は Async を要求します。コンパイラは、suspend fn の実装で `resume` を `resume(v)` と直接呼ぶ以外の使い方（変数に入れる、クロージャで捕まえる、引数に渡す）を見ると、後から呼びうるとみなしてハンドラの依存に Async を足します。上の JsTimer も同梱の SystemClock も Async に依存するので、`with JsTimer { ... }` の R には Async が残ります。
 
-`main` とテスト関数の R は Async を除いて空であればよいので、Async が残っても動きます。uses 節で効果がないと宣言した関数の中では、エラーになります。
+`main` とテスト関数の R はホストのエフェクト（Async と ProcessHost）を除いて空であればよいので、Async が残っても動きます。uses 節で効果がないと宣言した関数の中では、エラーになります。
 
 ```emela check=error
 effect Timer {
@@ -222,7 +222,7 @@ fn main() {
 
 ## Immediate
 
-Immediate は「中断せず、呼んだその場で完了する」ことを表す組み込みの制約です。コンパイラが宣言から判定するので、実装を書くことはありません。suspend fn を1つも持たないエフェクト（Async を除く）は Immediate で、Console は Immediate、Clock は Immediate ではありません。どのハンドラを使うかには左右されません。
+Immediate は「中断せず、呼んだその場で完了する」ことを表す組み込みの制約です。コンパイラが宣言から判定するので、実装を書くことはありません。suspend fn も `suspend handler` のメンバー（[状態と資源](/guide/resources/#ハンドラのメンバー)）も持たないエフェクトは、Async を除いて Immediate で、Console は Immediate、Clock は Immediate ではありません。どのハンドラを使うかには左右されません。
 
 中断されると困る場所だけが、効果の型引数に `R: Immediate` と書いてこの制約を求めます。呼び出し側に印を付ける代わりに、型検査で止めます。
 
@@ -304,6 +304,8 @@ fn main() {
 ```
 
 `fn now() { (use Clock).now() }` のように fn の操作だけを呼ぶ本体も通り、Clock はハンドラの依存になります。
+
+ハンドラのメンバーも同じです。`suspend` を付けずに宣言したメンバー（`handler Open(path: String): ReadFile`）を実装する内側のハンドラの init と release は、fn の操作の本体と同じ規則で検査します。開くときや閉じるときに待つなら、エフェクトの宣言で `suspend handler Open(...)` にします。
 
 ## resume されない継続
 

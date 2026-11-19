@@ -26,7 +26,7 @@ import { delimiter, dirname, join, relative, resolve } from 'node:path';
 
 const EMELA = process.env.EMELA ?? 'emela';
 const ROOT = new URL('..', import.meta.url).pathname;
-const DOCS = join(ROOT, 'src/content/docs');
+const DOCS = [join(ROOT, 'src/content/docs'), join(ROOT, 'src/content/tour')];
 const SPLIT = '--- emela-docs: end of command ---';
 
 // Console commands call `emela` by name, so an explicit EMELA goes first on PATH.
@@ -83,7 +83,7 @@ function normalize(lines) {
   return out.join('\n');
 }
 
-const files = process.argv.length > 2 ? process.argv.slice(2) : walk(DOCS);
+const files = process.argv.length > 2 ? process.argv.slice(2) : DOCS.flatMap(walk);
 const work = mkdtempSync(join(tmpdir(), 'emela-docs-'));
 let checked = 0;
 let ran = 0;

@@ -1,6 +1,6 @@
 ---
 title: データ型
-description: type（直積）、enum（直和）、Option、タプルと Unit、部分更新、const
+description: type（直積）、enum（直和）、derive、Option、タプルと Unit、Map と Set と Array、部分更新、const
 ---
 
 データは type（直積）、enum（直和）、タプルで定義します。宣言も構築もパターンも同じ `( )` の形なので、作るときと取り出すときで書き方が変わりません。
@@ -23,6 +23,7 @@ fn main() {
 
   pair = (user.id, "admin")
   dbg(pair) # (1, "admin")
+  ()
 }
 ```
 
@@ -41,6 +42,7 @@ fn main() {
   dbg(Todo(2, "Review", completed: True))
   # Todo(id: 2, title: "Review", completed: True)
   dbg(Pair(first: 1, second: "one")) # Pair(first: 1, second: "one")
+  ()
 }
 ```
 
@@ -87,6 +89,7 @@ fn main() {
   p = Pair(first: 1, second: True)
   q = Pair(first: "s", ..p)
   dbg(q) # Pair(first: "s", second: True)
+  ()
 }
 ```
 
@@ -133,6 +136,7 @@ fn area(shape: Shape) -> Float {
 fn main() {
   dbg(area(Rect(2.0, 3.0))) # 6.0
   dbg([Red, Green]) # [Red, Green]
+  ()
 }
 ```
 
@@ -175,8 +179,44 @@ fn main() {
 ```
 
 ```text
-type `Shape` has no fields
+type `Shape` has no field or function `radius`
 ```
+
+## derive
+
+自分で定義した型は、そのままでは `==` で比べることも、文字列に埋め込むこともできません。宣言の末尾に `derive` を書くと、コンパイラがフィールドの構造からその実装を作ります。
+
+```emela check
+enum Priority { Low, High } derive Eq, Ord, Show
+
+type Task(title: String, priority: Priority) derive Eq, Show
+
+fn main() {
+  a = Task(title: "write", priority: High)
+  b = Task(title: "read", priority: Low)
+  dbg(a == b) # False
+  dbg(Low < High) # True
+  dbg(List.sort([High, Low, High])) # [Low, High, High]
+  dbg("next: #{b}") # "next: Task(title: \"read\", priority: Low)"
+  ()
+}
+```
+
+derive できるのは、Prelude の Eq、Ord、Show と、`Std.Dynamic` の Encode、Decode、ObjectKey、`Std.Shape` の Shaped です。derive した Ord は、enum では先に書いたバリアントを小さいとし、同じ構成子どうしはフィールドを前から順に比べます。Ord を derive するには Eq も要ります。フィールドの型がその Trait を満たさなければ derive できず、Float のフィールドを持つ型は Ord を derive できません。
+
+```emela check
+import Std.Dynamic.{Encode}
+import Std.Json
+
+type Point(x: Int, y: Int) derive Encode
+
+fn main() {
+  dbg(Json.encode(Point(x: 1, y: 2))) # "{\"x\":1,\"y\":2}"
+  ()
+}
+```
+
+Encode と Decode は値を `Std.Dynamic` の値と相互に変換し、`Std.Json` はそれを使って JSON を読み書きします。Trait と derive の細かい規則は [Trait](/guide/traits/) にあります。
 
 ## Option
 
@@ -202,12 +242,48 @@ fn main() {
     None    -> "none"
   }
   dbg(label) # "found 20"
+  ()
 }
 ```
 
 `Option.map`、`and_then`、`or`、`is_some`、`is_none`、`or_fail` が core にあります（[core のモジュール](/std/core/)）。`Option.or_fail(opt, err)` は `None` をエラーに変えます（[エラー](/guide/errors/)）。
 
 `xs[0]` のような添字の構文はないので、リストの要素は上のように `List.get(xs, 0)` で取ります。範囲外なら `None` が返ります。
+
+## Map と Set と Array
+
+`List` のほかのコレクションは std にあり、import して使います。`import Std.Map.{Map}` と書くと、型 `Map` と、`Map.get` のようなモジュールの関数の両方が使えます。
+
+```emela check
+import Std.Array.{Array}
+import Std.Map.{Map}
+import Std.Set.{Set}
+
+fn main() {
+  ages: Map[String, Int] = Map.from_list([("bob", 30), ("alice", 25)])
+  dbg(Map.get(ages, "alice")) # Some(25)
+  dbg(Map.keys(ages)) # ["alice", "bob"]
+  older = Map.insert(ages, "carol", 41)
+  dbg(Map.size(older)) # 3
+
+  tags = Set.from_list(["b", "a", "b"])
+  dbg(Set.contains(tags, "a")) # True
+  dbg(tags) # Set.from_list(["a", "b"])
+
+  scores: Array[Int] = Array.from_list([10, 20, 30])
+  dbg(Array.get(scores, 1)) # Some(20)
+  dbg(Array.set(scores, 1, 99)) # Array.from_list([10, 99, 30])
+  ()
+}
+```
+
+| 型 | 中身 |
+|---|---|
+| `Map[K, V]` | キーから値への対応。キーの順（Ord）に並ぶ |
+| `Set[A]` | 重複のない値の集まり。Ord の順に並ぶ |
+| `Array[A]` | 長さの決まった列。位置で読む `get` が定数時間 |
+
+どれも不変で、`Map.insert` や `Array.set` は元の値を変えずに新しい値を返します。キーと要素の型には、挿入や検索で Ord が要ります。関数の一覧は [標準ライブラリ](/std/overview/) にあります。
 
 ## タプルと Unit
 
@@ -244,6 +320,7 @@ fn main() {
   dbg(MAX_RETRY + 1) # 4
   dbg(DEFAULT_CONFIG.port) # 8080
   dbg(List.length(LIMITS)) # 3
+  ()
 }
 ```
 
@@ -263,6 +340,7 @@ fn main() {
   dbg("start")
   dbg(LIMIT)
   dbg(LIMIT)
+  ()
 }
 ```
 
@@ -284,6 +362,7 @@ fn zero() -> Int {
 
 fn main() {
   dbg(RATIO)
+  ()
 }
 ```
 
@@ -320,6 +399,7 @@ fn where_is(p: (Int, Int)) -> String {
 fn main() {
   dbg(where_is((0, 0))) # "origin"
   dbg(where_is((0, 5))) # "on the y axis"
+  ()
 }
 ```
 

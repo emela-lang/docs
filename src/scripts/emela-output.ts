@@ -1,52 +1,46 @@
-// Renders a RunResult (or an error) into an output element. Shared by the
-// inline Run buttons and the Playground so they present output identically.
-import type { RunResult } from './emela-runner';
+// Renders a run into an output element, the way a terminal shows `emela run`: diagnostics
+// first, then standard output and standard error in the order they were written. Shared by the
+// inline Run buttons and the Playground.
+import type { Chunk, RunResult } from './emela-runner';
 
-interface Part {
-  label?: string;
-  text: string;
-  kind: 'out' | 'err' | 'diag' | 'muted';
+function part(el: HTMLElement, kind: string, text: string): void {
+  const node = document.createElement('div');
+  node.className = `emela-out-part emela-out-${kind}`;
+  node.textContent = text;
+  el.appendChild(node);
 }
 
+/** Clears `el` for a new run. */
+export function startOutput(el: HTMLElement): void {
+  el.hidden = false;
+  el.textContent = '';
+  el.dataset.state = 'running';
+}
+
+/** Appends one write of the running program. */
+export function appendChunk(el: HTMLElement, chunk: Chunk): void {
+  // Each write is one line; the element already breaks the line.
+  part(el, chunk.fd === 2 ? 'err' : 'out', chunk.text.replace(/\n$/, ''));
+}
+
+/** Shows the whole result, replacing what streamed in. */
 export function renderResult(el: HTMLElement, result: RunResult): void {
   el.textContent = '';
-  el.dataset.state = result.error || result.trap ? 'error' : 'ok';
-
-  const parts: Part[] = [];
-  if (result.error) {
-    // A compile / type error: no program ran.
-    parts.push({ text: result.error, kind: 'diag' });
-  } else {
-    if (result.stdout) parts.push({ text: result.stdout, kind: 'out' });
-    if (result.stderr) parts.push({ label: 'stderr', text: result.stderr, kind: 'err' });
-    if (result.trap) parts.push({ label: 'trap', text: result.trap, kind: 'err' });
-    if (!result.stdout && !result.stderr && !result.trap) {
-      parts.push({ text: '(出力なし)', kind: 'muted' });
-    }
-    if (result.exit_code != null && result.exit_code !== 0) {
-      parts.push({ label: 'exit code', text: String(result.exit_code), kind: 'err' });
-    }
+  const failed = !result.compiled || result.timedOut || (result.exitCode ?? 0) !== 0;
+  el.dataset.state = failed ? 'error' : 'ok';
+  if (result.diagnostics) part(el, 'diag', result.diagnostics.trimEnd());
+  if (!result.compiled) return;
+  for (const chunk of result.output) appendChunk(el, chunk);
+  if (result.timedOut) {
+    part(el, 'err', '10 秒たっても終わらないので止めました。');
+  } else if (result.output.length === 0) {
+    part(el, 'muted', '（出力なし）');
   }
-
-  for (const part of parts) {
-    const line = document.createElement('div');
-    line.className = `emela-out-part emela-out-${part.kind}`;
-    if (part.label) {
-      const tag = document.createElement('span');
-      tag.className = 'emela-out-label';
-      tag.textContent = `${part.label}: `;
-      line.appendChild(tag);
-    }
-    line.appendChild(document.createTextNode(part.text));
-    el.appendChild(line);
-  }
+  if (result.exitCode != null && result.exitCode !== 0) part(el, 'muted', `終了コード ${result.exitCode}`);
 }
 
 export function renderError(el: HTMLElement, message: string): void {
   el.textContent = '';
   el.dataset.state = 'error';
-  const line = document.createElement('div');
-  line.className = 'emela-out-part emela-out-diag';
-  line.textContent = message;
-  el.appendChild(line);
+  part(el, 'diag', message);
 }

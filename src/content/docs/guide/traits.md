@@ -5,7 +5,7 @@ description: trait と impl、Trait の関数の呼び方、制約、derive と�
 
 Trait は型への制約で、その型にどの関数が用意されているかを検査します。`==` は Eq を、文字列の補間は Show を使うというように、言語の決まった場所が Trait を求めます。環境によって差し替えたい振る舞いを書くのは Trait でなく [エフェクト](/guide/effects/) です。
 
-```emela
+```emela check
 type User(id: Int, name: String)
   derive Eq, Show
 
@@ -19,8 +19,9 @@ impl User: Describe {
 
 fn main() {
   user = User(id: 1, name: "alice")
-  dbg(Describe.describe(user))    # "user 1: alice"
-  dbg(user)                       # User(id: 1, name: "alice")
+  dbg(Describe.describe(user)) # "user 1: alice"
+  dbg(user == User(id: 1, name: "alice")) # True
+  _ = dbg("#{user}") # "User(id: 1, name: \"alice\")"
 }
 ```
 
@@ -49,7 +50,7 @@ trait Decode {
 
 `self` は第1引数で、型は実装する型 `Self` です。`decode` のように `self` を取らない関数も書けて、どの型の実装を使うかは期待される戻り値の型で決まります。本体を持つ `max` は既定の実装なので、impl で省けます。
 
-`trait Ord: Eq` は、Ord を実装する型が Eq も実装していることを求めます。前提が複数なら `trait A: B + C` と書きます。
+`trait Ord: Eq` は、Ord を実装する型が Eq も実装していることを求めます。前提が複数なら `trait A: B + C` と書きます。`[A: Ord]` の制約には前提も含まれるので、`[A: Ord]` の関数の中では `==` も使えます。
 
 ## impl
 
@@ -59,7 +60,7 @@ impl User: Show {
 }
 ```
 
-引数と戻り値の型は Trait の宣言から決まるので、impl では書きません。1つの型と1つの Trait の組に、実装はプログラム全体で1つだけです。
+引数と戻り値の型は Trait の宣言から決まるので、impl では書きません。1つの型と1つの Trait の組に、実装はプログラム全体で1つだけです。型引数のある型の impl は、型引数への制約を頭に書きます（`impl Pair[A: Eq, B: Eq]: Eq`）。
 
 impl を書けるのは、その型を定義したモジュールか、その Trait を定義したモジュールだけです。どちらの持ち主でもないときは、自分の型で包みます。
 
@@ -81,7 +82,9 @@ fn largest[A: Ord](xs: List[A]) -> Option[A] { ... }
 fn report[A: Ord + Show](xs: List[A]) -> String { ... }
 ```
 
-Trait の関数は `Show.show(user)` のように `Trait名.関数名(値)` の形で呼び、パイプにもそのままつなげます。`user.show()` のようなメソッド呼び出しの構文はありません。型引数への制約は `[A: Ord]` と書きます（[型引数](/guide/generics/)）。
+Trait の関数は `Show.show(user)` のように `Trait名.関数名(値)` の形で呼び、パイプにもそのままつなげます。`self` を取る関数は、その Trait が呼ぶ側のモジュールから名前で見えていれば（Prelude の Trait、`import` の波括弧で取り込んだ Trait、同じモジュールで定義した Trait）、`user.describe()` のように値の後ろに書いても呼べます。型引数への制約は `[A: Ord]` と書きます（[型引数](/guide/generics/)）。
+
+`self` を取らず、戻り値にだけ Self がある関数（`Decode.decode(json)`）は、結果の型から impl を選びます。結果の型が関数の中で決まらないときはエラー（E0333）で、`n: Int = ...` のように型を書きます。
 
 Trait の関数は既定では純粋です。宣言に `fails E` や `uses { R }` を書けば、実装はその範囲でエラーと効果を持てます。実装が宣言の範囲を超えられないので、`[A: Decode]` を使う関数のエラーと効果は、どの型の実装が選ばれても変わりません。
 
@@ -96,22 +99,20 @@ derive に並べた Trait の実装を、コンパイラが型の構造から作
 
 導出した Ord はバリアントを宣言の順に小さいとし、同じバリアントならフィールドを前から順に比べます。
 
-導出できるのは、導出規則を持つ Trait だけです。導出規則は Trait の作者が書き、値を1つ受け取ってフィールドごとの結果をまとめる形（Show、Encode、Hash）、2つの値をフィールドごとに比べる形（Eq、Ord）、フィールドごとに作った値から全体を組み立てる形（Decode、Default）があります。
+導出できるのは、導出規則をコンパイラが持つ次の Trait だけです。ほかの Trait を derive に書くとエラー（E0326）です。
 
-構文はまだ決まっていません。今は次のような形を想定しています。
+| Trait | 置き場所 | 導出の形 |
+|---|---|---|
+| Eq、Ord | Prelude | 2つの値をフィールドごとに比べる |
+| Show | Prelude | フィールドごとの結果をまとめる |
+| Encode、Decode、ObjectKey | `Std.Dynamic` | 値と動的な値（JSON など）を行き来する |
+| Shaped | `Std.Shape` | 型の形を記述する |
 
-```emela
-trait Encode {
-  fn encode(self) -> Json
-
-  derive fold {
-    record(name, fields) { Json.object(fields) }
-    variant(name, tag, payload) {
-      Json.object([("tag", Json.string(tag)), ("value", payload)])
-    }
-  }
-}
-```
+- フィールドの型がその Trait を満たさなければ導出できません（E0326）。Float は Ord を満たさないので、Float のフィールドを持つ型には `derive Ord` を書けません。
+- 前提の Trait は自動では導出しません。`derive Ord` には Eq の derive か impl が要ります。
+- 同じ型と Trait の組に derive と手書きの impl を両方書くとエラー（E0330）です。
+- 型引数のある型に導出すると、すべての型引数に同じ制約が付きます（`enum Tree[A] { ... } derive Eq` は `impl Tree[A: Eq]: Eq`）。
+- 非公開の型に導出した実装がどこでも使われないときは警告（W0303）になります。
 
 ## 組み込みの Trait
 
@@ -119,11 +120,10 @@ trait Encode {
 |---|---|---|
 | Eq | `==` `!=` | 書ける |
 | Ord | `<` `<=` `>` `>=` | 書ける |
-| Show | 文字列の補間、`dbg` | 書ける |
-| Hash | Map と Set のキー | 書ける |
+| Show | 文字列の補間 | 書ける |
 | Immediate | 効果が中断しないこと | 書けない（自動で判定） |
 
-Eq、Ord、Show、Hash は Prelude にあり、import なしで使えます。関数型はこの4つのどれも満たしません。Immediate は効果の集合に掛ける制約です（[中断する操作](/guide/suspend/)、[外部関数](/guide/external/)）。
+Eq、Ord、Show は Prelude にあり、import なしで使えます。関数型はこの3つのどれも満たしません。Map と Set のキーには Ord を求めます。Immediate は効果の集合に掛ける制約です（[中断する操作](/guide/suspend/)、[外部関数](/guide/external/)）。
 
 関連型、高カインド型への Trait、実行時の動的ディスパッチ、`Add` のような演算子ごとの Trait はありません。
 
@@ -172,7 +172,7 @@ True 2.0 0.0 1e+21 -2.5e-8 0.30000000000000004
 
 ### Eq と Ord の形
 
-自分で定義した型は、derive か impl を書かないと Eq、Ord、Show のどれも満たしません。`dbg` だけは Show がなくても値を表示します。
+自分で定義した型は、derive か impl を書かないと Eq、Ord、Show のどれも満たしません。`dbg` だけは Show がなくても値を表示します。Show を満たす型なら、手書きの impl も含めてその Show で表示します。
 
 ```emela check
 type User(id: Int, name: String)
@@ -193,12 +193,12 @@ fn main() {
   dbg(nan == nan) # False
   dbg(0.0 == -0.0) # True
   dbg("apple" < "banana") # True
-  dbg(False < True) # True
+  _ = dbg(False < True) # True
 }
 ```
 
-表示の形は上の「Show の形」と同じです。大小比較は Int、Int64、Float、String、Bool で動き、タプルやリスト、自分で定義した型の `<` は `not supported yet: this operator on this type` になります。
-
-`trait` の宣言、`impl`、`derive` は `emela check` を通りますが、`Show.show(x)` のように Trait の関数を呼ぶと `not supported yet: reference to this kind of definition` になります。手書きの `impl Show` を書いても、補間と `dbg` はそれを使わず構造のまま表示します。
-
-関数の値どうしの `==` も今は通ってしまいます。仕様では関数型は Eq を満たさないので、書かないでください。
+- Int、Int64、String、Bool は Eq、Ord、Show を満たします。Float は Eq と Show を満たし、Ord は満たしません。
+- タプル、List、Option は、要素の型が満たす Trait を満たします。Ord は辞書式に比べます（`[1, 2] < [1, 3]` は True）。
+- String の大小は Unicode のコードポイントの辞書式の順です。
+- Float の `<` などは Ord を通らない組み込みの演算子で、IEEE 754 の比較に従います（`NaN` との比較はすべて False）。Float の全順序が要るときは `List.sort_by(xs, Float.compare)` のように `Float.compare` を渡します。
+- 関数の値どうしの `==` はコンパイルエラー（E0326）です。

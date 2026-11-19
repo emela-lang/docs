@@ -3,7 +3,7 @@ title: 基本の型
 description: Int、Int64、Float、Bool、String、Unit、Never、リテラルの形、数値と文字列の意味、演算子の優先順位
 ---
 
-基本の型は7つです。数値と文字列の計算結果はターゲットに依らず決まっていて、同じプログラムは JavaScript でも C でも同じ値を返します。
+基本の型は7つです。数値と文字列の計算結果はターゲットに依らず決まっていて、同じプログラムは JavaScript、ネイティブ、WASM のどのターゲットでも同じ値を返します。
 
 ```emela check
 fn main() {
@@ -15,6 +15,7 @@ fn main() {
   nothing: () = ()
   dbg("#{name}: #{count}, #{big}, #{ratio}, #{done}, #{nothing}")
   # "emela: 42, 9000000000, 0.75, False, ()"
+  ()
 }
 ```
 
@@ -28,21 +29,22 @@ fn main() {
 | `()` | Unit。値は `()` の1つだけ |
 | `Never` | 値を持たない型。`fail` や `panic` の式の型 |
 
-`List`、`Option`、`Ordering` も Prelude にある型です。`Option` は [データ型](/guide/data/)、`List` は [core のモジュール](/std/core/) を見てください。
+`List`、`Option`、`Ordering` も Prelude にある型です。`Option` と、import して使う `Map`、`Set`、`Array` は [データ型](/guide/data/)、`List` は [core のモジュール](/std/core/) を見てください。
 
 ## 数値のリテラル
 
 ```emela check
 fn main() {
-  dbg(1_000_000)        # 1000000
-  dbg(0xFF)             # 255
-  dbg(0b1010)           # 10
+  dbg(1_000_000) # 1000000
+  dbg(0xFF) # 255
+  dbg(0b1010) # 10
   mask: Int64 = 0xFFFF_FFFF
-  dbg(mask)             # 4294967295
+  dbg(mask) # 4294967295
   later = Int64.from_int(1) + 2
-  dbg(later)            # 3
-  dbg(3.14)             # 3.14
-  dbg(1.0e9)            # 1000000000.0
+  dbg(later) # 3
+  dbg(3.14) # 3.14
+  dbg(1.0e9) # 1000000000.0
+  ()
 }
 ```
 
@@ -68,15 +70,31 @@ integer literal `3000000000` is out of range for `Int`
 fn main() {
   name = "emela"
   count = 3
-  dbg("hello, #{name}!")            # "hello, emela!"
-  dbg("#{count + 1} items")         # "4 items"
-  dbg("list: #{[1, 2]}, #{Some(1.5)}")  # "list: [1, 2], Some(1.5)"
-  dbg("say \"hi\"")                 # "say \"hi\""
-  dbg("literal \#{name}")           # "literal \#{name}"  表示も \# の形
+  dbg("hello, #{name}!") # "hello, emela!"
+  dbg("#{count + 1} items") # "4 items"
+  dbg("list: #{[1, 2]}, #{Some(1.5)}") # "list: [1, 2], Some(1.5)"
+  dbg("say \"hi\"") # "say \"hi\""
+  dbg("literal \#{name}") # "literal \#{name}"  表示も \# の形
+  ()
 }
 ```
 
 `#{式}` で値を埋め込めます。中には任意の式を書けて、型は Show を満たす必要があります。`#{` を文字として書きたいときのエスケープは `\#` です。
+
+Show を満たすのは、基本の型と、要素が Show を満たすタプル、`List`、`Option` です。自分で定義した型を埋め込むときは `derive Show` を付けます（[Trait](/guide/traits/)）。付けていない型や関数の値を埋め込むとエラーです。
+
+```emela check
+type Point(x: Int, y: Int) derive Show
+
+fn main() {
+  p = Point(x: 1, y: 2)
+  dbg("at #{p}") # "at Point(x: 1, y: 2)"
+  dbg(inspect("a")) # "\"a\""
+  ()
+}
+```
+
+Prelude の `inspect(value)` は Show の結果を文字列で返します。補間と違って、String も `"` で囲みます。`dbg` だけは Show を求めず、どの型の値でも表示します。
 
 使えるエスケープは `\"`、`\\`、`\n`、`\t`、`\r`、`\#`、`\u{...}`（16進のコードポイント）の7つで、それ以外の `\` はエラーです。
 
@@ -90,14 +108,6 @@ fn main() {
 unknown escape sequence `\q`
 ```
 
-:::caution[0.21 で入る予定]
-補間の式が Show を満たすかの検査は、Trait とともに 0.21 で入ります。今は構造をそのまま表示する形で、すべての型の値を補間できます。
-:::
-
-:::caution[実装との違い]
-今のコンパイラ（0.20.1）は、`\"` `\\` `\n` `\#` だけを文字に直します。`\t`、`\r`、`\u{...}` は検査は通りますが、実行時の文字列には `\t` のような2文字以上の並びのまま残ります。
-:::
-
 ### 複数行の文字列
 
 文字列は改行をまたげないので、複数行は `"""` で囲みます。
@@ -110,7 +120,8 @@ fn main() {
     FROM users
     WHERE id = #{id}
     """
-  # query は "SELECT *\nFROM users\nWHERE id = 1"
+  dbg(query) # "SELECT *\nFROM users\nWHERE id = 1"
+  ()
 }
 ```
 
@@ -124,24 +135,21 @@ fn main() {
 }
 ```
 
-:::caution[実装との違い]
-今のコンパイラ（0.20.1）は、複数行の文字列の形の検査はしますが、インデントと前後の改行を取り除きません。上の `query` は各行の先頭の空白と最初と最後の改行を含んだ文字列になります。
-:::
-
 リテラルの細かい規則は [字句と予約語](/reference/lexical/) にあります。
 
 ## 数値の計算
 
 ```emela check
 fn main() {
-  dbg(2147483647 + 1)       # -2147483648   あふれは巻き戻る
-  dbg(Int.checked_add(2147483647, 1))   # None
-  dbg(-7 / 2)               # -3   0 の方向へ切り捨て
-  dbg(-7 % 2)               # -1   剰余の符号は被除数に従う
-  dbg(7 % -2)               # 1
-  dbg(1.0 / 0.0)            # Infinity
-  dbg(0.0 / 0.0)            # NaN
-  dbg(-5.5 % 2.0)           # -1.5
+  dbg(2147483647 + 1) # -2147483648   あふれは巻き戻る
+  dbg(Int.checked_add(2147483647, 1)) # None
+  dbg(-7 / 2) # -3   0 の方向へ切り捨て
+  dbg(-7 % 2) # -1   剰余の符号は被除数に従う
+  dbg(7 % -2) # 1
+  dbg(1.0 / 0.0) # Infinity
+  dbg(0.0 / 0.0) # NaN
+  dbg(-5.5 % 2.0) # -1.5
+  ()
 }
 ```
 
@@ -156,6 +164,7 @@ fn divide(a: Int, b: Int) -> Int {
 
 fn main() {
   dbg(divide(10, 0))
+  ()
 }
 ```
 
@@ -183,15 +192,18 @@ type mismatch: expected `Int`, found `Float`
 
 ```emela check
 fn main() {
-  dbg(Float.from_int(3) + 1.5)          # 4.5
-  dbg(Int64.from_int(5))                # 5
-  dbg(Int64.to_int(Int64.from_int(7)))  # 7
-  dbg(Float.floor(-1.5))                # -2
-  dbg(Float.ceil(1.2))                  # 2
-  dbg(Float.round(2.5))                 # 3
-  dbg(Float.round(-2.5))                # -3
-  dbg(Float.truncate(-1.5))             # -1
-  dbg(Int.to_string(42))                # "42"
+  dbg(Float.from_int(3) + 1.5) # 4.5
+  dbg(Int64.from_int(5)) # 5
+  dbg(Int64.to_int(Int64.from_int(7))) # 7
+  dbg(Float.floor(-1.5)) # -2
+  dbg(Float.ceil(1.2)) # 2
+  dbg(Float.round(2.5)) # 3
+  dbg(Float.round(-2.5)) # -3
+  dbg(Float.truncate(-1.5)) # -1
+  dbg(Int.to_string(42)) # "42"
+  dbg(Int.abs(-4)) # 4
+  dbg(Int.max(3, 7)) # 7
+  ()
 }
 ```
 
@@ -205,12 +217,13 @@ fn main() {
 const MASK = 0b1100
 
 fn main() {
-  dbg(Int.bit_and(0b1010, MASK))        # 8
-  dbg(0b1010 |> Int.bit_or(MASK))       # 14
-  dbg(Int.shift_left(1, 4))             # 16
-  dbg(Int.shift_left(1, 40))            # 0   幅以上のシフトは全部押し出す
-  dbg(Int.shift_right(-8, 1))           # -4  符号を保つ
-  dbg(Int.shift_right_unsigned(-1, 0))  # -1
+  dbg(Int.bit_and(0b1010, MASK)) # 8
+  dbg(0b1010 |> Int.bit_or(MASK)) # 14
+  dbg(Int.shift_left(1, 4)) # 16
+  dbg(Int.shift_left(1, 40)) # 0   幅以上のシフトは全部押し出す
+  dbg(Int.shift_right(-8, 1)) # -4  符号を保つ
+  dbg(Int.shift_right_unsigned(-1, 0)) # -1
+  ()
 }
 ```
 
@@ -220,28 +233,34 @@ Int64 にも同じ関数があります。数値の規則の全体は [ターゲ
 
 ```emela check
 fn main() {
-  dbg(String.length("emela"))     # 5
-  dbg(String.length("👍"))        # 1   見た目の文字数
-  dbg(String.byte_size("👍"))     # 4   UTF-8 のバイト数
-  dbg(String.append("ab", "cd"))  # "abcd"
-  dbg(String.concat(["a", "b", "c"]))  # "abc"
-  dbg("abc" < "abd")              # True
+  dbg(String.length("emela")) # 5
+  dbg(String.length("👍")) # 1   見た目の文字数
+  dbg(String.byte_size("👍")) # 4   UTF-8 のバイト数
+  dbg(String.append("ab", "cd")) # "abcd"
+  dbg(String.concat(["a", "b", "c"])) # "abc"
+  dbg(List.join(["a", "b", "c"], ", ")) # "a, b, c"
+  dbg(String.split("a,b", ",")) # ["a", "b"]
+  dbg(String.trim("  hi ")) # "hi"
+  dbg(String.to_ascii_uppercase("emela")) # "EMELA"
+  dbg("abc" < "abd") # True
+  ()
 }
 ```
 
-`String.length` が返すのは見た目の文字数です。UTF-16 の長さともバイト数とも違い、バイト数は `String.byte_size` で取ります。`s[3]` のように位置を数値で指す API はないので、文字列は `String.chars` や `String.split` でたどります。
+`String.length` が返すのは見た目の文字数（書記素クラスタの数）です。UTF-16 の長さともバイト数とも違い、バイト数は `String.byte_size` で取ります。`s[3]` のように位置を数値で指す API はないので、文字列は `String.chars` や `String.split` でたどります。
 
 文字の型（Char）もなく、1文字は長さ1の String です。
 
 ```emela check
 fn main() {
-  dbg(String.chars("añ👍"))           # ["a", "ñ", "👍"]
-  dbg(String.code_points("A"))        # [65]
-  dbg(String.from_code_point(65))     # Some("A")
+  dbg(String.chars("añ👍")) # ["a", "ñ", "👍"]
+  dbg(String.code_points("A")) # [65]
+  dbg(String.from_code_point(65)) # Some("A")
+  ()
 }
 ```
 
-連結に `+` は使えません。補間か `String.append`、`String.concat` を使います。
+連結に `+` は使えません。補間か `String.append`、`String.concat`、区切りを挟む `List.join` を使います。
 
 ```emela check=error
 fn main() {
@@ -265,12 +284,13 @@ Never は値を持たない型で、`fail e` と `panic("...")` の式の型で�
 fn first(xs: List[Int]) -> Int {
   xs match {
     [x, ..] -> x
-    [] -> panic("empty list")   # Never なので Int の分岐と合流する
+    []      -> panic("empty list") # Never なので Int の分岐と合流する
   }
 }
 
 fn main() {
-  dbg(first([3, 4]))    # 3
+  dbg(first([3, 4])) # 3
+  ()
 }
 ```
 
@@ -292,16 +312,26 @@ fn main() {
 
 ```emela check
 fn main() {
-  dbg(1 + 2 * 3)            # 7
-  dbg(-2 * 3 + 1)           # -5
-  dbg(1 < 2 && 2 < 3)       # True
-  dbg(!(1 == 2) || False)   # True
-  dbg(3 |> Int.to_string)   # "3"
+  dbg(1 + 2 * 3) # 7
+  dbg(-2 * 3 + 1) # -5
+  dbg(1 < 2 && 2 < 3) # True
+  dbg(!(1 == 2) || False) # True
+  dbg(3 |> Int.to_string) # "3"
+  ()
 }
 ```
 
 比較は連鎖できないので、`a < b < c` は `a < b && b < c` と書きます。`&&` と `||` は短絡評価です。自分で定義した型に演算子を定義することはできず、`Money.add(a, b)` のように関数で書きます。
 
-:::caution[0.21 で入る予定]
-`==` は Eq、大小比較は Ord を満たす型に使えます。この検査は Trait とともに 0.21 で入り、今の `==` は関数を含むどの型の値にも構造の比較として使えます。
-:::
+`==` と `!=` は Eq を、`<` などの大小比較は Ord を満たす型に使えます。Int、Int64、String、Bool は両方を満たし、Float は Eq だけを満たします（Float の `<` は IEEE 754 の比較です）。自分で定義した型は `derive Eq, Ord` を付けると比べられます。関数の値は比べられません。
+
+```emela check=error
+fn main() {
+  f = |n: Int| n + 1
+  same = f == f
+}
+```
+
+```text
+type `fn(Int) -> Int` does not implement `Eq`
+```

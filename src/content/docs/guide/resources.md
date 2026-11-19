@@ -123,6 +123,8 @@ handler `Fixed` can only be constructed in its own `init`
   = help: use `with Fixed { ... }`; `init` and `release` run there
 ```
 
+init の中では、ハンドラの名前の代わりに `Self(...)` と書いても同じ値を作れます（フィールドのないハンドラなら `Self`）。
+
 init は引数を取れます。`init(prefix: String) { MemoryStore(prefix:) }` と書き、with では `with MemoryStore(prefix: "v1") { ... }` のように渡します。引数は with に入る前、with の外で評価されます。設定をエフェクトから受け取るときは、最初の例の `Config` のように init で use します。
 
 ### 依存と初期化の順序
@@ -184,6 +186,70 @@ cannot connect to db://down
 ### release は失敗できない
 
 release はエラーで終われません。失敗しうる後始末は release の中で escape して受けるか、`panic` で defect にします。
+
+## ハンドラのメンバー
+
+ファイルのように、1つのハンドラの下でいくつも開いては閉じる資源は、エフェクトのハンドラのメンバーで表します。`handler Open(path: String): ReadFile` は操作ではなく、「このエフェクトのハンドラはみな、ReadFile を実装する Open という内側のハンドラを持つ」という宣言です。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+
+error FileMissing(path: String)
+
+effect ReadFile {
+  fn read() -> String
+}
+
+effect Files {
+  handler Open(path: String): ReadFile fails FileMissing
+}
+
+handler MemoryFiles: Files {
+  handler Open(path: String): ReadFile {
+    init(path: String) {
+      if path == "missing.txt" { fail FileMissing(path:) }
+      (use Console).print_line("open #{path}")
+      Self(path:)
+    }
+    release { (use Console).print_line("close #{self.path}") }
+    fn read() { "contents of #{self.path}" }
+  }
+}
+
+fn concat(a: use ReadFile, b: use ReadFile) -> String { "#{a.read()} + #{b.read()}" }
+
+fn main() {
+  with SystemConsole, MemoryFiles {
+    console = use Console
+    with a = Files.Open("a.txt"), b = Files.Open("b.txt") {
+      console.print_line(concat(a, b))
+    }
+    with c = Files.Open("missing.txt") {
+      console.print_line(c.read())
+    } escape {
+      FileMissing(path:) -> console.print_line("no #{path}")
+    }
+  }
+}
+```
+
+```console
+$ emela run main.emel
+open a.txt
+open b.txt
+contents of a.txt + contents of b.txt
+close b.txt
+close a.txt
+no missing.txt
+```
+
+- メンバーの引数は内側のハンドラの init の引数で、`fails` はその init の E です。
+- with では `x = Files.Open(引数)` の形で開きます。最も内側で Files を供給するハンドラの Open の init が走り、x はその能力の値になります。with を抜けるときに release が走ります。能力の値 `fs: use Files` からは `fs.Open(引数)` で開けます。
+- メンバーで開いたエフェクトは名前では `use` できません。束縛した x を通してだけ使います。同じ with に `Files.Open` を2つ並べても、a と b はそれぞれのファイルを指します。
+- 実装する側は、メンバーと同じ名前の内側のハンドラを書きます。括弧の中はそのフィールドで、init はメンバーと同じ名前と型の引数を取ります。内側のハンドラが使うエフェクト（上の Console）は外側のハンドラ（MemoryFiles）の依存になります。
+- init の中でもメンバーを式として開けます（`first = Files.Open(path)`）。開いたハンドラは、開いた側のハンドラが release された後に、開いた順の逆に release されます。開いた能力は `use ReadFile` 型のフィールドに持てます。
+- `suspend handler Open(...)` と宣言したメンバーは、開くときと閉じるときに中断できます（[中断する操作](/guide/suspend/)）。
+- [ラベル](/guide/labels/)も元のエフェクトのメンバーを持ちます（`x = AuditFiles.Open(path)`）。
 
 ## layer
 
@@ -285,9 +351,16 @@ fn main() {
 }
 ```
 
-### Platform
+### Platform と Process
 
-同梱のホスト用のハンドラ（SystemConsole、SystemClock、SystemRandom、SystemEnv、SystemFileSystem、SystemHttp）は、`Std.Platform` の layer `Platform` にまとめてあります。`main` はふつう `with Platform { ... }` と書きます。
+同梱のホスト用のハンドラは2つの layer にまとめてあります。
+
+| layer | 中身 | 要るホストのエフェクト |
+|---|---|---|
+| `Platform`（`Std.Platform`） | SystemConsole、SystemClock、SystemRandom、SystemHttp | Async |
+| `Process`（`Std.Process`） | Platform と SystemArgs、SystemStdin、SystemStdout、SystemStderr、SystemEnv、SystemFileSystem | Async、ProcessHost |
+
+Process の中のハンドラは、ホストが OS のプロセスであること（ProcessHost）を求めます。`main` とテスト関数には ProcessHost が与えられるので、どちらも書けます。引数、標準入出力、環境変数、ファイルを使わないプログラムは `with Platform { ... }` と書きます。
 
 ```emela check
 import Std.Platform.{Platform}
@@ -298,6 +371,30 @@ fn main() {
     (use Console).print_line("hi")
   }
 }
+```
+
+引数と標準出力を使うときは Process を書きます。Args はプログラム名を除いた引数を返し、Stdout と Stderr は改行を足さずに書く `print` を持ちます。人に読ませる行は Console、パイプやファイルに流すデータとプロンプトは Stdout と使い分けます。
+
+```emela check
+import Std.Console.{Console}
+import Std.Process.{Process, Args, Stdout}
+
+fn main() {
+  with Process {
+    names = (use Args).list()
+    out = use Stdout
+    out.print("hello")
+    List.map(names, |n| out.print(", #{n}"))
+    out.print_line("")
+    (use Console).print_line("#{List.length(names)} names")
+  }
+}
+```
+
+```console
+$ emela run main.emel -- alice bob
+hello, alice, bob
+2 names
 ```
 
 一部を差し替えるときは `with Platform, MyClock { ... }` と後ろに並べます。Http を使わないプログラムなら、Http の注釈のないターゲットでも `with Platform` のままビルドできます（[外部関数](/guide/external/)）。個々のハンドラは[標準ライブラリ](/std/platform/)を見てください。
@@ -330,14 +427,14 @@ fn count_words(words: List[String]) {
 
 fn main() {
   (result, final) = State.run(10, || count_words(["a", "b", "c"]))
-  dbg(result)        # 13
-  _ = dbg(final)     # 13
+  dbg(result) # 13
+  _ = dbg(final) # 13
 }
 ```
 
 `State.run(initial, body)` は、初期値 initial の状態を供給して body を実行し、body の値と最後の状態の組を返します。body の R から `State[S]` が消えるので、外からは純粋に見えます。`count_words` を呼んでも、`main` の R には何も残りません。
 
-状態の型 S は body の R の `State[...]` から決まるので、`State.run([], ...)` の `[]` の要素の型も推論されます。`update` の一息での実行や、中断をまたぐときの扱いは [State・Fiber・Deferred](/std/state-fiber/) にあります。
+状態の型 S は body の R の `State[...]` から決まるので、`State.run([], ...)` の `[]` の要素の型も推論されます。`update` の一息での実行や、中断をまたぐときの扱いは [State と Fiber](/std/state-fiber/) にあります。
 
 ### body が失敗したとき
 
@@ -363,7 +460,7 @@ fn main() {
   }) escape {
     TooMany(n:) -> ((), [n])
   }
-  dbg(r1)    # ((), [3])
+  dbg(r1) # ((), [3])
 
   # body の中で受けると、そこまでの状態が残る
   r2 = State.run([], || {
@@ -371,7 +468,7 @@ fn main() {
     push(2)
     push(3) escape { TooMany(_) -> () }
   })
-  _ = dbg(r2)    # ((), [1, 2, 3])
+  _ = dbg(r2) # ((), [1, 2, 3])
 }
 ```
 
@@ -399,8 +496,8 @@ fn main() {
       List.map(["a", "b", "a"], look)
     })
   })
-  dbg(hits)          # Hits(n: 2)
-  _ = dbg(misses)    # Misses(n: 1)
+  dbg(hits) # Hits(n: 2)
+  _ = dbg(misses) # Misses(n: 1)
 }
 ```
 
@@ -408,7 +505,7 @@ fn main() {
 
 ### State に依存するハンドラ
 
-状態を使うハンドラは State に依存するハンドラとして書きます。同梱のテスト用ハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）はこの形です。
+状態を使うハンドラは State に依存するハンドラとして書きます。同梱のテスト用ハンドラ（TestConsole、TestClock、TestStdout など）はこの形です。
 
 ```emela check
 import Std.State.{State}
@@ -435,7 +532,7 @@ fn main() {
       greet("bob")
     }
   })
-  _ = dbg(lines)    # ["hello alice", "hello bob"]
+  _ = dbg(lines) # ["hello alice", "hello bob"]
 }
 ```
 
@@ -465,7 +562,7 @@ handler QuietLogger: Logger {
 fn make_greeter() {
   with FileLogger {
     log = use Logger
-    || log.info("hi")    # log を抱えたまま with の外に出る
+    || log.info("hi") # log を抱えたまま with の外に出る
   }
 }
 
@@ -486,7 +583,7 @@ warning[W0402]: a value that holds `log` leaves the `with` that provides it
     │        ─────┬────
     │             ╰────── `log` is released at the end of this `with`
     │
- 20 │     || log.info("hi")    # log を抱えたまま with の外に出る
+ 20 │     || log.info("hi") # log を抱えたまま with の外に出る
     │     ────────┬────────
     │             ╰────────── the value of the body holds `log`
 ────╯
@@ -495,8 +592,8 @@ warning[W0402]: a value that holds `log` leaves the `with` that provides it
 defect: handler FileLogger was used after release
 ```
 
-コンパイラは、値がどの能力を抱えているかを型とともに追跡し（capture set）、with の本体の値がその with の供給した能力を抱えていれば W0402 の警告を出します。capture set は推論され、ソースには書きません。`--experimental-capture-checking` を付けると、この警告はエラー（E0444）になります。
+コンパイラは、値がどの能力を抱えているかを型とともに追跡し（capture set）、with の本体の値がその with の供給した能力を抱えていれば W0402 の警告を出します。capture set は推論され、ソースには書きません（[エディタ](/tools/editors/)の LSP がホバーで表示します）。実験的な機能 `capture-checking` を有効にすると、この警告はエラー（E0444）になります。コマンドに `--experimental-capture-checking` を付けるか、`Pome.toml` の `[experimental]` に `capture-checking = true` と書きます。
 
 警告のままなので、実行時にも検査します。release 済みのハンドラの操作を呼ぶと `handler <名前> was used after release` の defect になります。この検査が掛かるのは、フィールド、init、release のどれかを持つハンドラだけです。状態を持たないハンドラは、with の外へ持ち出しても動きます。
 
-能力の値そのものを返したり、データに入れて返したりしても同じ扱いです。with の中で引数に渡す、データに入れるのはかまいません（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, |n| log.info(n))`）も問題ありません。Scope の能力、fiber のハンドル、Deferred の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。
+能力の値そのものを返したり、データに入れて返したりしても同じ扱いです。with の中で引数に渡す、データに入れるのはかまいません（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, |n| log.info(n))`）も問題ありません。Scope の能力、fiber のハンドル、Deferred、Semaphore、Queue の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。

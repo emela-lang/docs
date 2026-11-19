@@ -1,34 +1,15 @@
 ---
-title: State・Fiber・Deferred
-description: 可変な状態と並行性を受け持つ Std.State、Std.Fiber、Std.Cause、Std.Deferred のリファレンス
+title: State と Fiber
+description: 状態の Std.State、並行性の Std.Fiber、終わり方の Std.Exit と Std.Cause、fiber の間で値を渡す Deferred、Semaphore、Queue
 ---
 
-可変な状態（`Std.State`）と並行性（`Std.Fiber`、`Std.Cause`、`Std.Deferred`）の型と関数の一覧です。使い方の説明は [リソース](/guide/resources/) と [並行性](/guide/concurrency/) にあります。
+std のエフェクトの層は、可変な状態（`Std.State`）と並行性（`Std.Fiber` とその部品）を受け持ちます。どれもランタイムと組になっていて、ホストには触れません。使い方の説明は [リソース](/guide/resources/) と [並行性](/guide/concurrency/) にあります。
 
-## Std.State
+型と関数の一覧は API リファレンスの [Std.State](/std/api/std-state/)、[Std.Fiber](/std/api/std-fiber/)、[Std.Exit](/std/api/std-exit/)、[Std.Cause](/std/api/std-cause/)、[Std.Deferred](/std/api/std-deferred/)、[Std.Semaphore](/std/api/std-semaphore/)、[Std.Queue](/std/api/std-queue/) にあります。
 
-可変な状態をエフェクトで表します。状態の置き場所は `State.run` の枠で、値そのものは不変のままです。
+## State
 
-```emela
-pub effect State[S] {
-  fn get() -> S
-  fn set(value: S) -> ()
-  fn update(f: fn(S) -> S) -> ()
-}
-```
-
-| 宣言 | シグネチャ | 説明 |
-|---|---|---|
-| `get` | `fn get() -> S` | 今の状態 |
-| `set` | `fn set(value: S) -> ()` | 状態を `value` にする |
-| `update` | `fn update(f: fn(S) -> S) -> ()` | 状態に `f` を適用する |
-| `run` | `run[S, A, E, R](initial: S, body: fn() -> A fails E uses { State[S], R }) -> (A, S) fails E uses { R }` | 初期値 `initial` の状態で `body` を実行し、`body` の値と最後の状態の組を返す |
-
-`body` の `use` から `State[S]` が消えるので、`State.run` の呼び出しは外からは純粋に見えます。`body` が失敗したときは状態を捨ててエラーだけが伝わります。失敗の時点の状態も欲しいときは、`body` の中で escape して値に変えます。`body` が中断しても、状態は再開の後に引き継がれます。
-
-- `update` の `f` は純粋なので、`update` は一息に実行されます。fiber の間で共有しても途中の状態は見えません。
-- 同じ型の状態を2つ持つときは、別の型で包みます（`State[Hits]` と `State[Misses]`）。
-- `run` はランタイムが供給する組み込みのハンドラです。
+`State[S]` は、型 `S` の状態を読み書きするエフェクトです。操作は `get`、`set`、`update` の3つで、`State.run(initial, body)` が状態を用意します。`State.run` は本体の値と最後の状態の組を返し、`body` の `use` から `State[S]` を取り除くので、外からは純粋な呼び出しに見えます。
 
 ```emela check
 import Std.State.{State}
@@ -46,49 +27,21 @@ fn main() {
 }
 ```
 
-テスト用のハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp）はどれも状態を State に置きます。[Console・Clock・Random・Env](/std/platform/) を見てください。
+- `body` が失敗したときは、状態を捨ててエラーだけが伝わります。失敗の時点の状態も欲しいときは、`body` の中で escape して値に変えます。
+- `update` の `f` は純粋なので、`update` は一息に実行されます。fiber の間で共有しても途中の状態は見えません。
+- 同じ型の状態を2つ持つときは、別の型で包みます（`State[Hits]` と `State[Misses]`）。
 
-## Std.Fiber
+テスト用のハンドラ（TestConsole、TestClock、TestFileSystem、TestHttp など）は、どれも状態を State に置きます。
 
-fiber は1本のスレッドの上の軽い実行の単位です。スコープの中でしか起動できず、どの fiber もスコープより先に終わります。`import Std.Fiber.{Fiber, Scope}` か `import Std.Fiber` で使います。
+## Fiber
 
-### 型
+fiber は1本のスレッドの上の軽い実行の単位です。`Fiber.scope` の中でしか起動できず、どの fiber もスコープより先に終わります。
 
-| 宣言 | 定義 | 説明 |
-|---|---|---|
-| `Fiber` | `@external type Fiber[A]` | 型 `A` の値を返す fiber のハンドル。ランタイムが持つ。起動した `Fiber.scope` の外へ持ち出せない |
-| `Exit` | `enum Exit[A, E] { Success(A), Failure(Cause[E]) }` | fiber の終わり方。値で終わったか、エラー、defect、中断で終わったか。`Std.Exit` にある |
-| `Scope` | `@intrinsic effect Scope[E, R]` | スコープの中で fiber を起動する能力。`E` と `R` は子の fails と use。供給できるのは `Fiber.scope` だけで、ハンドラは書けない |
-
-`Scope` の操作は次の2つです。
-
-| 操作 | シグネチャ | 説明 |
-|---|---|---|
-| `fork` | `fn fork[A](f: fn() -> A fails E uses { R }) -> Fiber[A]` | `f` をスコープの子の fiber として起動する |
-| `deferred` | `fn deferred[A]() -> Deferred[A]` | スコープに属す Deferred を作る |
-
-### 関数
-
-| 関数 | シグネチャ | 説明 |
-|---|---|---|
-| `scope` | `scope[A, E, R](body: fn() -> A fails E uses { Scope[E, R], Async, R }) -> A fails E uses { Async, R }` | スコープを作って `body` を実行し、すべての子が終わってから値を返す |
-| `fork` | `fork[A, E, R](f: fn() -> A fails E uses { Scope[E, R], R }) -> Fiber[A] uses { Scope[E, R] }` | 一番内側のスコープで `f` を起動する。`(use Scope).fork(f)` と同じ |
-| `deferred` | `deferred[A, E, R]() -> Deferred[A] uses { Scope[E, R] }` | 一番内側のスコープに属す Deferred を作る。`(use Scope).deferred()` と同じ |
-| `join` | `join[A](fiber: Fiber[A]) -> A uses { Async }` | 子が終わるのを待って値を返す。`interrupt` で中断した子なら defect（`fiber was interrupted`） |
-| `await` | `await[A](fiber: Fiber[A]) -> Exit[A, {}] uses { Async }` | 子が終わるのを待って終わり方を返す。子のエラーと defect はスコープへ行くので、届くのは `Success` か中断だけ |
-| `interrupt` | `interrupt[A](fiber: Fiber[A]) -> () uses { Async }` | 子を中断し、巻き戻り（`release` を含む）が終わるまで待つ。終わっている子には何もしない |
-| `Exit.attempt` | `attempt[A, E, R](f: fn() -> A fails E uses { R }) -> Exit[A, E] uses { R }` | `f` をその場で実行し、エラーと defect を値に変える。自分への中断は受けない。`Std.Exit` にある |
-| `all` | `all[A, E, R](fs: List[fn() -> A fails E uses { R }]) -> List[A] fails E uses { Async, R }` | すべてを並行に実行し、値を元の順に集める |
-| `race` | `race[A, E, R](fs: List[fn() -> A fails E uses { R }]) -> A fails E uses { Async, R }` | すべてを並行に実行し、最初に終わったもの（値でもエラーでも）を採る。残りは中断する |
-| `both` | `both[A, B, E, R](f: fn() -> A fails E uses { R }, g: fn() -> B fails E uses { R }) -> (A, B) fails E uses { Async, R }` | 2つを並行に実行して組で返す |
-| `map` | `map[A, B, E, R](xs: List[A], f: fn(A) -> B fails E uses { R }) -> List[B] fails E uses { Async, R }` | 各要素に `f` を並行に適用し、結果を元の順に返す |
-| `timeout` | `timeout[A, E, R](ms: Int, f: fn() -> A fails E uses { R }) -> Option[A] fails E uses { Clock, Async, R }` | `f` を `ms` ミリ秒まで待つ。間に合えば `Some`、間に合わなければ `f` を中断して `None`。時間は Clock で測る |
-
-- `scope` の `body` が返った時点で走っている子は中断されます。子が失敗すると、兄弟と `body` が中断され、その失敗が伝わります。
+- `Fiber.scope(body)` は、`body` の中で `Fiber.fork` した子が全部終わってから値を返します。`body` が返った時点で走っている子は中断されます。子が失敗すると、兄弟と `body` が中断され、その失敗が伝わります。
+- `Fiber.join` は子の値を待ち、`Fiber.interrupt` は子を中断して後片付けが終わるまで待ちます。
 - 子は `scope` を呼んだ時点のハンドラを使います。子が使うエフェクトは `scope` の外で供給します。
-- `all`、`race`、`both`、`map` は、1つが失敗すると残りを中断して、そのエラーで失敗します。
-- `timeout` で失敗させたいときは `Option.or_fail` で包みます。
-- `scope`、`join`、`await`、`interrupt`、`Exit.attempt` は組み込みで、`all`、`race`、`both`、`map`、`timeout` はその上に Emela で書かれています。
+
+よく使う形は、スコープを内側に持つ関数にしてあります。`Fiber.all`、`Fiber.both`、`Fiber.map` は全部を並行に走らせて値を集め、`Fiber.race` は最初に終わったものを取り、`Fiber.timeout` は時間内に終わらなければ中断して `None` を返します。どれも、1つが失敗すると残りを中断して、そのエラーで失敗します。
 
 ```emela check
 import Std.Fiber
@@ -109,23 +62,13 @@ fn main() {
 }
 ```
 
-:::caution[実行時の検査]
-スコープ、fiber のハンドル、Deferred の持ち出しの検査は、0.20 では一部が実行時の defect（`fiber scope was used after it ended` など）です。0.22 の capture set ですべて静的な検査になります。
-:::
+fiber のハンドルと、スコープに属する Deferred、Semaphore、Queue は、そのスコープの外へ持ち出せません。持ち出すとコンパイルのエラーになります。
 
-## Std.Cause
+## Exit と Cause
 
-fiber が正常に終わらなかった原因です。エラー（`Fail`）、defect（`Die`）、中断（`Interrupt`）のどれかです。
+`Std.Exit` の `Exit[A, E]` は計算の終わり方で、`Success(A)` か `Failure(Cause[E])` です。`Exit.attempt(f)` は `f` をその場で走らせ、エラーと defect を値に変えます。サーバーで1件の panic が全体を止めないようにするときに使います。
 
-| 宣言 | シグネチャ | 説明 |
-|---|---|---|
-| `Cause` | `opaque type Cause[E]` | 原因。`E` は起こりうるエラーの集合。中身のエラーは取り出せない |
-| `CauseKind` | `enum CauseKind { Fail, Die, Interrupt }` | 原因の種類 |
-| `kind` | `kind[E](c: Cause[E]) -> CauseKind` | 原因の種類 |
-| `to_string` | `to_string[E](c: Cause[E]) -> String` | `error: ...`、`defect: ...`、`interrupted` の形の文字列 |
-| `raise` | `raise[A, E](c: Cause[E]) -> A fails E` | 起こし直す。`Fail` は fail、`Die` は defect、`Interrupt` は中断の巻き戻し |
-
-エラーの和の値は書けないので、Cause はエラーを渡しません。種類を見るか、表示するか、`Cause.raise` で起こし直して escape で受けます。
+`Std.Cause` の `Cause[E]` は失敗の原因で、エラー（`Fail`）、defect（`Die`）、中断（`Interrupt`）のどれかです。エラーの和の値は書けないので、Cause はエラーを取り出させません。`Cause.kind` で種類を見るか、`Cause.to_string` で表示するか、`Cause.raise` で起こし直して escape で受けます。
 
 ```emela check
 import Std.Exit
@@ -158,18 +101,11 @@ fn main() {
 }
 ```
 
-`Exit.attempt` は defect を値に変えられる境界です。サーバーで1件の panic が全体を止めないようにするときに使います。
+`Fiber.await` も子の終わり方を Exit で返します。子のエラーと defect はスコープへ伝わるので、`await` に届くのは `Success` か中断だけです。
 
-## Std.Deferred
+## Deferred
 
-一度だけ値を入れられる入れ物で、fiber の間で値を渡すのに使います。作れるのは Scope の `deferred`（か `Fiber.deferred()`）だけなので、スコープに属し、スコープの外へは持ち出せません。
-
-| 宣言 | シグネチャ | 説明 |
-|---|---|---|
-| `Deferred` | `@external type Deferred[A]` | 型 `A` の値を1つ入れる入れ物。ランタイムが持つ |
-| `complete` | `complete[A](d: Deferred[A], value: A) -> Bool` | 最初の1回だけ値を入れて True。2回目からは何もせず False。中断しない |
-| `await` | `await[A](d: Deferred[A]) -> A uses { Async }` | 値が入るまで待って返す。何本の fiber が待ってもよい |
-| `poll` | `poll[A](d: Deferred[A]) -> Option[A]` | 入っていれば `Some`、なければ `None`。待たない |
+`Std.Deferred` の `Deferred[A]` は、一度だけ値を入れられる入れ物です。fiber の間で値を1つ渡すのに使います。`Fiber.deferred()` で作るのでスコープに属します。
 
 ```emela check
 import Std.Fiber
@@ -187,8 +123,69 @@ fn main() {
 }
 ```
 
-`poll` は、止める合図を区切りごとに見るときに使います。外部関数のコールバックから fiber に合図を送るのにも Deferred を使います（[外部関数](/guide/external/)）。
+`complete` は最初の1回だけ値を入れて True を返します。`await` は値が入るまで待ち、`poll` は待たずに今の中身を返します。外部関数のコールバックから fiber に合図を送るのにも Deferred を使います（[外部関数](/guide/external/)）。
 
-:::caution[0.21 以降に入る予定]
-`Semaphore` と `Queue` は 0.21 で入ります。`Schedule` と `Stream` は後の版です。
-:::
+## Semaphore
+
+`Std.Semaphore` の `Semaphore` は決まった数の許可を持ち、同時に走る処理の数を抑えます。`Fiber.semaphore(n)` で作り、`Semaphore.with_permit(s, f)` で許可を待ってから `f` を走らせます。許可は `f` が値、エラー、defect、中断のどれで終わっても返されます。
+
+```emela check
+import Std.Clock.{Clock, TestClock}
+import Std.Fiber
+import Std.Instant
+import Std.Semaphore
+import Std.State.{State}
+
+## 100ms かかる仕事を、同時に2つまで走らせる。
+fn squares(n: Int) -> List[Int] uses { Clock, Async } {
+  Fiber.scope(|| {
+    permits = Fiber.semaphore(2)
+    Fiber.map(List.range(0, n), |i| {
+      Semaphore.with_permit(permits, || {
+        (use Clock).sleep(100)
+        i * i
+      })
+    })
+  })
+}
+
+fn main() {
+  start = Instant.from_unix_milliseconds(0)
+  (result, end) = State.run(start, || with TestClock { squares(5) })
+  dbg(result) # [0, 1, 4, 9, 16]
+  _ = dbg(Instant.to_unix_milliseconds(end)) # 300
+}
+```
+
+5つの仕事を2つずつ走らせるので、仮の時刻は 300ms 進みます。待たずに試すときは `try_with_permit` を使います。
+
+## Queue
+
+`Std.Queue` の `Queue[A]` は、容量の決まった値の列です。`Fiber.queue(capacity)` で作ります。`offer` は列が満ちていれば待ち、`take` は空なら待ちます。`close` した列には足せず、残りを取り切ると `take` が `QueueClosed` で失敗するので、消費する側はそれを終わりの合図にします。
+
+```emela check
+import Std.Fiber
+import Std.Queue
+import Std.Queue.{Queue, QueueClosed}
+
+fn sum_all(q: Queue[Int], acc: Int) -> Int uses { Async } {
+  next = Some(Queue.take(q)) escape { QueueClosed -> None }
+  next match {
+    None    -> acc
+    Some(x) -> sum_all(q, acc + x)
+  }
+}
+
+fn main() {
+  total = Fiber.scope(|| {
+    q = Fiber.queue(2)
+    consumer = Fiber.fork(|| sum_all(q, 0))
+    List.each(List.range(1, 11), |x| Queue.offer(q, x) escape { QueueClosed -> () })
+    Queue.close(q)
+    Fiber.join(consumer)
+  })
+  _ = dbg(total) # 55
+}
+```
+
+待たずに試すときは `try_offer` と `poll` を使います。

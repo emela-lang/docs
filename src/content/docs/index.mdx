@@ -1,16 +1,19 @@
 ---
 title: Emela
-description: 型付きのエラーとエフェクトを持つ関数型言語。JavaScript、WebAssembly、C にコンパイルします
+description: 型付きのエラーとエフェクトを持つ関数型言語。JavaScript、WebAssembly、ネイティブの実行ファイルにコンパイルします
 template: splash
 hero:
   tagline: エラーと副作用が型に出る関数型言語。その型はコンパイラが推論します。
   actions:
-    - text: Emela とは
-      link: /start/introduction/
+    - text: ツアーを始める
+      link: /tour/
       icon: right-arrow
-    - text: 言語ツアー
-      link: /start/tour/
+    - text: Playground で試す
+      link: /playground/
       icon: right-arrow
+      variant: secondary
+    - text: インストール
+      link: /start/installation/
       variant: minimal
     - text: GitHub
       link: https://github.com/emela-lang/emela
@@ -18,7 +21,7 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 `half` は `Negative` で失敗しうると型に書いてあります。`main` はそのエラーを `escape` で受けて文字列に戻し、出力します。`main` の `Console` は `with Platform` が供給します。
 
@@ -60,11 +63,19 @@ $ emela run main.emel
 		fiber はスコープの中でだけ動き、スコープより長生きしません。
 	</Card>
 	<Card title="どのターゲットでも同じ結果" icon="rocket">
-		JavaScript、WebAssembly、C に出力します。`Int` は32ビットに固定です。
+		JavaScript、WebAssembly、ネイティブの実行ファイルに出力します。`Int` は32ビットに固定です。
 	</Card>
 </CardGrid>
 
 :::note[開発中の言語です]
-Emela 0.20 は 0.1x 系とは別の言語として作り直した版で、互換性はありません。
-仕様と実装はまだ変わります。動く範囲は [実装の状況](/start/status/) にあります。
+このサイトは emela 0.28.0 に合わせています。1.0 までは minor の版で言語に壊れる変更が入ることがあります。動く範囲は [実装の状況](/start/status/) にあります。
 :::
+
+## 始め方
+
+<CardGrid>
+	<LinkCard title="Emela ツアー" href="/tour/" description="ブラウザでコードを書き換えて動かしながら、言語を1ページに1つずつ見ます。" />
+	<LinkCard title="Playground" href="/playground/" description="インストールせずに、ブラウザでコードを検査、整形、実行します。" />
+	<LinkCard title="Emela とは" href="/start/introduction/" description="型に出るエラーとエフェクトを、短い例で見ます。" />
+	<LinkCard title="インストール" href="/start/installation/" description="macOS、Linux、Windows に emela を入れて、最初のプロジェクトを作ります。" />
+</CardGrid>
