@@ -117,13 +117,9 @@ fn max_of[A: Ord](a: A, b: A) -> A {
 }
 ```
 
-Prelude には Eq、Ord、Show、Hash の4つの Trait があります。`==` は Eq、`<` は Ord、文字列の補間は Show を求めます。
+Prelude には Eq、Ord、Show、Hash の4つの Trait があります。`==` は Eq、`<` は Ord、文字列の補間は Show を求めます。Trait の詳細は [Trait](/guide/traits/) にあります。
 
-:::caution[0.21 で入る予定]
-`trait`、`impl`、`derive` と、制約の検査は 0.21 で入ります。今のコンパイラは `[A: Ord]` の構文を受け付けますが、制約を検査せず、型引数の値に `<` や `>` を使う関数（上の `max_of`）はまだコンパイルできません。`==` と補間は構造のまま、すべての型で動きます。Trait の詳細は [Trait](/guide/traits/) にあります。
-:::
-
-効果の集合に付ける `Immediate` の制約（`[R: Immediate]`）は 0.20 で動きます。中断しない関数だけを受けたい場所で使います（[外部関数](/guide/external/)）。
+効果の集合に付ける `Immediate` の制約（`[R: Immediate]`）は、中断しない関数だけを受けたい場所で使います（[外部関数](/guide/external/)）。
 
 `List` や `Option` のような型構成子そのものを型引数に渡すこと（高カインド型）はできません。`List.map` と `Option.map` は別々の関数です。
 

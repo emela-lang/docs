@@ -41,11 +41,7 @@ pub enum Ordering { Less, Equal, Greater }
 | `dbg` | `dbg[A: Show](value: A) -> A` | 値の表示を標準エラーに1行出し、値をそのまま返す |
 | `ParseError` | `error ParseError(input: String)` | `parse` の入力の形が正しくない。`input` は入力の全体 |
 
-`dbg` の出力は副作用ですが、デバッグ用の例外として `use` に出さず、純粋な関数として扱います。そのため式の途中に挟めます（`xs |> dbg |> List.length`）。defect は型に出ない異常終了で、`emela run` では終了コード 101 になります（[エラー](/guide/errors/)）。
-
-:::caution[0.21 で入る予定]
-`trait` と `impl` と `derive`、Trait の制約の検査は 0.21 で入ります。0.20 では、`==` や `<`、補間、`dbg` の表示は、Trait を見ずに構造のまま全部の型で動きます。関数の値だけは表示できません。
-:::
+`dbg` の出力は副作用ですが、デバッグ用の例外として `use` に出さず、純粋な関数として扱います。そのため式の途中に挟めます（`xs |> dbg |> List.length`）。defect は型に出ない異常終了で、`emela run` では終了コード 101 になります（[エラー](/guide/errors/)）。`dbg` の引数は Show を満たす必要があります（[Trait](/guide/traits/)）。
 
 ## Int
 
