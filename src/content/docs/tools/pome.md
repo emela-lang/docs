@@ -166,15 +166,15 @@ warning[W0205]: `MIT/Apache-2.0` is not an SPDX license expression
 |---|---|
 | `target` | `build`、`run`、`test` の既定のビルド対象。`js`、`wasm`、`native`。省けば `js` |
 
-- コマンドの `--target` が優先します。`check` はターゲットを取りません。
+- コマンドの `--target` が優先します。`check` はターゲットを取りませんが、`[build].target` が正しいかは確かめます。
 - `c` は `native` の古い名前で、警告（W0903）を出します。0.29 で取り除きます。
 - `[replace]` と同じく、その Pome をビルドするときだけ効き、依存されたときは無視します。
 - 知らないターゲットはエラー（E0232）です。
 
 ```console no-check
-$ emela build
+$ emela check
 error[E0232]: unknown target `node` in `[build].target`
-   ─[ /path/to/greeter/Pome.toml ]
+   ─[ Pome.toml ]
    = note: expected one of `js`, `native`, `wasm`
 
 1 error
@@ -301,8 +301,8 @@ the cached dependencies match Pome.lock
 - `[dev-dependencies]` が空になれば表ごと消します。`[dependencies]` は空でも残します。
 - 誤りは `error: ` で始まる1行を標準エラーに出し、終了コード 1 で終わります。
 
-:::caution[0.28.0 にないもの]
-仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.28.0 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
+:::caution[0.28.1 にないもの]
+仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.28.1 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
 :::
 
 ## 持たないもの
