@@ -3,7 +3,7 @@ title: emela コマンド
 description: new、check、build、run、test、fmt、doc、pome、lsp、doctor の引数と出力、実験的な機能のフラグ、環境変数、終了コード
 ---
 
-`emela` は、プロジェクトの作成、検査、ビルド、実行、テスト、整形、文書の生成、依存の管理、言語サーバー、環境の診断を1つにまとめたコマンドです。規範となる規則は仕様の [付録 B コマンド](https://github.com/emela-lang/emela/blob/main/spec/tooling/commands.md) と [テストランナー](https://github.com/emela-lang/emela/blob/main/spec/tooling/test-runner.md) にあります。このページの出力は emela 0.28.0 のものです。
+`emela` は、プロジェクトの作成、検査、ビルド、実行、テスト、整形、文書の生成、依存の管理、言語サーバー、環境の診断を1つにまとめたコマンドです。規範となる規則は仕様の [付録 B コマンド](https://github.com/emela-lang/emela/blob/main/spec/tooling/commands.md) と [テストランナー](https://github.com/emela-lang/emela/blob/main/spec/tooling/test-runner.md) にあります。このページの出力は emela 0.28.1 のものです。
 
 ```console no-check
 $ emela --help
@@ -96,7 +96,7 @@ Options:
 
 - 型を検査して診断を出します。何も書き出しません。
 - 診断は標準エラーに出します。形は [エディタと言語サーバー](/tools/editors/#診断の表示形式) にあります。
-- `check` はターゲットを取りません。ターゲットに関わる診断（そのターゲットの `@external` がない E0412、`[build].target` の誤り E0232 など）は `build`、`run`、`test` で出ます。
+- `check` はターゲットを取りません。ターゲットに関わる診断（そのターゲットの `@external` がない E0412 など）は `build`、`run`、`test` で出ます。`[build].target` の誤り（E0232）は `check` でも出ます。
 - `test/` と `[dev-dependencies]` も読みます。
 
 ## emela build
@@ -316,7 +316,7 @@ Options:
 
 ```console no-check
 $ emela doctor --target wasm
-emela 0.28.0+c154aa5
+emela 0.28.1+2d3fe7d
 
 js
   ok       node 22.23.4 (/usr/local/bin/node)
@@ -337,7 +337,7 @@ pome
 
 `check`、`build`、`run`、`test` は、実験的な機能ごとに `--experimental-<名前>` を受け取ります。その1回の実行だけ、ビルドする Pome（単独のファイルなら読むファイル）で機能を有効にします。`Pome.toml` の `[experimental]` に足す形で働き、依存には効かず、`Pome.toml` で有効にした機能を無効にもできません。
 
-- 0.28.0 の実験的な機能は `capture-checking` だけです（[実装の状況](/start/status/#実験的な機能)）。
+- 0.28.1 の実験的な機能は `capture-checking` だけです（[実装の状況](/start/status/#実験的な機能)）。
 - `--experimental-` で始まり、知らない機能、安定した機能、取り除いた機能を指すフラグはエラーにせず、警告（W0206）にします。
 - 言語サーバーはフラグを持たず、`Pome.toml` だけを見ます。
 

@@ -1,9 +1,9 @@
 ---
 title: 実装の状況
-description: emela 0.28.0 で動くもの、ターゲットごとの違い、実験的な機能、仕様にあってまだ動かないもの、既知の不具合
+description: emela 0.28.1 で動くもの、ターゲットごとの違い、実験的な機能、仕様にあってまだ動かないもの、既知の不具合
 ---
 
-このサイトは emela 0.28.0（2026-11-18 のリリース）に合わせて書いています。仕様は emela リポジトリの [`spec/`](https://github.com/emela-lang/emela/tree/main/spec) にあり、コンパイラはそのほとんどを実装しています。ここには、0.28.0 で使えるもの、ターゲットごとの違い、実験的な機能、まだ動かないものをまとめます。各版で入ったものは emela リポジトリの [CHANGELOG](https://github.com/emela-lang/emela/blob/main/CHANGELOG.md) にあります。
+このサイトは emela 0.28.1（2026-11-19 のリリース）に合わせて書いています。仕様は emela リポジトリの [`spec/`](https://github.com/emela-lang/emela/tree/main/spec) にあり、コンパイラはそのほとんどを実装しています。ここには、0.28.1 で使えるもの、ターゲットごとの違い、実験的な機能、まだ動かないものをまとめます。各版で入ったものは emela リポジトリの [CHANGELOG](https://github.com/emela-lang/emela/blob/main/CHANGELOG.md) にあります。
 
 ## 版ごとに入ったもの
 
@@ -18,10 +18,11 @@ description: emela 0.28.0 で動くもの、ターゲットごとの違い、実
 | 0.26 | メソッド呼び出し `x.f(a)`、`Std.Bytes` | [メソッド呼び出し](/guide/functions/#メソッド呼び出し) |
 | 0.27 | 無名関数 `\|x\| e`、`uses { R }`、`escape` の `_`、`Std.Array`、`Std.Exit` | [束縛と関数](/guide/functions/)、[エラー](/guide/errors/) |
 | 0.28 | `--target native`、`Std.Process`（引数、標準入出力、`main` の終了コード）、局所関数、`each`、`Std.Json` と `derive Encode, Decode`、`Semaphore` と `Queue`、能力の型 `use E`、1つのハンドラで複数のエフェクトを実装する、handler member、Bun、`emela doctor`、Windows 向けのリリース、ブラウザで動くコンパイラ（[Playground](/playground/)） | [ターゲット](/reference/targets/)、[標準ライブラリ](/std/overview/)、[emela コマンド](/tools/cli/) |
+| 0.28.1 | Playground とツアーのエディタの補完、ホバー、診断（ブラウザで動く言語サーバー）。同じ `with` の `L by P` の不具合などの修正 | [Playground](/playground/)、[エフェクトのラベル](/guide/labels/) |
 
 ## ターゲット
 
-| ターゲット | Tier | 0.28.0 での状況 | 実行に要るもの |
+| ターゲット | Tier | 0.28.1 での状況 | 実行に要るもの |
 |---|---|---|---|
 | `js` | 1 | 既定。すべての構文と std が動く | Node.js 22 以降か Bun 1.4.3 以降 |
 | `wasm` | 1 | すべての構文が動く。標準入力と `Http` のクライアントはまだない。利用者の `@external(wasm, ...)` と `@export(wasm, ...)` はまだ書けない | Wasmtime 49 以降 |
@@ -54,7 +55,7 @@ emela check --experimental-capture-checking
 
 ## 仕様にあって、まだ動かないもの
 
-| 機能 | 0.28.0 での動き |
+| 機能 | 0.28.1 での動き |
 |---|---|
 | 持ち出しの静的な検査（capture set） | 既定は警告 W0402 だけで、実際に使うと実行時の defect（`handler ... was used after release`、`fiber scope was used after it ended`）になる。`capture-checking` で E0444 にできる |
 | 相互再帰の末尾呼び出しの警告 | 出ない（[emela#265](https://github.com/emela-lang/emela/issues/265)） |
@@ -68,12 +69,11 @@ emela check --experimental-capture-checking
 
 ## 既知の不具合
 
-0.28.0 で分かっている、仕様と違う動きです。
+0.28.1 で分かっている、仕様と違う動きです。
 
 | 不具合 | 回避のしかた |
 |---|---|
-| 同じ `with` に `SystemConsole` と `L by P` を並べ、`P` のハンドラが自分でも `Console` を使うと、実行時に落ちる（JS では `TypeError`、native では `internal error`）（[emela#679](https://github.com/emela-lang/emela/issues/679)） | `with SystemConsole { with L by P { ... } }` のように `with` を入れ子にする |
-| 仕様は WASM の `SystemClock.sleep` と `Std.FileSystem` をまだ使えないとしているが、0.28.0 では動く | 仕様の側を直す |
+| 仕様は WASM の `SystemClock.sleep` と `Std.FileSystem` をまだ使えないとしているが、0.28.1 では動く | 仕様の側を直す |
 
 ほかの不具合は [GitHub の issue](https://github.com/emela-lang/emela/issues) にあります。
 

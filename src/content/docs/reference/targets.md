@@ -62,8 +62,8 @@ JS と WASM は、言語のすべての構文を出力できます。違いは�
 | `native` | 中断しうる export の fn | E0441 |
 | `native`、`wasm` | `Std.Http` のクライアント（`SystemHttp` は JS にだけ実装がある） | E0412 |
 
-:::caution[仕様と 0.28.0 の違い]
-仕様の `[target.wasm.external]` は、`SystemClock.sleep` と `Std.FileSystem` も WASM ではまだ使えないとしています。emela 0.28.0 ではどちらも動きます。`emela run --target wasm` はプロジェクトのディレクトリを `wasmtime run --dir` で渡します。
+:::caution[仕様と 0.28.1 の違い]
+仕様の `[target.wasm.external]` は、`SystemClock.sleep` と `Std.FileSystem` も WASM ではまだ使えないとしています。emela 0.28.1 ではどちらも動きます。`emela run --target wasm` はプロジェクトのディレクトリを `wasmtime run --dir` で渡します。
 :::
 
 検査するのはエントリからたどれる関数だけです。たどれない関数に使えないものが含まれていても、コンパイル時のエラーにはなりません。`with Platform` と書いても、`Http` を実際に使わなければ native と WASM でビルドできます。
@@ -171,8 +171,8 @@ fn main() {
 
 相互再帰の末尾呼び出しは保証しません。仕様では、コンパイラが相互再帰の末尾呼び出しを検出して警告し、escape の対象と with の本体の中の、末尾呼び出しに見える自分自身への呼び出しには linter が「保証されない」と警告します。
 
-:::caution[0.28.0 との違い]
-emela 0.28.0 は、相互再帰の末尾呼び出しにまだ警告を出しません。
+:::caution[0.28.1 との違い]
+emela 0.28.1 は、相互再帰の末尾呼び出しにまだ警告を出しません。
 :::
 
 ```emela check

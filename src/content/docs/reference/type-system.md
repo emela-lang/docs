@@ -536,7 +536,7 @@ fn read_only(q: use Query) {
 ```
 
 :::caution[今の実装との違い]
-仕様には、`use E` だけが満たす組み込みの Trait `Capability` があり、`[C: Capability]` でどのエフェクトの能力でも受け取れます。0.28.0 のコンパイラはまだ `Capability` を知らず、`cannot find trait` の E0211 になります。
+仕様には、`use E` だけが満たす組み込みの Trait `Capability` があり、`[C: Capability]` でどのエフェクトの能力でも受け取れます。0.28.1 のコンパイラはまだ `Capability` を知らず、`cannot find trait` の E0211 になります。
 :::
 
 ### 能力が with から漏れないこと
@@ -623,7 +623,7 @@ fn bad() -> () uses { Ticker } {
 規則:
 
 - Immediate を付けられるのは uses 節に書く型引数（効果の集合）だけです。ふつうの型引数やエラーの集合の型引数に付けると E0322 です。
-- 効果の集合の型引数には Trait の制約を付けられません。0.28.0 では `not supported yet: trait bounds on effect sets` のエラーになります。
+- 効果の集合の型引数には Trait の制約を付けられません。0.28.1 では `not supported yet: trait bounds on effect sets` のエラーになります。
 - `R: Immediate` の制約は、その定義（fn か構成子）を参照したところで、具体化した集合について確かめます（E0416）。診断は参照（呼ばれる側の名前）を指し、同じ参照で足りない要素は1つの診断にまとめます。型の注釈（`Ticker[Clock]`）では確かめません。値は構成子からしか作れないためです。
 - 引数の型の中の見えない効果の集合は Immediate の制約を持たないので、`R: Immediate` の引数には渡せません。制約が要るときは、名前を付けた型引数に `: Immediate` を書きます。
 - 外部関数の引数の型の中の見えない効果の集合は、Immediate の制約を持ちます。外部関数の宣言の引数の関数型に書いた uses 節は、Immediate でなければエラーになります。
@@ -821,7 +821,7 @@ default のないラベルを供給しないと、main とテストで R が空�
 - Int、Int64、String、Bool は Eq、Ord、Show を満たします。Float は Eq と Show を満たし、Ord は満たしません。Float の大小比較は Ord を通らない組み込みの演算子です。
 - タプル、List、Option は、要素の型が満たすときにその Trait を満たします。Ord は辞書式に比べます。
 - それ以外の型は、derive か impl を書かないかぎり Eq、Ord、Show のどれも満たしません。暗黙には導出しません。
-- Capability は `use E` だけが満たします。能力の型を含む型（`List[use Db]`）や関数型は満たしません。Capability を付けられるのはふつうの型引数だけです。0.28.0 では未実装です（上の「[能力の値の型](#能力の値の型)」）。
+- Capability は `use E` だけが満たします。能力の型を含む型（`List[use Db]`）や関数型は満たしません。Capability を付けられるのはふつうの型引数だけです。0.28.1 では未実装です（上の「[能力の値の型](#能力の値の型)」）。
 
 ### Show の形
 

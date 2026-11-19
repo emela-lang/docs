@@ -14,7 +14,7 @@ emela --version
 
 ```console no-check
 $ emela --version
-emela 0.28.0+c154aa5
+emela 0.28.1+2d3fe7d
 ```
 
 最新のリリースが `$HOME/.emela/bin/emela` に入ります。そのディレクトリが `PATH` になければ、スクリプトが最後に `add $HOME/.emela/bin to PATH to run emela directly` と知らせます。シェルの設定に足してください。入れ直すときも同じコマンドで、前の `emela` は置き換わります。
@@ -24,12 +24,12 @@ emela 0.28.0+c154aa5
 | 変数 | 働き | 例 |
 |---|---|---|
 | `EMELA_INSTALL_DIR` | 置くディレクトリ（既定は `$HOME/.emela/bin`） | `EMELA_INSTALL_DIR=$HOME/bin` |
-| `EMELA_VERSION` | 入れる版。省けば最新のリリース。`v` は付けても付けなくてもよい | `EMELA_VERSION=0.28.0` |
+| `EMELA_VERSION` | 入れる版。省けば最新のリリース。`v` は付けても付けなくてもよい | `EMELA_VERSION=0.28.1` |
 | `EMELA_CHANNEL` | `nightly` にすると、最新の開発版（prerelease）を入れる。既定は `stable` | `EMELA_CHANNEL=nightly` |
 
 ```sh
 curl -fsSL https://emela.dev/install.sh \
-  | EMELA_INSTALL_DIR="$HOME/bin" EMELA_VERSION=0.28.0 sh
+  | EMELA_INSTALL_DIR="$HOME/bin" EMELA_VERSION=0.28.1 sh
 ```
 
 `nightly` は GitHub の API で一覧を引くので、回数の制限に当たったら `GITHUB_TOKEN` を設定します。
@@ -52,7 +52,7 @@ steps:
       node-version: 22
   - uses: emela-lang/setup-emela@v1
     with:
-      version: 0.28.0
+      version: 0.28.1
   - run: emela pome install
   - run: emela fmt --check
   - run: emela test
@@ -85,7 +85,7 @@ steps:
 
 ```console no-check
 $ emela doctor
-emela 0.28.0+c154aa5
+emela 0.28.1+2d3fe7d
 
 js
   ok       node 22.23.4 (/usr/local/bin/node)
