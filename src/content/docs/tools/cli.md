@@ -1,9 +1,9 @@
 ---
 title: emela コマンド
-description: check、build、run、test、fmt、doc、lsp の引数、出力先、環境変数、終了コード
+description: new、check、build、run、test、fmt、doc、pome、lsp、doctor の引数、出力先、環境変数、終了コード
 ---
 
-`emela` は検査、ビルド、実行、テスト、整形、文書の生成、言語サーバーを1つにまとめたコマンドです。どのサブコマンドもプロジェクトのディレクトリか単独のファイルを受け取り、省けば `.` を対象にします。
+`emela` は検査、ビルド、実行、テスト、整形、文書の生成、依存の管理、言語サーバーを1つにまとめたコマンドです。どのサブコマンドもプロジェクトのディレクトリか単独のファイルを受け取り、省けば `.` を対象にします（`new` と `pome` と `doctor` を除く）。
 
 ```console
 $ emela --help
@@ -12,25 +12,31 @@ Compile, run, test, and format Emela programs
 Usage: emela <COMMAND>
 
 Commands:
-  check  Report diagnostics without compiling
-  build  Compile to JavaScript under `target/emela/js` (or to a native executable with `--target c`)
-  run    Compile and run: on Node.js, or as a native executable with `--target c`
-  test   Run the functions marked `@test`
-  fmt    Format the sources in place
-  doc    Generate API documentation under `target/emela/doc`
-  lsp    Start the language server over standard input and output
-  help   Print this message or the help of the given subcommand(s)
+  new     Create a new Pome in a new directory
+  check   Report diagnostics without compiling
+  build   Compile to the output of `--target` (`target/emela/js` for JS; an executable for native; `main.wasm` for WASM)
+  run     Compile and run: on Node.js, as a native executable (`--target native`), or with wasmtime (`--target wasm`)
+  test    Run the functions marked `@test`
+  fmt     Format the sources in place
+  doc     Generate API documentation under `target/emela/doc`
+  pome    Manage dependencies: Pome.toml and Pome.lock
+  lsp     Start the language server over standard input and output
+  doctor  Report whether the programs each build target uses can be found and are new enough
+  help    Print this message or the help of the given subcommand(s)
 ```
 
 | コマンド | 働き |
 |---|---|
+| `emela new <名前>` | 新しい Pome のディレクトリを作る |
 | `emela check [PATH]` | 診断だけを出す。コンパイルしない |
 | `emela build [PATH]` | コンパイルして出力先に書き出す |
 | `emela run [PATH] [-- ARGS...]` | コンパイルして実行する |
 | `emela test [PATH] [FILTER]` | `@test` の関数を実行する |
 | `emela fmt [PATHS...]` | ソースを整形して書き換える |
 | `emela doc [PATH]` | API の文書を生成する |
+| `emela pome …` | 依存を足す・除く・入れる・上げる・一覧・確かめる |
 | `emela lsp` | 言語サーバーとして動く |
+| `emela doctor [PATH]` | 各ターゲットに要るプログラムがあるか確かめる |
 
 ## 渡すパス
 
@@ -48,6 +54,27 @@ error[E0208]: directory `scripts` is outside the source root `src`
    = note: source files of a project (the directory with Pome.toml) go under src/; pass the project directory, or a file or directory under src/
 
 1 error
+```
+
+## emela new
+
+```text
+Usage: emela new [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  A name (`hello`) or a source path (`github.com/alice/hello`, `github:alice/hello`)
+
+Options:
+      --lib  Create a library (`src/lib.emel`) instead of an application (`src/main.emel`)
+```
+
+- カレントディレクトリの下に新しい Pome を作ります。`Pome.toml`、`.gitignore`、アプリケーションなら `src/main.emel`、`--lib` なら `src/lib.emel` を置きます。
+- `<NAME>` は素の名前（`hello`）、source path、`github:owner/repo` の省略形のどれでも受け付けます。素の名前のとき `[pome].name` は仮の値になり、コメントで差し替えを促します。
+- 詳しい決まりは [プロジェクトと Pome](/tools/pome/) にあります。
+
+```console
+$ emela new hello
+created application `hello`
 ```
 
 ## emela check
@@ -72,28 +99,28 @@ Options:
 
 - 出力先はプロジェクトなら `<プロジェクト>/target/emela/<ターゲット>`、単独のファイルならファイルのあるディレクトリの `target/emela/<ターゲット>` です。`--out-dir` で変えられます。
 - `js` では、エントリを写した `main.mjs` とランタイム（`emela_runtime.mjs`）を書き出します。同梱の std のホストのファイルは `emela_core/` の下に置きます。
-- `c` では、`main.c` と C のランタイム（`emela_runtime.c`、`emela.h` など）を書き出し、cc でコンパイルした実行ファイル `main` を置きます。
+- `native` では、C のソースとランタイムを書き出し、cc でコンパイルした実行ファイル `main` を置きます。
+- `wasm` では、WASI の component として `main.wasm` を書き出します。
 
 ```console
-$ emela build --target c main.emel
-$ ls target/emela/c
-emela.h  emela_core  emela_runtime.c  emela_runtime.h  main  main.c
+$ emela build --target wasm main.emel
+$ ls target/emela/wasm
+main.wasm
 ```
 
 ### --target
 
 | 値 | 内容 |
 |---|---|
-| `js` | Node.js で動く JavaScript |
-| `c` | cc でコンパイルする C。native の実行ファイルになる |
+| `js` | Node.js（または Bun）で動く JavaScript |
+| `native` | このマシン向けの実行ファイル。C コンパイラ（`EMELA_CC`）で作る |
+| `wasm` | WebAssembly（WASI）。`wasmtime`（`EMELA_WASMTIME`）で動かす |
 
 - 省けば `Pome.toml` の `[build].target`、それもなければ `js` です。`--target` が優先します。
-- JS は Node 18 以降、Deno、Bun のようなサーバーのホストを前提にします。ブラウザは 0.20 の対象外です。
-- C は Tier 2 で、対象は macOS（arm64）と Linux（x86_64）、C11 のコンパイラを前提にします。
-
-:::caution[まだないもの]
-`--target wasm` はまだありません（WASM の出力は 0.21 以降）。C のターゲットでは、`String.length`（と、それを使う `Instant.to_string`）と Http がまだ使えません。ターゲットの違いは [ターゲット](/reference/targets/) にあります。
-:::
+- JS は Node 22 以降、または Bun 1.4.3 以降を前提にします。既定は `PATH` の `node` で、`EMELA_JS_HOST=bun` なら Bun を使います。ブラウザは実行ホストの対象外です。
+- native は Tier 2 で、対象は macOS（arm64）と Linux（x86_64）、C11 のコンパイラを前提にします。`--target c` は同じものの非推奨名で、0.29 で削除予定です。
+- WASM は Wasmtime 49 以降（WASI 0.3、`-S p3=y`）を前提にします。
+- native では `String.length`（と、それを使う `Instant.to_string`）と Http クライアントがまだ使えません。ターゲットの違いは [ターゲット](/reference/targets/) にあります。
 
 ## emela run
 
@@ -107,9 +134,28 @@ Options:
 
 - `build` と同じ出力先に書き出してから実行します。前の出力は消さずに上書きします。
 - 診断はプログラムを起動する前に出します。エラーがあれば起動しません。
-- プログラムへの引数は `--` の後に書きます（`emela run -- a b`）。0.20 の std には、引数を読む API はまだありません。
-- `main` が返した値は表示しません。
+- プログラムへの引数は `--` の後に書きます（`emela run -- a b`）。読むのは `Std.Process` の `Args` です。
+- `main` が返した値は表示しません（`ExitCode` を返したときは終了コードになります）。
 - エントリに `main` がなければエラーです。
+
+```emela check
+import Std.Process.{Process, Args}
+import Std.Console.{Console}
+
+fn main() {
+  with Process {
+    xs = (use Args).list()
+    (use Console).print_line("#{xs}")
+  }
+}
+```
+
+```console
+$ emela run main.emel -- a b
+["a", "b"]
+```
+
+`Args.list()` はプログラム名を除いた引数の一覧、`Args.get(index)` は `index` 番目（0 始まり）か、範囲外なら `None` です。`with Process` で `SystemArgs` が供給されます。
 
 ```console
 $ emela run main.emel
@@ -124,14 +170,15 @@ $ echo $?
 Usage: emela test [OPTIONS] [PATH] [FILTER]
 
 Options:
-      --out-dir <OUT_DIR>  Output directory [default: <project>/target/emela/test, or test-c for `--target c`]
+      --out-dir <OUT_DIR>  Output directory [default: <project>/target/emela/test, or test-native for `--target native`]
       --target <TARGET>    The target [default: `[build].target` of Pome.toml, or js]
+      --reporter <REPORTER>  How results are shown [default: agent inside a coding agent, pretty at a terminal, plain otherwise]
 ```
 
 - `@test` を付けた関数を1つずつ実行します。
 - テストの名前は、エントリのモジュールのものは関数名だけ、ほかのモジュールのものはモジュール名を前に付けます（`Greeting.says_hello`）。
 - `FILTER` を渡すと、名前に部分一致する（大文字小文字を区別する）テストだけを実行します。単独のファイルでは、エントリから import でたどれるモジュールのテストだけが対象です。
-- 出力は `target/emela/test`（C は `target/emela/test-c`）に書き、通常のビルドの出力を上書きしません。
+- 出力は `target/emela/test`（native は `target/emela/test-native`）に書き、通常のビルドの出力を上書きしません。
 - 1つでも失敗すれば終了コード 1、なければ 0 です（テストが0個でも 0）。
 - テストだけのファイルに `main` は要りません。
 
@@ -167,7 +214,7 @@ Options:
 
 ```console
 $ emela fmt --check
-src/main.emel
+src/extra.emel
 $ printf 'fn  main( ) {\n dbg( 1+2 )\n}\n' | emela fmt -
 fn main() {
   dbg(1 + 2)
@@ -195,6 +242,30 @@ $ ls std-docs
 Float.md  index.md  Int.md  Int64.md  List.md  Option.md  Prelude.md  Std.Cause.md  ...
 ```
 
+## emela pome
+
+```text
+Usage: emela pome <COMMAND>
+```
+
+| コマンド | 働き |
+|---|---|
+| `emela pome add <src>[@<version>]` | 依存を足す。version を省けば最新の tag。`--dev` は `[dev-dependencies]`、`--allow-external` は `@external` を許す |
+| `emela pome remove <src>` | 依存を除く |
+| `emela pome install` | `Pome.toml` に合わせて lock を作り、依存を取ってくる |
+| `emela pome update [<src>]` | 要求をその Pome の最新の tag に上げる。省けば全部 |
+| `emela pome list` | 解決した依存の木を出す |
+| `emela pome verify` | キャッシュの依存が `Pome.lock` のハッシュと合うか確かめる |
+
+- どれも `Pome.toml` と `Pome.lock` を整合させて書き換えます（`list` と `verify` は書き換えません）。
+- `<src>` には source path か `github:` の省略形を書けます。
+- 詳しくは [プロジェクトと Pome](/tools/pome/) にあります。
+
+```sh
+emela pome add github:emela-lang/x@v0.2.0
+emela pome install
+```
+
 ## emela lsp
 
 ```text
@@ -203,12 +274,27 @@ Usage: emela lsp
 
 引数を取らず、標準入出力で言語サーバーとして動きます。機能とエディタの設定は [エディタと言語サーバー](/tools/editors/) にあります。
 
+## emela doctor
+
+```text
+Usage: emela doctor [OPTIONS] [PATH]
+
+Options:
+      --target <TARGET>    Require this target instead of the build target of the project
+      --format <FORMAT>    Output format [default: text] [possible values: text, json]
+```
+
+各ビルドターゲットが使うプログラム（Node / Bun、Wasmtime、C コンパイラなど）が見つかるか、版が足りるかを確かめます。入れたあとの確認に使います。
+
 ## 環境変数
 
 | 変数 | 働き |
 |---|---|
 | `EMELA_NODE` | `run` と `test` が使う node。なければ PATH の `node`。見つからなければエラー |
-| `EMELA_CC` | `--target c` が使う C コンパイラ。なければ PATH の `cc`。起動できないときと、コンパイルに失敗したときはエラー |
+| `EMELA_JS_HOST` | JS の実行ホスト。`bun` なら Bun を使う |
+| `EMELA_CC` | `--target native` が使う C コンパイラ。なければ PATH の `cc`。起動できないときと、コンパイルに失敗したときはエラー |
+| `EMELA_CC_ARGS` | native のコンパイルに足すフラグ |
+| `EMELA_WASMTIME` | `--target wasm` が使う wasmtime。なければ PATH の `wasmtime` |
 | `NO_COLOR` | 空でない値を入れると、診断に色を付けない。色は、標準エラーが端末で `NO_COLOR` が空か未設定のときだけ付く |
 
 ```console
@@ -240,9 +326,3 @@ $ echo $?
 ```
 
 エラーと defect の違いは [エラー](/guide/errors/)、中断は [中断と再開](/guide/suspend/) にあります。
-
-## 仕様にあって CLI にまだないもの
-
-:::caution[予定]
-仕様は `emela pome add / remove / install / update / list` と `emela new` を定めていますが、今の CLI にはありません（`unrecognized subcommand` になります）。これらは [プロジェクトと Pome](/tools/pome/) で予定として扱います。
-:::

@@ -8,25 +8,21 @@ Hello world を書いて、実行、検査、テスト、整形を一通り試�
 ## プロジェクトを作る
 
 ```sh
-mkdir -p hello/src
+emela new hello
 cd hello
-touch Pome.toml
 ```
 
 ```text
 hello/
+├── .gitignore
 ├── Pome.toml
 └── src/
     └── main.emel
 ```
 
-`Pome.toml` を置いたディレクトリがプロジェクトです。中身は空でかまいません。`emela` は渡されたパスから祖先をたどり、最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。書ける内容（名前、版、依存、既定のターゲット）は [プロジェクトと Pome](/tools/pome/) にあります。
+`emela new` が `Pome.toml` と `src/main.emel`（`--lib` なら `src/lib.emel`）を置きます。`Pome.toml` を置いたディレクトリがプロジェクトです。`emela` は渡されたパスから祖先をたどり、最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。書ける内容（名前、版、依存、既定のターゲット）と依存の足し方（`emela pome`）は [プロジェクトと Pome](/tools/pome/) にあります。
 
 ソースは `src/` の下に置き、1つのファイルが1つのモジュールになります。`src/greeting.emel` は `Greeting` として import できます。エントリは `src/main.emel` の `main` です。
-
-:::caution[Pome の依存はまだ使えません]
-今のコンパイラは `Pome.toml` の有無と `[build].target` だけを見ます。`[dependencies]` は読まず、`emela pome` と `emela new` のコマンドもまだありません。
-:::
 
 ## Hello world
 

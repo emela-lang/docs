@@ -18,15 +18,13 @@ greeter/
 [pome]
 name = "github.com/acme/greeter"
 version = "0.1.0"
-emela = "0.20.1"
+emela = "0.28.0"
 
 [build]
 target = "js"
 ```
 
-:::caution[今の CLI で読むのは `[build].target` だけ]
-0.20 のコンパイラは `Pome.toml` があるかどうかと `[build].target` だけを見ます。`[pome]`、`[dependencies]`、`[replace]` は診断なしに無視され、依存を取ってくることも `Pome.lock` を書くこともしません。TOML として読めない `Pome.toml` も、今は何も言われません。空の `Pome.toml` でもプロジェクトになります。このページの依存の節は仕様で決まった予定の形です。
-:::
+新しいプロジェクトは `emela new` で作れます。依存の追加・取得は下の [emela pome と emela new](#emela-pome-と-emela-new) を見てください。
 
 ## プロジェクトの決まり方
 
@@ -59,17 +57,13 @@ fn says_hello() {
 }
 ```
 
-:::caution[ライブラリだけのプロジェクト]
-今の CLI は、`main.emel` のないプロジェクトの `build` と `run` をエントリがないというエラーで止め、`test` は内部の誤りで止まります。`check` は通ります。
-:::
-
 ## Pome.toml
 
 ```toml
 [pome]
 name = "github.com/emela-lang/quince"   # source path
 version = "0.3.2"
-emela = "0.20.1"                         # 要るコンパイラの最小の版
+emela = "0.28.0"                         # 要るコンパイラの最小の版
 module = "Quince"                        # 依存されたときのルート名（省略可）
 
 [dependencies]
@@ -80,7 +74,7 @@ module = "Quince"                        # 依存されたときのルート名�
 "github.com/emela-lang/x" = { path = "../x" }    # この Pome をビルドするときだけ効く
 
 [build]
-target = "c"                                     # 既定のビルド対象（省略時は js）
+target = "native"                                # 既定のビルド対象（省略時は js）
 ```
 
 ### [pome]
@@ -118,7 +112,7 @@ target = "c"                                     # 既定のビルド対象（�
 
 | 項目 | 内容 |
 |---|---|
-| `target` | `check`、`build`、`run`、`test` の既定のビルド対象。`js` か `c`。省けば `js` |
+| `target` | `build`、`run`、`test` の既定のビルド対象。`js`、`native`、`wasm`。省けば `js`。`c` は `native` の非推奨名（0.29 で削除） |
 
 - コマンドの `--target` が優先します。
 - `[replace]` と同じく、その Pome をビルドするときだけ効き、依存されたときは無視します。
@@ -126,14 +120,14 @@ target = "c"                                     # 既定のビルド対象（�
 
 ```console
 $ emela build
-error[E0232]: unknown target `wasm` in `[build].target`
+error[E0232]: unknown target `jvm` in `[build].target`
    ─[ /path/to/greeter/Pome.toml ]
-   = note: expected one of `js`, `c`
+   = note: expected one of `js`, `native`, `wasm`
 
 1 error
 ```
 
-この検査は今の CLI でも動きます。ただし `check` は `[build].target` を見ないので、このエラーは `build`、`run`、`test` で出ます。
+`check` は `[build].target` を見ないので、このエラーは `build`、`run`、`test` で出ます。
 
 ## 依存のモジュール
 
@@ -166,23 +160,23 @@ error[E0232]: unknown target `wasm` in `[build].target`
 
 ## emela pome と emela new
 
-:::caution[予定]
-次のコマンドは仕様で決まっていますが、今の CLI にはありません（`unrecognized subcommand` になります）。
-:::
-
 | コマンド | 働き |
 |---|---|
-| `emela pome add <src>[@<version>]` | 依存を足す。version を省けば最新の tag |
-| `emela pome remove <src>` | 依存を除く |
+| `emela new <名前>` | 新しい Pome を作る。`--lib` を付けるとライブラリ（`src/lib.emel`）にする |
+| `emela pome add <src>[@<version>]` | 依存を足す。version を省けば最新の tag。`--dev` は `[dev-dependencies]`、`--allow-external` は `@external` を許す |
+| `emela pome remove <src>` | 依存を除く（`[dependencies]` または `[dev-dependencies]`） |
 | `emela pome install` | `Pome.toml` に合わせて lock を作り、依存を取ってくる |
 | `emela pome update [<src>]` | 要求をその Pome の最新の tag に上げる。省けば全部 |
 | `emela pome list` | 解決した依存の木を出す |
-| `emela new <名前>` | 新しい Pome を作る。`--lib` を付けるとライブラリ（`src/lib.emel`）にする |
+| `emela pome verify` | キャッシュの依存が `Pome.lock` のハッシュと合うか確かめる |
 
-- どれも `Pome.toml` と `Pome.lock` を整合させて書き換えます。
+- `pome` のコマンドは `Pome.toml` と `Pome.lock` を整合させて書き換えます（`list` と `verify` は書き換えません）。
 - `<src>` には source path か `github:` の省略形を書けます。
+- `emela new` の `<名前>` は素の名前（`hello`）、source path、`github:owner/repo` のどれでも受け付けます。素の名前のとき `[pome].name` は仮の値です。
 
 ```sh
+emela new hello
+cd hello
 emela pome add github:emela-lang/x@v0.2.0
 emela pome install
 ```
