@@ -1,9 +1,9 @@
 ---
 title: FileSystem と Path
-description: テキストのファイルを読み書きする FileSystem エフェクトと、そのハンドラ、パスを組み立てる Std.Path
+description: テキストのファイルを読み書きする FileSystem エフェクトとそのハンドラ、パスを組み立てる Std.Path
 ---
 
-`Std.FileSystem` はファイルとディレクトリをテキスト（UTF-8）で扱うエフェクトです。操作はどれも `suspend fn` で、操作ごとに起こりうるエラーだけを `fails` に書いているので、escape で受けたエラーは型から消えます。パスの文字列は `Std.Path` の純粋な関数で組み立てます。
+`Std.FileSystem` は、ファイルとディレクトリをテキスト（UTF-8）で扱うエフェクトです。操作はどれも `suspend fn` で、操作ごとに起こりうるエラーだけを `fails` に書いているので、escape で受けたエラーは型から消えます。パスの文字列は `Std.Path` の純粋な関数で組み立てます。
 
 ```emela check
 import Std.Process.{Process}
@@ -49,162 +49,49 @@ no notes in notes/monday.txt
 
 `note` の推論される型は `fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | InvalidText | FileSystemFailure uses { FileSystem }` です。`show` は FileNotFound を escape で受けるので、残りの4つ（FileAccessDenied、IsADirectory、InvalidText、FileSystemFailure）だけが残ります。
 
-## エフェクト
+操作とエラーの一覧は API リファレンスの [Std.FileSystem](/std/api/std-filesystem/) と [Std.Path](/std/api/std-path/) にあります。
 
-```emela
-pub effect FileSystem {
-  suspend fn read_text(path: String) -> String
-    fails FileNotFound | FileAccessDenied | IsADirectory | InvalidText | FileSystemFailure
-  suspend fn write_text(path: String, text: String) -> ()
-    fails FileNotFound | FileAccessDenied | IsADirectory | FileSystemFailure
-  suspend fn append_text(path: String, text: String) -> ()
-    fails FileNotFound | FileAccessDenied | IsADirectory | FileSystemFailure
-  suspend fn exists(path: String) -> Bool
-  suspend fn is_directory(path: String) -> Bool
-  suspend fn list_directory(path: String) -> List[String]
-    fails FileNotFound | FileAccessDenied | NotADirectory | FileSystemFailure
-  suspend fn create_directory(path: String) -> ()
-    fails FileAccessDenied | NotADirectory | FileSystemFailure
-  suspend fn remove(path: String) -> ()
-    fails FileNotFound | FileAccessDenied | DirectoryNotEmpty | FileSystemFailure
-}
-```
+## 操作
 
 | 操作 | 説明 |
 |---|---|
 | `read_text(path)` | ファイルの中身を読む |
 | `write_text(path, text)` | ファイルを作るか、中身を置き換える |
 | `append_text(path, text)` | ファイルの末尾に足す。なければ作る |
-| `exists(path)` | パスにファイルかディレクトリがあるか。失敗しない |
-| `is_directory(path)` | パスがディレクトリか。失敗しない |
+| `exists(path)`、`is_directory(path)` | パスにあるか、ディレクトリか。失敗しない |
 | `list_directory(path)` | ディレクトリの中の名前を、名前の順に返す |
-| `create_directory(path)` | ディレクトリを、親もまとめて作る |
-| `remove(path)` | ファイルか空のディレクトリを消す |
+| `create_directory(path)` | ディレクトリを、親もまとめて作る。既にあれば何もしない |
+| `remove(path)` | ファイルか空のディレクトリを消す。中身ごと消す操作はない |
 
-操作をすべて `suspend fn` にしているのは、同期の API だと読み書きの間すべての fiber が止まるからです。そのため外部関数のコールバックの中では FileSystem を使えません。コールバックからは [Deferred](/std/state-fiber/) で fiber に合図を送り、fiber の側でファイルを扱います。Bytes の型がまだないので、バイナリは扱えません。
+- `write_text` と `append_text` は、親のディレクトリがなければ FileNotFound です。
+- `exists` と `is_directory` は、権限で見えないときも False を返します。
+- UTF-8 として読めないファイルは、置換文字に置き換えずに InvalidText で失敗します。読んで書き戻したときに中身が壊れないようにするためです。先頭の BOM は残します。
+- 相対パスはプロセスの現在のディレクトリから解きます。正規化（`..` の解決）、絶対パスへの変換、`~` の展開はしません。
+
+操作がすべて `suspend fn` なのは、同期の API だと読み書きの間すべての fiber が止まるからです。そのため外部関数のコールバックの中では FileSystem を使えません。コールバックからは Deferred で fiber に合図を送り、fiber の側でファイルを扱います（[State と Fiber](/std/state-fiber/)）。
 
 ## エラー
 
 | error | 意味 |
 |---|---|
-| `FileNotFound(path: String)` | ファイルかディレクトリがない。書くときは親のディレクトリがない |
-| `FileAccessDenied(path: String)` | 権限がない |
-| `NotADirectory(path: String)` | ディレクトリであるべき場所にファイルがある |
-| `IsADirectory(path: String)` | ファイルであるべき場所にディレクトリがある |
-| `DirectoryNotEmpty(path: String)` | 空でないディレクトリを消そうとした |
-| `InvalidText(path: String)` | UTF-8 として読めない |
-| `FileSystemFailure(path: String, message: String)` | それ以外のホストのエラー。`message` はホストの説明 |
+| `FileNotFound(path:)` | ファイルかディレクトリがない。書くときは親のディレクトリがない |
+| `FileAccessDenied(path:)` | 権限がない |
+| `NotADirectory(path:)` | ディレクトリであるべき場所にファイルがある |
+| `IsADirectory(path:)` | ファイルであるべき場所にディレクトリがある |
+| `DirectoryNotEmpty(path:)` | 空でないディレクトリを消そうとした |
+| `InvalidText(path:)` | UTF-8 として読めない |
+| `FileSystemFailure(path:, message:)` | それ以外のホストのエラー。`message` はホストの説明 |
 
-どれも `pub error` なので、import して escape で受けられます（`import Std.FileSystem.{FileNotFound}`）。種類ごとに別の error にしてあるので、escape で受けたものは `fails` から消えます。1つの error に種類のフィールドを持たせると、一部の値だけを受ける腕になって `fails` に残ります。名前に `File` などを付けているのは、自分で書く `NotFound` とぶつからないようにするためです。escape の規則は [エラー](/guide/errors/) にあります。
+種類ごとに別の error にしてあるので、escape で受けたものは `fails` から消えます。1つの error に種類のフィールドを持たせると、一部の値だけを受ける腕になって `fails` に残ります。名前に `File` などを付けているのは、自分で書く `NotFound` とぶつからないようにするためです。escape の規則は [エラー](/guide/errors/) にあります。
 
-## 振る舞い
+## ハンドラ
 
-- `write_text` はファイルを作るか上書きします。`append_text` はファイルがなければ作ります。どちらも親のディレクトリがなければ FileNotFound です。
-- `create_directory` は親もまとめて作り、既にあれば何もしません。そのパスか途中にファイルがあれば NotADirectory です。
-- `remove` はファイルか空のディレクトリを消します。中身ごと消す操作はありません。
-- `exists` と `is_directory` は失敗しません。権限で見えないときも False です。
-- `list_directory` はパスでなく名前だけを、名前の順（コードポイントの辞書順）に並べて返します。
-- UTF-8 として読めないファイルは、置換文字に置き換えずに InvalidText で失敗します。読んで書き戻したときに中身が壊れないようにするためです。先頭の BOM は取り除かずに残します。
-- 相対パスはプロセスの現在のディレクトリから解きます。
-- パスは String のままです。正規化（`..` の解決）、絶対パスへの変換、`~` の展開はしません。
+`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、`Std.Process` の `Process` に入っています。Async と ProcessHost に依存し、状態を持ちません。FileSystemFailure の `message` の文言はターゲットで違います。
 
-実際に SystemFileSystem で試すと、次のようになります。
+`TestFileSystem` はテスト用のハンドラで、ファイルとディレクトリを `State[TestFiles]` に置き、その場で再開します。ディスクに触れずにテストできます。
 
-```emela check
-import Std.Process.{Process}
-import Std.Console.{Console}
-import Std.FileSystem.{
-  FileSystem,
-  FileNotFound,
-  FileAccessDenied,
-  NotADirectory,
-  IsADirectory,
-  DirectoryNotEmpty,
-  FileSystemFailure,
-}
-
-fn attempt(
-  f: fn(
-  ) -> String fails FileNotFound | FileAccessDenied | NotADirectory | IsADirectory | DirectoryNotEmpty | FileSystemFailure uses {
-    FileSystem,
-  },
-) -> String uses { FileSystem } {
-  f() escape {
-    FileNotFound(path:)                -> "FileNotFound(#{path})"
-    NotADirectory(path:)               -> "NotADirectory(#{path})"
-    IsADirectory(path:)                -> "IsADirectory(#{path})"
-    DirectoryNotEmpty(path:)           -> "DirectoryNotEmpty(#{path})"
-    FileAccessDenied(path:)            -> "FileAccessDenied(#{path})"
-    FileSystemFailure(path:, message:) -> "FileSystemFailure(#{path}, #{message})"
-  }
-}
-
-fn main() {
-  with Process {
-    say = (use Console).print_line
-    fs = use FileSystem
-    say(
-      attempt(|| {
-        fs.write_text("missing/a.txt", "x")
-        "written"
-      }),
-    )
-    say(
-      attempt(|| {
-        fs.create_directory("out/sub/deep")
-        fs.create_directory("out/sub/deep")
-        fs.write_text("out/b.txt", "b")
-        fs.write_text("out/a.txt", "a")
-        "#{fs.list_directory("out")}"
-      }),
-    )
-    say(
-      attempt(|| {
-        fs.create_directory("out/a.txt/x")
-        "created"
-      }),
-    )
-    say(
-      attempt(|| {
-        fs.remove("out/sub")
-        "removed"
-      }),
-    )
-    say("#{fs.exists("out")} #{fs.is_directory("out/a.txt")} #{fs.exists("nothing")}")
-  }
-}
-```
-
-```console
-$ emela run main.emel
-FileNotFound(missing/a.txt)
-["a.txt", "b.txt", "sub"]
-NotADirectory(out/a.txt/x)
-DirectoryNotEmpty(out/sub)
-True False False
-```
-
-## SystemFileSystem
-
-`SystemFileSystem` はホストのファイルシステムを使う本物のハンドラで、`Std.Process` の layer `Process` に入っています。
-
-| ターゲット | 実装 |
-|---|---|
-| JS | `node:fs/promises` |
-| C | POSIX の関数を外部関数の中で同期に呼び、その場で完了する（読み書きの間はほかの fiber も止まる） |
-
-Async に依存し、状態を持ちません。C では U+0000 を含むファイルを C の文字列で渡せないので、読むと FileSystemFailure になります。FileSystemFailure の `message` の文言はターゲットで違います。
-
-## TestFileSystem と TestFiles
-
-`TestFileSystem` はテスト用のハンドラです。ファイルとディレクトリを `State[TestFiles]` に置き、その場で再開するので、ディスクに触れずにテストできます。
-
-```emela
-pub type TestFiles(files: List[(String, String)], directories: List[String])
-```
-
-- `files` は、パスと中身の組をパスの順に並べたものです。書くと、この順を保って入ります。
-- ディレクトリは `directories` にあるものと、`files` と `directories` にあるパスの祖先です。`a/b/c.txt` があれば `a` と `a/b` はディレクトリです。
+- `TestFiles(files:, directories:)` の `files` は、パスと中身の組をパスの順に並べたものです。
+- `directories` にあるものと、`files` と `directories` のパスの祖先がディレクトリです。`a/b/c.txt` があれば `a` と `a/b` はディレクトリです。
 - パスは文字列のまま比べます。`a/b` と `./a/b` は別のパスです。
 - エラーは SystemFileSystem と同じ規則で起こします。FileAccessDenied、InvalidText、FileSystemFailure は起こせないので、それを試すときは小さなハンドラを自分で書きます。
 
@@ -243,20 +130,13 @@ fn a_missing_file_is_reported() {
 }
 ```
 
-State と `State.run` は [State・Fiber・Deferred](/std/state-fiber/) に、テストの書き方は [テスト](/guide/testing/) にあります。
+State と `State.run` は [State と Fiber](/std/state-fiber/) に、テストの書き方は [テスト](/guide/testing/) にあります。
 
 ## Std.Path
 
-`Std.Path` はパスの文字列を組み立てる純粋な関数を持ち、ファイルシステムには触れません。`import Std.Path` の後に `Path.join(dir, "notes.txt")` と書きます。
+`Std.Path` はパスの文字列を組み立てる純粋な関数（`join`、`parent`、`file_name`、`extension`）を持ち、ファイルシステムには触れません。
 
-| 関数 | シグネチャ | 説明 |
-|---|---|---|
-| `join` | `join(a: String, b: String) -> String` | `a` の下の `b`。間に `/` を1つ挟む。`b` が `/` で始まれば `b` そのもの。片方が空ならもう片方 |
-| `parent` | `parent(path: String) -> Option[String]` | 最後の要素を除いたパス。要素が1つのとき、`/`、空文字列は `None` |
-| `file_name` | `file_name(path: String) -> Option[String]` | 最後の要素。`/`、空文字列、`.` か `..` で終わるものは `None` |
-| `extension` | `extension(path: String) -> Option[String]` | ファイル名の最後の `.` より後（`.` は含まない）。`.` がないもの、先頭の `.` だけのもの（`.bashrc`）、`.` で終わるものは `None` |
-
-- 区切りは `/` だけを扱います。Node は Windows でも `/` を受け付けます。
+- 区切りは `/` だけを扱います。JS のホストは Windows でも `/` を区切りとして受け付けます。
 - 正規化しません。`..` は解決せず、絶対パスにもしません。
 - 末尾の `/` と、続けて書いた `/` は数えません。`a/b/` は `a/b` と同じです。
 

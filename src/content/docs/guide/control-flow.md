@@ -1,9 +1,9 @@
 ---
 title: 制御の流れ
-description: if 式、&& と || の短絡、再帰と List の関数による繰り返し、末尾呼び出しの保証
+description: if 式、&& と || の短絡、再帰とコレクションの関数による繰り返し、末尾呼び出しの保証
 ---
 
-分岐は `if` と `match` で書き、どちらも値を返す式です。for や while はないので、繰り返しは再帰か `List.map` や `List.fold` のような関数で書きます。
+分岐は `if` と `match` で書き、どちらも値を返す式です。for や while はないので、繰り返しは再帰か `List.map`、`List.fold`、`List.each` のような関数で書きます。
 
 ```emela check
 fn sum(xs: List[Int], acc: Int) -> Int {
@@ -15,6 +15,7 @@ fn sum(xs: List[Int], acc: Int) -> Int {
 
 fn main() {
   dbg(sum(List.range(1, 10001), 0)) # 50005000
+  ()
 }
 ```
 
@@ -39,6 +40,7 @@ fn main() {
   label = if 3 > 0 { "あり" } else { "なし" }
   dbg(label) # "あり"
   dbg(validate("ok") escape { Invalid(_) -> "?" }) # "ok"
+  ()
 }
 ```
 
@@ -68,6 +70,7 @@ fn crash() -> Bool {
 fn main() {
   dbg(False && crash()) # False   crash は呼ばれない
   dbg(True || crash()) # True
+  ()
 }
 ```
 
@@ -98,10 +101,33 @@ fn main() {
 
   dbg(List.any(items, |i| i.price > 1000)) # True
   dbg(List.range(0, 5)) # [0, 1, 2, 3, 4]
+  ()
 }
 ```
 
 決まった回数の繰り返しは、`List.range(from, to)` で作ったリストに関数を当てるか、再帰で書きます。リストの関数の一覧は [core のモジュール](/std/core/) にあります。
+
+値を作らず、要素ごとに出力のような効果を起こすだけなら `List.each` を使います。`f` を先頭から順に呼び、`()` を返します。`f` も `()` を返す関数にします。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+
+fn main() {
+  with SystemConsole {
+    out = use Console
+    List.each(List.range(1, 4), |i| out.print_line("step #{i}"))
+  }
+}
+```
+
+```console
+$ emela run main.emel
+step 1
+step 2
+step 3
+```
+
+`f` が失敗すると、そこで止まって残りの要素には呼びません。`Std.Array`、`Std.Map`、`Std.Set` にも同じ `each` があり、それぞれの順序（Map と Set はキーの順）でたどります（[データ型](/guide/data/)）。
 
 ### 再帰
 
@@ -117,14 +143,15 @@ fn gcd(a: Int, b: Int) -> Int {
 fn main() {
   dbg(count_down(5, [])) # [1, 2, 3, 4, 5]
   dbg(gcd(48, 18)) # 6
+  ()
 }
 ```
 
-関数は宣言の順序に関係なく、同じモジュールのほかの関数と自分自身を呼べます。
+トップレベルの関数は宣言の順序に関係なく、同じモジュールのほかの関数と自分自身を呼べます。補助の再帰は、関数の中の [局所関数](/guide/functions/#局所関数) にもできます。
 
 ## 末尾呼び出し
 
-自分自身への末尾呼び出しはすべてのターゲットでスタックを消費しません。suspend な操作を含む関数でも同じで、100万回の再帰でもスタックはあふれません。
+自分自身への末尾呼び出しはすべてのターゲットでスタックを消費しません。局所関数が本体の中で自分の名前を呼ぶときと、suspend な操作を含む関数でも同じで、100万回の再帰でもスタックはあふれません。
 
 ```emela check
 fn count(n: Int, acc: Int) -> Int {
@@ -141,10 +168,11 @@ fn all_positive(xs: List[Int]) -> Bool {
 fn main() {
   dbg(count(1000000, 0)) # 1000000
   dbg(all_positive(List.range(1, 1000000))) # True
+  ()
 }
 ```
 
-末尾位置は関数の本体の最後の式と、そこにある if の分岐、match の腕、`&&` と `||` の右辺です。`x + sum(rest)` のように呼んだ後に計算が残る再帰は末尾呼び出しにならず、深さの上限は実装に依ります。深くなりうるときは、累積の引数を足して末尾呼び出しの形にします。
+末尾位置は関数の本体の最後の式と、そこにある if の分岐、match の腕、ブロックの最後の式、`&&` と `||` の右辺です。無名関数と局所関数の本体は、外側の関数にとっての末尾位置ではありません。`x + sum(rest)` のように呼んだ後に計算が残る再帰は末尾呼び出しにならず、深さの上限は実装に依ります。深くなりうるときは、累積の引数を足して末尾呼び出しの形にします。
 
 `escape` の対象の式と `with` の本体は、最後の式に見えても末尾位置になりません。後で escape の腕やハンドラの release が走りうるので、呼んだ後にまだ仕事が残っています。escape の腕の本体は末尾位置です。
 
@@ -163,6 +191,7 @@ fn retry(n: Int) -> Int {
 
 fn main() {
   dbg(retry(0)) # 3
+  ()
 }
 ```
 
@@ -179,6 +208,7 @@ fn is_odd(n: Int) -> Bool {
 
 fn main() {
   dbg(is_even(10)) # True
+  ()
 }
 ```
 
@@ -205,6 +235,7 @@ fn describe(n: Int) -> String {
 
 fn main() {
   dbg(describe(-2)) # "negative"
+  ()
 }
 ```
 

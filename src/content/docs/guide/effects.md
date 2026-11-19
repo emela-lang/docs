@@ -23,7 +23,7 @@ fn greet(name: String) {
 
 fn main() {
   with SystemConsole, ConsoleLogger {
-    greet("alice")    # [info] hello alice
+    greet("alice") # [info] hello alice
   }
 }
 ```
@@ -143,7 +143,11 @@ $ emela run main.emel
 primary <- ["replica row"]
 ```
 
-レプリカから読んでプライマリに書いています。能力の値（やそれを捕まえたクロージャ）を with の中で下の関数へ渡すのはかまいませんが、with の外へ持ち出すことはできません（[状態と資源](/guide/resources/)）。
+レプリカから読んでプライマリに書いています。
+
+- `use Db` は型で、型を書ける場所ならどこにでも書けます。ハンドラのフィールドの型にもできます。
+- 能力の値に呼べるのは、そのエフェクトの操作だけです。中身を調べる操作はなく、`==` も使えません。
+- 能力の値（やそれを捕まえたクロージャ）を with の中で下の関数へ渡すのはかまいませんが、with の外へ持ち出すと警告（W0402）になります（[状態と資源](/guide/resources/#能力を-with-の外へ持ち出さない)）。
 
 ## with でハンドラを供給する
 
@@ -156,6 +160,8 @@ with SystemConsole, ConsoleLogger { greet("alice") }
 `with H { 本体 }` は、本体の中で H が実装するエフェクトを供給し、本体の値をそのまま返します。供給したエフェクトは本体の R から消えます。H にはハンドラのほか、[layer](/guide/resources/) や[ラベル](/guide/labels/)の項目も書けます。
 
 同じ with に並べたハンドラの依存は、同じ with の別のハンドラが満たしてかまいません。`ConsoleLogger` は Console を使いますが、同じ with の `SystemConsole` が供給するので動きます。並び順は問わず、`with ConsoleLogger, SystemConsole` でもかまいません。同じエフェクトのハンドラを2つ並べたときは後ろが優先され、前のものは初期化もされません。
+
+項目は `x = H` の形でも書けます。本体の中で x はその項目のハンドラの能力の値になり、同じ with のほかの項目が同じエフェクトを供給していても、x はこの項目のハンドラを指します。
 
 ### どのハンドラが使われるか
 
@@ -180,12 +186,12 @@ fn main() {
   with SystemConsole, Outer {
     outer = use Logger
     with Inner {
-      (use Logger).info("a")    # inner: a
-      outer.info("b")           # outer: b
+      (use Logger).info("a") # inner: a
+      outer.info("b") # outer: b
     }
   }
   with SystemConsole, Outer, Inner {
-    (use Logger).info("c")      # inner: c（後ろが優先）
+    (use Logger).info("c") # inner: c（後ろが優先）
   }
 }
 ```
@@ -210,12 +216,12 @@ handler Inner: Logger {
 }
 
 fn main() {
-  say = |m| (use Logger).info(m)          # 囲む with がない
+  say = |m| (use Logger).info(m) # 囲む with がない
   with SystemConsole, Outer {
-    near = |m| (use Logger).info(m)       # Outer に囲まれている
+    near = |m| (use Logger).info(m) # Outer に囲まれている
     with Inner {
-      say("a")     # inner: a（呼んだ場所の Logger）
-      near("b")    # outer: b
+      say("a") # inner: a（呼んだ場所の Logger）
+      near("b") # outer: b
     }
   }
 }
@@ -257,11 +263,55 @@ fn main() {
 }
 ```
 
-- ハンドラは `handler 名前: エフェクト` と書き、そのエフェクトのすべての操作をちょうど1回ずつ実装します。`handler H: A + B` と書けば、1つのハンドラで複数のエフェクトを実装できます。
+- ハンドラは `handler 名前: エフェクト` と書き、そのエフェクトのすべての操作をちょうど1回ずつ実装します。
 - 操作の引数と戻り値の型はエフェクトの宣言から決まるので、ハンドラには書きません。
 - 操作の本体で使うエフェクト（`ConsoleLogger` の Console など）はハンドラの依存になり、with の場所で満たします。`with ConsoleLogger { ... }` だけでは Console が R に残り、`main` ではエラーになります。
 
-フィールドを持つハンドラと、`init`、`release` は[状態と資源](/guide/resources/)で扱います。
+フィールドを持つハンドラと、`init`、`release`、ハンドラのメンバーは[状態と資源](/guide/resources/)で扱います。
+
+### 1つのハンドラで複数のエフェクトを実装する
+
+`handler H: A + B` と書くと、1つのハンドラで複数のエフェクトを実装できます。すべての操作が同じ `self` を共有し、init と release は1回ずつ走ります。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+
+effect Query {
+  fn query(sql: String) -> List[String]
+}
+
+effect Execute {
+  fn execute(sql: String) -> ()
+}
+
+handler MemoryDb: Query + Execute {
+  fn query(sql) { ["row 1", "row 2"] }
+  fn execute(sql) { (use Console).print_line("execute: #{sql}") }
+}
+
+fn count_rows(db: use Query) -> Int { List.length(db.query("select *")) }
+
+fn archive(db: use Query + Execute) {
+  n = count_rows(db)
+  db.execute("delete #{n} rows")
+}
+
+fn main() {
+  with SystemConsole, db = MemoryDb {
+    archive(db)
+  }
+}
+```
+
+```console
+$ emela run main.emel
+execute: delete 2 rows
+```
+
+- 複数のエフェクトの能力の値の型は `use Query + Execute` と書きます。`with db = MemoryDb` の db がこの型です。
+- `use Query + Execute` の値は、エフェクトの少ない `use Query` の引数に渡せます。渡した先では Query の操作しか呼べず、Execute を取り戻す方法はありません。逆に、持っていないエフェクトを求める引数に渡すとエラー（E0452）です。
+- 同じ名前の操作を持つ2つのエフェクトは並べられません（E0450）。
+- [ラベル](/guide/labels/)の `L by H` では、H が実装するエフェクトのうち L の元のエフェクトが使われます。
 
 ## uses 節で R を書く
 
@@ -275,7 +325,7 @@ fn pure_part(x: Int) -> Int uses {} { ... }
 
 要素の数によらず波括弧で `uses { Logger }`、`uses { A, B }`、空なら `uses {}` と書きます。uses 節を書くと、本体がそこにないエフェクトを使ったときにエラーになります。引数の関数型での省略の意味はエラーの `fails` と同じで、`f: fn() -> ()` はどんな効果の関数でも受け取り、`uses {}` を書けば効果のない関数に限ります。
 
-`main` の R は Async を除いて空でなければなりません。使うエフェクトはすべて `main` の中の with で供給します。
+`main` の R は、ホストのエフェクト（Async と ProcessHost）を除いて空でなければなりません。使うエフェクトはすべて `main` の中の with で供給します。
 
 ```emela check=error
 effect Logger {
@@ -291,7 +341,7 @@ fn main() {
 effect `Logger` is not provided in `main`
 ```
 
-Async は「後から再開される」ことを表す組み込みのエフェクトで、ランタイムが供給します（[中断する操作](/guide/suspend/)）。ふつうの `main` は `with Platform { ... }` と書いて、同梱のハンドラをまとめて供給します（[状態と資源](/guide/resources/)）。
+ホストのエフェクトは、ハンドラを書けず、`use` もできない、ホストだけが供給するエフェクトです。Async は「後から再開される」こと（[中断する操作](/guide/suspend/)）、ProcessHost はホストが OS のプロセスであること（引数、標準入出力、環境変数、ファイルシステムを持つ）を表します。どちらも `main` とテスト関数には最初から与えられます。ふつうの `main` は `with Platform { ... }` か `with Process { ... }` と書いて、同梱のハンドラをまとめて供給します（[状態と資源](/guide/resources/#platform-と-process)）。
 
 ## エフェクトの型引数
 
@@ -316,7 +366,7 @@ fn read_both() -> (Int, String) uses { Store[Int], Store[String] } {
 
 fn main() {
   with IntStore, NameStore {
-    _ = dbg(read_both())    # (42, "alice")
+    _ = dbg(read_both()) # (42, "alice")
   }
 }
 ```

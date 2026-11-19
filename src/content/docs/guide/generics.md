@@ -16,6 +16,7 @@ fn main() {
   p = Pair(first: 1, second: "one")
   dbg(swap(p)) # Pair(first: "one", second: 1)
   dbg(swap(Pair(first: True, second: 2.5))) # Pair(first: 2.5, second: True)
+  ()
 }
 ```
 
@@ -37,6 +38,7 @@ fn size[A](t: Tree[A]) -> Int {
 fn main() {
   t = Node(Node(Leaf, 1, Leaf), 2, Leaf)
   dbg(size(t)) # 2
+  ()
 }
 ```
 
@@ -52,6 +54,7 @@ fn group_first[Key, Value](pairs: List[(Key, Value)]) -> Option[Key] {
 
 fn main() {
   dbg(group_first([("a", 1), ("b", 2)])) # Some("a")
+  ()
 }
 ```
 
@@ -66,6 +69,7 @@ fn first[Item](xs: List[Item]) -> Option[Item] { # type parameter `Item` shadows
 
 fn main() {
   dbg(first([1, 2])) # Some(1)
+  ()
 }
 ```
 
@@ -86,12 +90,13 @@ fn main() {
   ints: List[Int] = EMPTY
   strings: List[String] = EMPTY
   dbg(ints) # []
+  ()
 }
 ```
 
 トップレベルの fn は引数の型を省けないので、多相な関数は型引数を宣言して書きます。戻り値の型は推論に任せられます。
 
-ブロックの中の束縛は多相になりません。無名関数を変数に入れて、別の型で2回使うとエラーです。
+ブロックの中の束縛と局所関数は多相になりません。無名関数を変数に入れて、別の型で2回使うとエラーです。
 
 ```emela check=error
 fn main() {
@@ -111,19 +116,38 @@ type mismatch: expected `Int`, found `String`
 
 型引数に `[A: Ord]` の形で制約を書けます。制約は Trait の名前で、`[A: Ord + Show]` のように `+` で並べます。
 
-```emela
+```emela check
 fn max_of[A: Ord](a: A, b: A) -> A {
+  if a > b { a } else { b }
+}
+
+fn describe[A: Show](xs: List[A]) -> String {
+  "#{List.length(xs)} items: #{xs}"
+}
+
+fn main() {
+  dbg(max_of(3, 7)) # 7
+  dbg(max_of("b", "a")) # "b"
+  dbg(describe([1, 2])) # "2 items: [1, 2]"
+  ()
+}
+```
+
+型引数の値には、制約に書いた Trait の働きだけを使えます。Prelude には Eq、Ord、Show の3つの Trait があり、`==` は Eq、`<` は Ord、文字列の補間は Show を求めます。制約を書かずに `<` を使うと、型引数が Ord を満たすとは限らないのでエラーです。
+
+```emela check=error
+fn max_of[A](a: A, b: A) -> A {
   if a > b { a } else { b }
 }
 ```
 
-Prelude には Eq、Ord、Show、Hash の4つの Trait があります。`==` は Eq、`<` は Ord、文字列の補間は Show を求めます。
+```text
+type `A` does not implement `Ord`
+```
 
-:::caution[0.21 で入る予定]
-`trait`、`impl`、`derive` と、制約の検査は 0.21 で入ります。今のコンパイラは `[A: Ord]` の構文を受け付けますが、制約を検査せず、型引数の値に `<` や `>` を使う関数（上の `max_of`）はまだコンパイルできません。`==` と補間は構造のまま、すべての型で動きます。Trait の詳細は [Trait](/guide/traits/) にあります。
-:::
+呼ぶ側では、渡した型が制約を満たすかを検査します。Float は Ord を満たさないので、`max_of(1.5, 2.5)` はエラーです。Trait の詳細は [Trait](/guide/traits/) にあります。
 
-効果の集合に付ける `Immediate` の制約（`[R: Immediate]`）は 0.20 で動きます。中断しない関数だけを受けたい場所で使います（[外部関数](/guide/external/)）。
+効果の集合には `Immediate` の制約（`[R: Immediate]`）を付けられます。中断しない関数だけを受けたい場所で使います（[外部関数](/guide/external/)）。
 
 `List` や `Option` のような型構成子そのものを型引数に渡すこと（高カインド型）はできません。`List.map` と `Option.map` は別々の関数です。
 
@@ -166,6 +190,7 @@ fn main() {
     }
     dbg(r) # Response(status: 404, body: "/x")
   }
+  ()
 }
 ```
 

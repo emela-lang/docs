@@ -1,73 +1,82 @@
 ---
 title: 実装の状況
-description: 0.20.x のコンパイラで動くもの、仕様にあってまだ動かないもの、ターゲットの Tier と C の制限
+description: emela 0.28.0 で動くもの、ターゲットごとの違い、実験的な機能、仕様にあってまだ動かないもの、既知の不具合
 ---
 
-このサイトは 0.20 系の仕様、つまり目標の言語を書いています。コンパイラはまだ仕様の全部を扱えません。今のコンパイラで何が動き、何がまだかをここにまとめます。各ページでも、未実装の機能には「予定」の注記を付けています。
+このサイトは emela 0.28.0（2026-11-18 のリリース）に合わせて書いています。仕様は emela リポジトリの [`spec/`](https://github.com/emela-lang/emela/tree/main/spec) にあり、コンパイラはそのほとんどを実装しています。ここには、0.28.0 で使えるもの、ターゲットごとの違い、実験的な機能、まだ動かないものをまとめます。各版で入ったものは emela リポジトリの [CHANGELOG](https://github.com/emela-lang/emela/blob/main/CHANGELOG.md) にあります。
 
-ここでの「main」は emela リポジトリの main ブランチ（次のリリースに入るもの）を、「0.20.1」は最新のリリースを指します。
+## 版ごとに入ったもの
 
-## 動くもの
-
-| 機能 | 入った版 | 詳しくは |
-|---|---|---|
-| 関数、type、enum、`opaque`、パターンマッチ、末尾呼び出し、パイプ、`List` / `Option`、モジュール、`@test`、`dbg` | 0.20.0 | [束縛と関数](/guide/functions/)、[データ型](/guide/data/) |
-| 後置の `match`、最初の参照で1回だけ評価する `const` | 0.20.0 | [パターンマッチ](/guide/pattern-matching/) |
-| `error`、`fail`、`escape`、fails 節 | 0.20.0 | [エラー](/guide/errors/) |
-| `effect`、`handler`、`use`、`with`、`@external` | 0.20.0 | [エフェクトとハンドラ](/guide/effects/)、[外部関数](/guide/external/) |
-| `suspend fn`、`Async`、`Immediate` | 0.20.0 | [中断する操作](/guide/suspend/) |
-| フィールドを持つハンドラ、`init` と `release`、`layer`、`State` | 0.20.0 | [状態と資源](/guide/resources/) |
-| fiber（`Std.Fiber`、`Std.Cause`、`Std.Deferred`） | 0.20.0 | [並行処理](/guide/concurrency/) |
-| `Console`、`Clock`、`Random`、`Env`、`FileSystem`、`Http` のクライアント、`Path`、`Instant` / `Duration`、`Platform` | 0.20.0 | [標準ライブラリ](/std/overview/) |
-| パターンの負の数のリテラル（`-1`） | 0.20.1 | [パターンマッチ](/guide/pattern-matching/) |
-| エフェクトのラベル（`effect L of E`、`with L by P`） | main | [エフェクトのラベル](/guide/labels/) |
-| C ターゲット（`--target c`、`[build].target`） | main | [ターゲット](/reference/targets/) |
-| `emela doc`（`pub` な宣言の文書を HTML か Markdown に出す） | main | [emela コマンド](/tools/cli/) |
-| `emela check`、`build`、`run`、`test`、`fmt`、`lsp` | 0.20.0 | [emela コマンド](/tools/cli/) |
-
-## 仕様にあって、まだ動かないもの
-
-| 機能 | 予定 | 今の動き |
-|---|---|---|
-| `trait`、`impl`、`derive`、Trait の制約の検査 | 0.21 | `trait` の宣言は通るが、Trait の関数を呼ぶと `not supported yet` になる。`==` と文字列の補間は Trait を見ず、どの型にも構造のまま働く |
-| `Map`、`Set`、`Array` | 0.21 | 名前が見つからないエラーになる |
-| JSON（Encode / Decode） | 0.21 | なし。Trait と一緒に入る |
-| `Semaphore`、`Queue`（同時に走る fiber の数の上限） | 0.21 | なし |
-| `Http` のサーバー | 0.21 | クライアントの `send` だけ |
-| WebAssembly の出力（`--target wasm`） | 0.21 以降 | `--target` に渡せるのは `js` と `c` だけ。`[build].target = "wasm"` はエラー |
-| Pome の依存（`[dependencies]`、`[replace]`、`Pome.lock`） | 未定 | `Pome.toml` は有無と `[build].target` だけを読む。ほかの表は黙って無視する |
-| `emela pome add` / `install` / `update` / `remove` / `list`、`emela new` | 未定 | コマンドがない |
-| capture set（能力、fiber のハンドル、`Deferred` の持ち出しの静的な検査） | 0.22 | 一部を実行時に検査し、defect にする（`handler ... was used after release`、`fiber scope was used after it ended`） |
-| `Bytes`（バイナリのデータ） | 未定 | `FileSystem` と `Http` は UTF-8 のテキストだけを扱う |
-| ブラウザで動く JS | 未定 | JS ターゲットは Node.js 18 以降、Deno、Bun を前提にする |
-
-0.20 で実行時の defect になる持ち出しは、0.22 でコンパイル時のエラーになります。0.20 でエラーになるプログラムは 0.22 でもエラーのままです。
+| 版 | 入ったもの |
+|---|---|
+| 0.20 | 言語の土台。データ型、パターンマッチ、モジュール、型付きのエラーとエフェクト、`suspend fn`、状態を持つハンドラ、fiber、ファイル、`Http` のクライアント、`@test` |
+| 0.21 | WebAssembly と C のターゲット、`emela doc`、エフェクトのラベル |
+| 0.22 | 依存（`emela pome`）、`@external` のファイルを出力にコピーする |
+| 0.23 | テストのルート `test/` と `[dev-dependencies]`、言語サーバーの機能の追加 |
+| 0.24 | `trait`、`impl`、`derive`（`Eq`、`Ord`、`Show`）、`Std.Map`、`Std.Set`。テストの補助は Pome の [brix](https://github.com/emela-lang/brix) に移った |
+| 0.25 | HTTP サービス（`@entry(Http.serve)`）、`@export`、ハンドラの `init` の引数、WASM ですべての構文が動く、`emela test --reporter`、`emela new` |
+| 0.26 | メソッド呼び出し `x.f(a)`、`Std.Bytes` |
+| 0.27 | 無名関数 `\|x\| e`、`uses { R }`、`escape` の `_`、`Std.Array`、`Std.Exit` |
+| 0.28 | `--target native`、`Std.Process`（引数、標準入出力、`main` の終了コード）、局所関数、`each`、`Std.Json` と `derive Encode, Decode`、`Semaphore` と `Queue`、能力の型 `use E`、1つのハンドラで複数のエフェクトを実装する、handler member、Bun、`emela doctor`、Windows 向けのリリース、ブラウザで動くコンパイラ（[Playground](/playground/)） |
 
 ## ターゲット
 
-| ターゲット | Tier | 状況 | 実行に要るもの |
+| ターゲット | Tier | 0.28.0 での状況 | 実行に要るもの |
 |---|---|---|---|
-| JS | 1 | 既定。実装済みの機能がすべて動く | Node.js 18 以降 |
-| WASM | 1 | 出力はまだない | |
-| C | 2 | main にある。次のリリースで入る | C11 のコンパイラ（`cc`、`EMELA_CC`） |
+| `js` | 1 | 既定。すべての構文と std が動く | Node.js 22 以降か Bun 1.4.3 以降 |
+| `wasm` | 1 | すべての構文が動く。標準入力と `Http` のクライアントはまだない。利用者の `@external(wasm, ...)` と `@export(wasm, ...)` はまだ書けない | Wasmtime 49 以降 |
+| `native` | 2 | 0.28 で `c` から改名した。書記素クラスタの関数、コールバックを取る外部関数、境界の `Bytes` と `Array`、HTTP サービス、`Http` のクライアントがまだない | C11 のコンパイラ、POSIX の C ヘッダとライブラリ |
 
-同じプログラムはどのターゲットでも同じ観測可能な結果を返すことを仕様で求めています。Tier 2 のターゲットも意味は Tier 1 と同じで、同じテストスイートを通すことを条件にします。新しい機能だけは Tier 1 より遅れて入ってかまいません。
+- `--target c` と `[build].target = "c"` は `native` の古い名前として読み、警告 W0903 を出します。0.29 で取り除きます。
+- native は macOS（arm64）と Linux（x86_64、glibc）だけで動きます。Windows の `emela` は JS と WASM のターゲットを使えます。
+- 細かな違いは [ターゲット](/reference/targets/) にあります。
 
-C ターゲットは、出力した C と C のランタイムを `cc` でコンパイルして native の実行ファイル `target/emela/c/main` を作ります。対象は macOS（arm64）と Linux（x86_64）で、Windows は後の版です。
+## 実験的な機能
 
-### C ターゲットの今の制限
+仕様の中には、まだ安定していない「実験的な機能」があります。互換性の保証の外にあり、どの版でも変わったり取り除かれたりします。Pome ごとに `Pome.toml` の `[experimental]` で有効にするか、コマンドの1回の実行だけ `--experimental-<名前>` で有効にします。
 
-C ターゲットでも、純粋な部分、エラーとエフェクト、`suspend fn`、fiber、`Console`、`Clock`、`Random`、`Env`、`FileSystem`、テストは動きます。次はまだです。
+```toml
+[experimental]
+capture-checking = true
+```
 
-| 使えないもの | 出る診断 |
+```sh
+emela check --experimental-capture-checking
+```
+
+| 名前 | 入った版 | 変えること |
+|---|---|---|
+| `capture-checking` | 0.28 | 能力を持つ値が、それを供給する `with` か `Fiber.scope` の外へ出ると、警告 W0402 の代わりにコンパイル時のエラー E0444 にする |
+
+- 知らない名前、安定した機能、取り除いた機能の名前は警告 W0206 です。
+- フラグは `check`、`build`、`run`、`test` が受け取ります。言語サーバーは `Pome.toml` だけを見るので、フラグだけで有効にした機能はエディタの診断に出ません。
+- 0.29 では `capture-checking` を既定にし、W0402 と実行時の検査を外す予定です（[emela#666](https://github.com/emela-lang/emela/issues/666)）。
+
+## 仕様にあって、まだ動かないもの
+
+| 機能 | 0.28.0 での動き |
 |---|---|
-| `String.length`、`String.chars` など、書記素クラスタの表が要る関数 | `` `String.length` needs the Unicode grapheme cluster tables, which target `c` does not support yet `` |
-| `String.split(s, "")` を ASCII でない文字列に使う | 実行時の defect |
-| `Http`（`SystemHttp` に C の実装がない） | `has no @external for target c` のエラー |
-| コールバックを受け取る外部関数 | コンパイル時のエラー |
+| 持ち出しの静的な検査（capture set） | 既定は警告 W0402 だけで、実際に使うと実行時の defect（`handler ... was used after release`、`fiber scope was used after it ended`）になる。`capture-checking` で E0444 にできる |
+| 相互再帰の末尾呼び出しの警告 | 出ない（[emela#265](https://github.com/emela-lang/emela/issues/265)） |
+| 能力の型の組み込み Trait `Capability` | 採択済みで、まだない（``cannot find trait `Capability` in this scope``） |
+| `emela pome publish` | コマンドがない（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできる |
+| `FileSystem` と `Http` でのバイナリ | `Std.Bytes` はあるが、`FileSystem` と `Http` は UTF-8 のテキストだけを扱う |
+| derive できる Trait | `Eq`、`Ord`、`Show`、`Encode`、`Decode`、`ObjectKey`、`Shaped` だけ。Trait の作者が導出規則を書く構文は未決 |
+| ブラウザで動く JS | ターゲットではない。JS の出力はサーバーのホストを前提にする |
 
-`with Platform` と書いても、`Http` を実際に使わなければ C ターゲットでビルドできます。たどれない関数の `@external` は検査しないためです。
+仕様でまだ決まっていない点は [`spec/open-questions.md`](https://github.com/emela-lang/emela/blob/main/spec/open-questions.md) にあります。
+
+## 既知の不具合
+
+0.28.0 で分かっている、仕様と違う動きです。
+
+| 不具合 | 回避のしかた |
+|---|---|
+| 同じ `with` に `SystemConsole` と `L by P` を並べ、`P` のハンドラが自分でも `Console` を使うと、実行時に落ちる（JS では `TypeError`、native では `internal error`）（[emela#679](https://github.com/emela-lang/emela/issues/679)） | `with SystemConsole { with L by P { ... } }` のように `with` を入れ子にする |
+| 仕様は WASM の `SystemClock.sleep` と `Std.FileSystem` をまだ使えないとしているが、0.28.0 では動く | 仕様の側を直す |
+
+ほかの不具合は [GitHub の issue](https://github.com/emela-lang/emela/issues) にあります。
 
 ## 版の方針
 
-0.y.z の範囲では、minor の版で言語に壊れる変更が入ることがあります。変更は emela リポジトリの CHANGELOG に記録しています。
+0.y.z の範囲では、minor の版で言語に壊れる変更が入ることがあります。変更は CHANGELOG に記録しています。実験的な機能は、patch の版でも変わることがあります。

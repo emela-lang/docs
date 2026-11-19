@@ -21,11 +21,11 @@ import Email
 import Http.JsonClient.{get}
 
 fn main() {
-  dbg(get("/users"))                  # "GET /users"
+  dbg(get("/users")) # "GET /users"
   email = Email.parse("alice@example.com") escape {
     Email.InvalidEmail(_) -> panic("invalid")
   }
-  dbg(Email.to_string(email))         # "alice@example.com"
+  dbg(Email.to_string(email)) # "alice@example.com"
 }
 ```
 
@@ -55,13 +55,13 @@ emela run               # プロジェクト: Pome.toml を探して src/main.em
 
 `emela run` にファイルを渡して `Pome.toml` が見つからなければ、そのファイルを単独で動かします。このときは同じディレクトリの直下の `.emel` だけをモジュールとして import できます。
 
-`Pome.toml` の書き方と依存の扱いは [Pome](/tools/pome/) にあります。今のコンパイラは `Pome.toml` の有無と `[build].target` だけを見るので、空のファイルでもプロジェクトになります。
+`Pome.toml` の書き方と依存の扱いは [Pome](/tools/pome/) にあります。
 
 ## import
 
 ```emela
-import Http.Client                  # Client.get(...) と呼ぶ
-import Data.Json.{Json, decode}     # Json と decode を修飾なしで使う
+import Http.Client # Client.get(...) と呼ぶ
+import Data.Json.{Json, decode} # Json と decode を修飾なしで使う
 ```
 
 `import Http.Client` は最後の名前 `Client` をスコープに入れるので、関数は `Client.get(...)` と呼びます。波括弧で列挙した名前は修飾なしで使えます。全部を取り込む `*` や、別名を付ける `as` はありません。
@@ -87,9 +87,10 @@ fn main() {
   xs: Option[List[Int]] = Some([1, 2])
   with SystemConsole {
     out = use Console
-    out.print_line("#{List.length([1, 2, 3])}")   # 3
+    out.print_line("#{List.length([1, 2, 3])}") # 3
   }
-  _ = dbg(xs)                                     # Some([1, 2])
+  dbg(xs) # Some([1, 2])
+  ()
 }
 ```
 
@@ -111,7 +112,7 @@ pub fn get(url: String) -> String {
   "GET #{url}"
 }
 
-fn secret() -> Int {    # 非公開
+fn secret() -> Int { # 非公開
   1
 }
 ```
@@ -155,7 +156,7 @@ fn main() {
   email = Email.parse("alice@example.com") escape {
     InvalidEmail(input:) -> panic("invalid: #{input}")
   }
-  dbg(show(email))      # "alice@example.com"
+  dbg(show(email)) # "alice@example.com"
 }
 ```
 
@@ -183,7 +184,7 @@ fn show(email: Email.Email) -> String {
 }
 ```
 
-`Email.Email` と書くか、`import Email.{Email}` で型を取り込みます。波括弧の形でも `Email` はモジュールとしてスコープに入るので、`Email.parse(...)` はそのまま書けます。
+`Email.Email` と書くか、`import Email.{Email}` で型を取り込みます。波括弧の形でも `Email` はモジュールとしてスコープに入るので、`Email.parse(...)` はそのまま書けます。std の `import Std.Map.{Map}` も同じで、型 `Map` と `Map.get(...)` のような関数の両方が使えます。
 
 名前空間と名前の引き方の細かい規則は [モジュールと名前の解決](/reference/modules/) にあります。
 
@@ -193,12 +194,13 @@ fn show(email: Email.Email) -> String {
 
 ```emela check
 enum Maybe {
-  Some(Int)       # `Some` shadows the prelude's `Some`
+  Some(Int) # `Some` shadows the prelude's `Some`
   Nothing
 }
 
 fn main() {
-  _ = dbg(Some(1))    # このモジュールの Some
+  dbg(Some(1)) # このモジュールの Some
+  ()
 }
 ```
 
@@ -206,8 +208,10 @@ fn main() {
 
 ## 依存した Pome のモジュール
 
-`Pome.toml` の `[dependencies]` に書いた Pome のモジュールは、その Pome のルート名の下に見えます（`Quince`、`Quince.Router`）。ルート名の決まり方と付け替え方は [Pome](/tools/pome/) にあります。
+`Pome.toml` の `[dependencies]` に書いた Pome のモジュールは、その Pome のルート名の下に見えます（`Quince`、`Quince.Router`）。依存は `emela pome add` で足し、`Pome.lock` に解決した版が記録されます。
 
-:::caution[実装の状況]
-依存（`[dependencies]`、`Pome.lock`、`emela pome` のコマンド）は仕様が決まっていますが、今のコンパイラはまだ実装していません。
-:::
+```sh
+emela pome add github.com/emela-lang/quince
+```
+
+import できるのは自分の `[dependencies]` に書いた Pome だけで、依存の依存は見えません。ルート名の決まり方と付け替え方は [Pome](/tools/pome/) にあります。

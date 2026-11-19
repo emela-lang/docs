@@ -1,6 +1,6 @@
 ---
 title: 束縛と関数
-description: 束縛と束縛し直し、ブロック、fn の宣言、引数名と名前付き引数、無名関数、関数の値、パイプ
+description: 束縛と束縛し直し、ブロック、fn の宣言、局所関数、引数名と名前付き引数、無名関数、関数の値、パイプ
 ---
 
 文は束縛（`パターン = 式`）だけで、ほかはすべて式です。関数は `fn` で宣言し、本体のブロックの最後の式が戻り値になります。
@@ -16,6 +16,7 @@ fn main() {
   dbg(area(w, h)) # 12
   dbg(area(width: 5, height: 2)) # 10
   dbg([1, 2, 3] |> List.map(|n| n * n)) # [1, 4, 9]
+  ()
 }
 ```
 
@@ -35,6 +36,7 @@ fn main() {
 
   pairs: List[(String, Int)] = List.zip(["a", "b"], [1, 2])
   dbg(pairs) # [("a", 1), ("b", 2)]
+  ()
 }
 ```
 
@@ -54,6 +56,7 @@ fn main() {
   user = User(id: 7, name: "alice")
   User(name:, ..) = user # name を取り出す
   dbg(name) # "alice"
+  ()
 }
 ```
 
@@ -71,6 +74,7 @@ fn main() {
     a + b
   }
   dbg(total) # 3
+  ()
 }
 ```
 
@@ -100,14 +104,37 @@ fn main() {
   dbg(greet("emela")) # "hello, emela"
   dbg(find(1) escape { NotFound(_) -> User(id: 0, name: "guest") })
   # User(id: 1, name: "alice")
+  ()
 }
 ```
 
-トップレベルの fn では引数の型を必ず書きます。戻り値の型と、失敗を書く `fails` 節、エフェクトを書く `use` 節は省けて、省けばコンパイラが推論します。
+fn では引数の型を必ず書きます。戻り値の型と、失敗を書く `fails` 節、エフェクトを書く `uses` 節は省けて、省けばコンパイラが推論します。
 
-戻り値の型を書いたときは、`fails` 節に書いていないエラーを起こせません。`-> User` だけなら「失敗しない」という意味です（[エラー](/guide/errors/)）。`use` 節は書かなくても推論します（[エフェクト](/guide/effects/)）。
+戻り値の型を書いたときは、`fails` 節に書いていないエラーを起こせません。`-> User` だけなら「失敗しない」という意味です（[エラー](/guide/errors/)）。`uses` 節は書かなくても推論します（[エフェクト](/guide/effects/)）。
 
 `return` はありません。途中で抜けたいときは if や match で分岐を分けます。
+
+## 局所関数
+
+ブロックの中にも `fn` で名前の付いた関数を書けます。書き方はトップレベルの fn と同じで、引数の型を書きます。
+
+```emela check
+fn sum_to(n: Int) -> Int {
+  fn go(i: Int, acc: Int) -> Int {
+    if i > n { acc } else { go(i + 1, acc + i) } # n は外側の引数
+  }
+  go(1, 0)
+}
+
+fn main() {
+  dbg(sum_to(100)) # 5050
+  ()
+}
+```
+
+局所関数の名前は、宣言の後と自分自身の本体の中で見えます。自分を呼べるので、補助の再帰をその関数の中に閉じ込められます。自分自身への末尾呼び出しはスタックを消費しません（[制御の流れ](/guide/control-flow/)）。宣言の時点で見えている変数は、無名関数と同じく捕まえます。
+
+型引数は宣言できず、局所関数自体は多相になりません。外側の fn の型引数は使えます。宣言より前からは見えないので、局所関数どうしの相互再帰は書けません。ブロックの最後の文にも置けません。
 
 ## 引数名と名前付き引数
 
@@ -123,6 +150,7 @@ fn main() {
   dbg(connect("localhost", port: 5432)) # "localhost:5432"
   dbg(connect(host: "localhost", port: 5432)) # "localhost:5432"
   dbg(connect(port: 5432, host: "localhost")) # "localhost:5432"
+  ()
 }
 ```
 
@@ -141,12 +169,13 @@ fn main() {
   y = 2
   dbg(NotFound(id:)) # NotFound(id: 42)
   dbg(Point(x:, y:)) # Point(x: 1, y: 2)
+  ()
 }
 ```
 
 構成子も関数と同じ規則に従うので、`Point(1, 2)` と `Point(x: 1, y: 2)` のどちらでも書けます。パターンでも `Point(x:, y:)` は `x` と `y` を束縛します。
 
-名前付きで呼べるのは、fn と構成子を名前で指して呼ぶときと、`log.info(msg: "hi")` のように能力の値の操作を呼ぶときです。局所変数に入れた関数の値は仮引数の名前を持たないので、位置引数で呼びます。
+名前付きで呼べるのは、fn（局所関数も含む）と構成子を名前で指して呼ぶときと、`log.info(msg: "hi")` のように能力の値の操作を呼ぶときです。局所変数に入れた関数の値は仮引数の名前を持たないので、位置引数で呼びます。
 
 ```emela check=error
 fn main() {
@@ -171,6 +200,9 @@ fn main() {
   dbg(List.fold([1, 2, 3], from: 0, f: |acc, n| acc + n)) # 6
   typed = |s: String| String.length(s)
   dbg(typed("abc")) # 3
+  later = || 6 * 7
+  dbg(later()) # 42
+  ()
 }
 ```
 
@@ -178,9 +210,25 @@ fn main() {
 
 外側の変数も捕まえられます。変数は不変なので、捕まえた値が後で変わることはありません。
 
+引数の位置には、必ず照合に成功するパターンも書けます。タプルの要素や構成子のフィールドを、引数を受けたその場で取り出せます。
+
+```emela check
+type User(id: Int, name: String)
+
+fn main() {
+  pairs = [("a", 1), ("b", 2)]
+  dbg(List.map(pairs, |(key, value)| "#{key}=#{value}")) # ["a=1", "b=2"]
+  users = [User(id: 1, name: "alice")]
+  dbg(List.map(users, |User(name:, ..)| name)) # ["alice"]
+  ()
+}
+```
+
+無名関数は、呼び出しの引数や束縛の右辺に置いて使います。ブロックの途中に無名関数だけの文を置くと、値が必ず捨てられるのでエラーです。
+
 ## 関数の値
 
-トップレベルの fn と、フィールドのある構成子は、呼ばずに名前を書くと関数の値になります。
+fn（トップレベルと局所）と、フィールドのある構成子は、呼ばずに名前を書くと関数の値になります。
 
 ```emela check
 type Point(x: Int, y: Int)
@@ -200,6 +248,7 @@ fn main() {
   dbg(List.fold([1, 2, 3], from: 0, f: add)) # 6
   make: fn(Int, Int) -> Point = Point
   dbg(make(1, 2)) # Point(x: 1, y: 2)
+  ()
 }
 ```
 
@@ -219,6 +268,7 @@ fn main() {
   dbg(add3(4)) # 7
   show_double = compose(|n| n * 2, Int.to_string)
   dbg(show_double(21)) # "42"
+  ()
 }
 ```
 
@@ -242,6 +292,7 @@ fn main() {
   dbg(total) # 7
 
   "emela" |> String.length |> dbg # 5
+  ()
 }
 ```
 
@@ -271,6 +322,7 @@ fn main() {
   dbg(ok) # [1, 2]
   bad = List.map([1, -2], check) escape { Negative(n:) -> [n] }
   dbg(bad) # [-2]
+  ()
 }
 ```
 

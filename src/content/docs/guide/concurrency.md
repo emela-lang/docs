@@ -1,6 +1,6 @@
 ---
 title: 並行処理
-description: fiber、組み合わせ関数、Fiber.scope と fork、中断、Exit と Cause、Deferred、持ち出しの禁止
+description: fiber、組み合わせ関数、Fiber.scope と fork、中断、Exit と Cause、Deferred、Semaphore、Queue、持ち出しの禁止
 ---
 
 複数の待ちを重ねるには fiber を使います。fiber は1つのスレッドの上で協調的に切り替わる軽量な実行単位で、必ずスコープの中で起動し、スコープを抜けるまでに終わります。`async` や `await` のような専用の構文はなく、すべて `Std.Fiber` の関数で書きます。
@@ -92,7 +92,7 @@ safe: 10, racy: 1
 - `Fiber.race(fs)` は最初に終わったものを採り、残りを中断します。最初に終わったものがエラーなら、そのエラーで失敗します。
 - `Fiber.timeout(ms, f)` は `f` を `ms` ミリ秒まで待ちます。間に合えば `Some`、間に合わなければ `f` を中断して `None` です。時間は Clock で測ります。
 
-どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `|| ...` で包んで渡します。型は [State・Fiber・Deferred](/std/state-fiber/) にあります。
+どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `|| ...` で包んで渡します。型は [State と Fiber](/std/state-fiber/) にあります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -165,9 +165,7 @@ $ echo $?
 1
 ```
 
-:::caution[0.21 で入る予定]
-同時に走る数の上限（「1000件を最大10並行で」）は、`Semaphore` と `Queue` と一緒に入ります。
-:::
+同時に走る数に上限を付ける（「1000件を最大10並行で」）には [Semaphore](#semaphore) を使います。
 
 ## Fiber.scope と fork
 
@@ -207,7 +205,7 @@ scope returned 1
 
 本体が値を返した時点で残っている子は中断され、すべての子の巻き戻りが終わってから scope が値を返します。親より長生きする fiber はないので、常駐する処理は main の直下のスコープで fork します。子の値を待つには `Fiber.join(fiber)` を使います。待つのは join を呼んだ fiber だけで、ほかの fiber はその間も進みます。
 
-fork できるのは scope に渡した関数と、そこから呼ばれた関数の中だけです。補助の関数はスコープを引数で受けず、`use Scope` で受けます。
+fork できるのは scope に渡した関数と、そこから呼ばれた関数の中だけです。補助の関数は `use Scope` でスコープを受けます。どのスコープに fork するかは、関数の R の Scope に出ます。
 
 ### 子が失敗したとき
 
@@ -461,9 +459,105 @@ rounds: 3
 
 外部関数のコールバックの中では待てないので、コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送り、fiber の側で扱います。
 
+## Semaphore
+
+Semaphore は、あるコードを同時に実行する fiber の数を絞ります。決まった数の許可を持ち、fiber は許可を取っている間だけそのコードを実行します。`Fiber.semaphore(n)` で作り、Deferred と同じく作ったスコープに属します。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+import Std.Clock.{Clock, SystemClock}
+import Std.Fiber.{Fiber}
+import Std.Semaphore.{Semaphore}
+
+fn load(id: Int) -> Int uses { Clock, Console } {
+  (use Console).print_line("start #{id}")
+  (use Clock).sleep(100)
+  (use Console).print_line("end #{id}")
+  id * 10
+}
+
+fn main() {
+  with SystemConsole, SystemClock {
+    total = Fiber.scope(|| {
+      db = Fiber.semaphore(2)
+      xs = Fiber.map([1, 2, 3, 4], |id| Semaphore.with_permit(db, || load(id)))
+      List.fold(xs, 0, |a, b| a + b)
+    })
+    (use Console).print_line("total #{total}")
+  }
+}
+```
+
+```console
+$ emela run main.emel
+start 1
+start 2
+end 1
+start 3
+end 2
+start 4
+end 3
+end 4
+total 100
+```
+
+- `Semaphore.with_permit(s, f)` は許可が空くまで待ってから1つ取り、`f` を実行して返します。`f` が値、エラー、defect、中断のどれで終わっても許可は返り、`f` の中の with の release はその前に走ります。
+- `with_permits(s, n, f)` は n 個の許可を取ります。待たずに取れるときだけ実行する `try_with_permit`（取れなければ `None`）と、空いている数を返す `available` もあります。
+- 待っている fiber は待ち始めた順に許可を受け取ります。
+- `f` の中で fork した fiber は許可を持ちません。
+
+## Queue
+
+Queue は fiber の間で値を順に受け渡します。決まった数まで値をためられ、閉じて「もう値は来ない」と知らせられます。`Fiber.queue(capacity)` で作り、作ったスコープに属します。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+import Std.Clock.{SystemClock}
+import Std.Fiber.{Fiber}
+import Std.Queue.{Queue, QueueClosed}
+
+# キューが閉じて空になるまで取り出す
+fn drain(jobs: Queue[String], done: Int) {
+  Some(Queue.take(jobs)) escape { QueueClosed -> None } match {
+    Some(job) -> {
+      (use Console).print_line("job #{job}")
+      drain(jobs, done + 1)
+    }
+    None -> done
+  }
+}
+
+fn main() {
+  with SystemConsole, SystemClock {
+    n = Fiber.scope(|| {
+      jobs = Fiber.queue(2)
+      worker = Fiber.fork(|| drain(jobs, 0))
+      List.map(["a", "b", "c"], |j| Queue.offer(jobs, j))
+      Queue.close(jobs)
+      Fiber.join(worker)
+    }) escape {
+      QueueClosed -> 0
+    }
+    (use Console).print_line("handled #{n}")
+  }
+}
+```
+
+```console
+$ emela run main.emel
+job a
+job b
+job c
+handled 3
+```
+
+- `Queue.offer(q, v)` は末尾に足し、いっぱいの間は待ちます。`Queue.take(q)` は先頭を取り出し、空の間は待ちます。待たない版の `try_offer`（足せたら True）と `poll`（`Some` か `None`）もあります。
+- `Queue.close(q)` で閉じると、残っている値は `take` で順に取り出せ、空になった後の `take` と、閉じた後の `offer` は `QueueClosed` で失敗します。
+- 待っている fiber は待ち始めた順に進みます。値は `offer` を始めた順に出てきます。
+
 ## スコープの外へ持ち出せないもの
 
-Scope の能力、fiber のハンドル（`Fiber[A]`）、Deferred は、スコープの外へ持ち出せません。
+Scope の能力、fiber のハンドル（`Fiber[A]`）、Deferred、Semaphore、Queue は、スコープの外へ持ち出せません。
 
 ```emela check=error
 import Std.Clock.{Clock, SystemClock}
@@ -483,7 +577,7 @@ fn main() {
 error: a `Fiber` cannot leave the `Fiber.scope` that started it
 ```
 
-`Option[Fiber[User]]` のように、値の型のどこかに `Fiber` か `Deferred` が含まれていればエラーです。型で止まらない持ち出し（State に入れる、クロージャで捕まえて返す）は実行時に検査します。
+`Option[Fiber[User]]` のように、値の型のどこかに `Fiber`、`Deferred`、`Semaphore`、`Queue` のどれかが含まれていればエラー（E0425）です。型で止まらない持ち出し（State に入れる、クロージャで捕まえて返す）は実行時に検査します。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -519,10 +613,10 @@ warning[W0402]: a value that holds `Scope` leaves the `Fiber.scope` that provide
 defect: fiber was joined after its scope ended
 ```
 
-コンパイラは値がどの能力を抱えているか（capture set）を追跡し、スコープの外へ出る値が Scope を抱えていれば W0402 の警告を出します。`--experimental-capture-checking` を付けると、この警告はエラー（E0444）になります。
+コンパイラは値がどの能力を抱えているか（capture set）を追跡し、スコープの外へ出る値が Scope を抱えていれば W0402 の警告を出します。実験的な機能 `capture-checking` を有効にすると、この警告はエラー（E0444）になります（[状態と資源](/guide/resources/#能力を-with-の外へ持ち出さない)）。
 
 ## 並列はない
 
-複数のスレッドでの並列実行はありません。CPU を使う計算を fiber に分けても速くなりません。将来は純粋な関数に限った並列の仕組みと、ヒープを分けたワーカーの間のメッセージを検討しています。スレッドやロックを言語に出すことはしません。
+複数のスレッドでの並列実行はありません。CPU を使う計算を fiber に分けても速くなりません。スレッドやロックを言語に出すことはしません。
 
 並行するコードは仮の時刻で動く TestClock でテストできます（[テスト](/guide/testing/)）。

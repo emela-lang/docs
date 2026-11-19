@@ -1,9 +1,13 @@
 ---
 title: 文法
-description: Emela 0.20 の EBNF。字句、モジュールと宣言、型、式、パターンと、文法の外で課す制約
+description: Emela の EBNF。字句、モジュールと宣言、型、式、パターンと、文法の外で課す制約
 ---
 
-Emela の構文を EBNF で書いたものです。仕様の決定をそのまま EBNF に落とした初版で、formatter の実装で曖昧さを洗い出し、適合テストとともに確定させていきます。
+:::note[規範は仕様]
+このページは仕様の [文法](https://github.com/emela-lang/emela/blob/main/spec/grammar.md) を日本語でまとめたものです。規範となるのは英語の [仕様](https://github.com/emela-lang/emela/tree/main/spec) で、食い違うときは仕様に従います。
+:::
+
+Emela の構文を EBNF で書いたものです。仕様の決定を EBNF に落とした初版で、formatter の実装で曖昧さを洗い出し、適合テストとともに確定させていきます。
 
 字句の細かな規則（名前のクラス、エスケープ、行の継続）は [字句と予約語](/reference/lexical/) にあります。
 
@@ -11,7 +15,7 @@ Emela の構文を EBNF で書いたものです。仕様の決定をそのま�
 
 - `{ x }` は0回以上の繰り返し、`[ x ]` は省略可能、`|` は選択を表します。引用符で囲んだものは終端記号です。
 - `NL` は、文の区切りとして働く改行です（[字句と予約語](/reference/lexical/) の行の継続規則）。継続と判定された改行、`(` `[` の内側の改行、効果の集合（`uses { ... }`）の波括弧の内側の改行は、字句解析の段階で取り除かれます。
-- 並びの末尾のカンマはどこでも許されます。規則では省略しています。
+- 並びの末尾のカンマはどこでも許されます。規則では省略しています。formatter は、1行に収まる並びでは末尾のカンマを取り、複数行に分けた並びでは付けます。
 
 括弧の役割は種類ごとに決まっています。`xs[0]` のような添字の構文はありません。
 
@@ -28,9 +32,7 @@ type Point(
 )
 
 fn main() {
-  xs = [1, 2, 3,]
-  dbg(Point(x: 1, y: 2,))
-  dbg(xs)
+  dbg(Point(x: 1, y: 2))
   ()
 }
 ```
@@ -74,7 +76,8 @@ item         = fn_decl | type_decl | enum_decl | error_decl | const_decl
              | effect_decl | handler_decl | layer_decl | trait_decl
 
 annotation   = "@" lower_name [ "(" annot_arg { "," annot_arg } ")" ]
-annot_arg    = lower_name | literal | lower_name ":" literal
+annot_arg    = lower_name | literal | lower_name ":" literal | qualified
+qualified    = type_name { "." type_name } "." lower_name
 
 fn_decl      = [ "suspend" ] "fn" lower_name [ type_params ]
                "(" [ params ] ")" [ signature ] [ block ]
@@ -88,8 +91,8 @@ bound        = type_ref
 
 type_decl    = "type" type_name [ type_params ] [ "(" [ fields ] ")" ] [ derive ]
 enum_decl    = "enum" type_name [ type_params ] "{" variant { sep variant } "}" [ derive ]
-variant      = type_name [ "(" ( fields | type { "," type } ) ")" ]
-error_decl   = "error" type_name [ "(" [ fields ] ")" ]
+variant      = { annotation } type_name [ "(" ( fields | type { "," type } ) ")" ]
+error_decl   = "error" type_name [ "(" [ fields ] ")" ] [ derive ]
 fields       = field { "," field }
 field        = { annotation } lower_name ":" type
 derive       = "derive" type_ref { "," type_ref }
@@ -97,19 +100,25 @@ sep          = "," | NL
 
 const_decl   = "const" upper_name [ ":" type ] "=" expr
 
-effect_decl  = "effect" type_name [ type_params ] "{" { op_sig NL } "}"
-             | "effect" type_name "of" type_ref [ "default" ]      (* ラベル *)
+effect_decl  = "effect" type_name [ type_params ] "{" { effect_member NL } "}"
+             | "effect" type_name "of" type_ref [ "[" type { "," type } "]" ] [ "default" ]   (* ラベル *)
+effect_member = op_sig | member_sig
 op_sig       = [ "suspend" ] "fn" lower_name [ type_params ] "(" [ params ] ")"
                "->" type [ "fails" error_set ]     (* type_params は組み込みのエフェクトだけ *)
+member_sig   = [ "suspend" ] "handler" type_name "(" [ params ] ")" ":" effect_ref { "+" effect_ref }
+               [ "fails" error_set ]                              (* handler メンバー *)
 
 handler_decl = "handler" type_name [ "(" [ fields ] ")" ]
                ":" effect_ref { "+" effect_ref } "{" { handler_item NL } "}"
 effect_ref   = type_ref [ "[" type { "," type } "]" ]
-handler_item = "init" block
+handler_item = "init" [ "(" [ params ] ")" ] block
              | "release" block
              | [ "suspend" ] "fn" lower_name "(" [ lower_name { "," lower_name } ] ")" block
+             | handler_decl                                      (* 内側の handler *)
 
-layer_decl   = "layer" type_name "{" type_ref { sep type_ref } "}"
+layer_decl   = "layer" type_name "{" supply { sep supply } "}"
+supply       = type_ref [ "." type_name ] [ "(" [ args ] ")" ]
+             | lower_name "." type_name "(" [ args ] ")"          (* 能力の handler メンバー *)
 
 trait_decl   = "trait" type_name [ ":" bound { "+" bound } ] "{" { trait_item NL } "}"
 trait_item   = "fn" lower_name "(" [ params ] ")" [ signature ] [ block ]
@@ -161,23 +170,72 @@ fn main() {
 }
 ```
 
+effect には操作のほかに handler メンバーを宣言できます。handler メンバーは、その effect のどの handler も内側の handler として持つ handler の名前です。with の項目 `x = E.M(引数)` で開き、x はその handler の能力になります。
+
+```emela check
+error Missing(path: String)
+
+effect Lines {
+  fn next() -> Option[String]
+}
+
+effect Files {
+  fn exists(path: String) -> Bool
+  handler Open(path: String): Lines fails Missing
+}
+
+handler MemoryFiles: Files {
+  fn exists(path) { path == "a.txt" }
+
+  handler Open(left: Int, path: String): Lines {
+    init(path: String) {
+      if path != "a.txt" { fail Missing(path:) }
+      Self(left: 2, path:)
+    }
+
+    fn next() {
+      if self.left > 0 { Some(self.path) } else { None }
+    }
+  }
+}
+
+fn first(lines: use Lines) -> Option[String] {
+  lines.next()
+}
+
+fn main() {
+  with MemoryFiles {
+    r = with file = Files.Open(path: "a.txt") {
+      first(file)
+    } escape {
+      Missing(path:) -> None
+    }
+    dbg(r)
+  }
+  ()
+}
+```
+
 ### 宣言についての文法の外の制約
 
 - import は宣言より前に置きます。宣言より後ろの import は E0127 です（コメントは数えません）。
 - type_decl は型と同じ名前の構成子を1つ定義します。バリアントが1つの enum と同じものです。
 - 1つのバリアントの中で、名前のないフィールドと名前付きのフィールドは混ぜられません（E0128）。
 - 本体のない fn_decl と、トップレベルの suspend fn は、`@external` が付いている場合にだけ許されます（E0130）。trait_item の fn は既定の実装を持たなくてよく、この制約は掛かりません。
+- `fails` と `uses` は文脈依存の語です。`uses` の位置に `use` と書くと E0147 で、診断が書き換えを示します。
+- annot_arg の `qualified` は `@entry` の引数にだけ書けます。
 - `opaque` は type と enum にだけ付けられます（E0131）。
-- フィールドのない type_decl は、`@external` が付いている場合にだけ許されます（E0130）。
+- init の引数は、どれも型を付けた lower_name です。
+- フィールドのない type_decl は、`@external`（同梱のソースでは `@intrinsic`）が付いている場合にだけ許されます（E0130）。
 - enum_decl は1つ以上のバリアントを持ちます（E0132）。値を持たない型は Never だけです。
-- type_decl と enum_decl の直後の改行に `derive` が続くとき、その改行は区切りにならず、derive は宣言の続きになります。間の空行とコメントだけの行は飛ばします（行の継続の判定と同じ）。`derive` は文脈依存の語なので、字句の継続規則には入れず、宣言の位置でだけ扱います。
+- type_decl、enum_decl、error_decl の直後の改行に `derive` が続くとき、その改行は区切りにならず、derive は宣言の続きになります。間の空行とコメントだけの行は飛ばします（行の継続の判定と同じ）。`derive` は文脈依存の語なので、字句の継続規則には入れず、宣言の位置でだけ扱います。
 
 ```emela check=error
-fn host_now() -> Int    # error[E0130]: 本体のない fn には @external が要る
+fn host_now() -> Int # error[E0130]: 本体のない fn には @external が要る
 ```
 
 ```emela check=error
-enum Empty {}           # バリアントが1つもない
+enum Empty {} # バリアントが1つもない
 ```
 
 ## 型
@@ -192,6 +250,7 @@ type       = type_ref [ "[" type_arg { "," type_arg } "]" ]
            | "(" type "," type { "," type } ")"               (* タプル *)
            | "fn" "(" [ type { "," type } ] ")" "->" type
              [ "fails" error_set ] [ "uses" effect_set ]
+           | "use" effect_item { "+" effect_item }            (* 能力の型 *)
 type_ref   = [ module_path "." ] type_name
 
 type_arg   = type
@@ -213,6 +272,10 @@ effect Log {
 
 type Job[E, R](run: fn() -> Int fails E uses { R })
 
+fn note(log: use Log, msg: String) {
+  log.info(msg)
+}
+
 fn twice[E](f: fn() -> Int fails Timeout | E) -> Int fails Timeout | E {
   f() + f()
 }
@@ -228,14 +291,17 @@ fn pair() -> (Int, fn(Int) -> Int fails {} uses {}) {
 
 要素1個のタプルはありません。型の `(T)` はただの括弧です。
 
+`use E` は effect E の能力の値の型です。`use A + B` は複数の effect の能力で、`use A + B` の能力は、そのうちの一部だけを並べた `use A` の引数にも渡せます（[エフェクト](/guide/effects/)）。
+
 集合の型引数の扱い（どの型引数が集合を受けるか）は文法では決めず、型検査で確かめます（[型と効果の体系](/reference/type-system/)）。
 
 ## 式
 
 ```ebnf
 block      = "{" { stmt NL } "}"
-stmt       = binding | expr
+stmt       = binding | local_fn | expr
 binding    = pattern [ ":" type ] "=" expr
+local_fn   = "fn" lower_name "(" [ params ] ")" [ signature ] block
 
 expr       = "fail" expr
            | "assert" expr
@@ -249,15 +315,17 @@ add_expr   = mul_expr { ( "+" | "-" ) mul_expr }
 mul_expr   = unary    { ( "*" | "/" | "%" ) unary }
 unary      = ( "!" | "-" ) unary
            | "use" type_ref [ "[" type { "," type } "]" ]
+           | lambda
            | postfix
-postfix    = primary { "(" [ args ] ")" | "." lower_name }
+postfix    = primary { "(" [ args ] ")" | "." lower_name | "." type_name "(" [ args ] ")" }
+                                                     (* "." type_name は handler メンバー。init の中だけ *)
 
-primary    = literal | lower_name | upper_name | type_ref | "self"
+primary    = literal | lower_name | upper_name | type_ref | "self" | "Self"
            | "(" ")"
            | "(" expr ")"
            | "(" expr "," expr { "," expr } ")"
            | "[" [ expr { "," expr } [ "," ".." expr ] ] "]"
-           | block | if_expr | with_expr | lambda
+           | block | if_expr | with_expr
 
 args       = arg { "," arg } [ "," ".." expr ]
            | ".." expr
@@ -266,12 +334,13 @@ arg        = expr | lower_name ":" [ expr ]
 if_expr    = "if" expr block [ "else" ( block | if_expr ) ]
 arm        = pattern [ "if" expr ] "->" expr
 with_expr  = "with" with_item { "," with_item } block
-with_item  = type_ref [ "by" type_ref [ "[" type { "," type } "]" ] ]   (* by はラベル *)
+with_item  = [ lower_name "=" ] supply [ "by" by_right ]                 (* by はラベル *)
+by_right   = type_ref [ "[" type { "," type } "]" | "(" [ args ] ")" ]
 lambda     = ( "||" | "|" [ lambda_param { "," lambda_param } ] "|" ) expr
 lambda_param = pattern [ ":" type ]
 ```
 
-`cmp_expr` は比較演算子を1つしか持てないので、`a < b < c` は書けません（E0119）。比較のほかの二項演算子と `|>` は左結合です。`escape` と `match` は後置で、続けて何度でも書けます。
+`cmp_expr` は比較演算子を1つしか持てないので、`a < b < c` は書けません（E0119）。比較のほかの二項演算子と `|>` は左結合です。`escape` と `match` は後置で、続けて何度でも書けます。`x.f(a)` は postfix の `.` lower_name と呼び出しの組で、フィールドの関数の呼び出しかメソッド呼び出しかは型検査で決まります（[型と効果の体系](/reference/type-system/)）。
 
 ```emela check
 error NotFound(id: Int)
@@ -283,6 +352,10 @@ fn find(id: Int) -> User fails NotFound {
 }
 
 fn main() {
+  ## 1を足す。
+  fn inc(n: Int) -> Int {
+    n + 1
+  }
   user = find(2) escape {
     NotFound(id:) -> User(id:, name: "guest")
   }
@@ -292,25 +365,33 @@ fn main() {
     n if n > 1 -> "many"
     _          -> "one"
   }
-  dbg((renamed, xs, label))
+  ys = xs.map(|x| inc(x))
+  dbg((renamed, ys, label))
   ()
 }
 ```
 
 ### 式についての文法の外の制約
 
-- ブロックの最後の文が式のとき、その値がブロックの値になります。最後が束縛のとき、ブロックの値は `()` です。
+- 無名関数の本体は expr なので、右へできるだけ長く伸びます。同じ式の中で無名関数の後ろに何かが続くことはありません。呼び出したり演算子を掛けたりするときは括弧で囲みます。
+- `fn` と lower_name で始まる文はローカルの fn です。式の中の `fn(` は E0148 で、無名関数は `|x| 本体` と書きます。
+- ローカルの fn に型引数、注釈、`pub`、`suspend` を付けると E0150 です。前の行に文書コメント（`##`）を書けます。
+- 無名関数の引数の並びの中では、括弧の外の `|` が並びを閉じます。そこに書く関数型の error_set は1項目だけで、2項目以上は `( )` で囲みます。
+- `||` は、被演算子の位置では引数のない無名関数、被演算子の後では or_expr の演算子です。
+- ブロックの最後の文が式のとき、その値がブロックの値になります。最後が束縛のとき、ブロックの値は `()` です。最後の文にローカルの fn は置けません（E0151）。
 - 文が束縛か式かは、パターンとして読める並びの直後に `=` または `:` があるかで区別します。左辺がパターンとして読めなければ E0125 です。
-- `use X` の操作をその場で呼ぶときは、`(use X).op(...)` と括弧で囲みます（E0121）。
+- `use X` の操作をその場で呼ぶときは、`(use X).op(...)` と括弧で囲みます。`use X` の直後に `.` や `(` を書くと E0121 です。
 - 引数の並びでは名前付き引数の後に位置引数を書けません（E0120）。
-- 引数の並びの末尾の `..式` は、構成子の部分更新です（[データ](/guide/data/)）。関数の呼び出しに書くとエラーになります。部分更新で変えるフィールドは名前付きで書き、位置では書けません（E0223）。
+- `by` の右の型引数（`Hits by State[Int]`）は effect を指すときだけ、引数は handler を指すときだけ書けます（[ラベル](/guide/labels/)）。
+- 式としての `Self` は handler の値で、handler の init の中でだけ、フィールドを渡して呼ぶか単独で書けます。
+- 引数の並びの末尾の `..式` は、構成子の部分更新です（[データ](/guide/data/)）。関数の呼び出しに書くと E0222 です。`..` の後に引数を書くと E0114 です。部分更新で変えるフィールドは名前付きで書き、位置では書けません（E0223）。
 - 式の `(x)` はただの括弧で、要素1個のタプルにはなりません。
 - リストのリテラルの `..式` は末尾に1回だけ書けます。`[x, y, ..rest]` は `rest` の前に `x`、`y` を付けたリストです。`..` の後は名前に限らず任意の式でよく（`[x, ..List.tail(xs)]`）、要素なしの `[..rest]`（E0115）と、途中や複数の `..`（`[..a, ..b]`）は書けません。
 
 ```emela check=error
 fn main() {
   a = [1]
-  b = [..a]      # error[E0115]: .. の前に要素が要る
+  b = [..a] # error[E0115]: .. の前に要素が要る
 }
 ```
 
@@ -318,7 +399,7 @@ fn main() {
 fn connect(host: String, port: Int) -> String { host }
 
 fn main() {
-  connect(host: "localhost", 8080)    # error[E0120]: 名前付きの後に位置引数
+  connect(host: "localhost", 8080) # error[E0120]: 名前付きの後に位置引数
 }
 ```
 

@@ -1,26 +1,28 @@
 ---
 title: Http
-description: HTTP のクライアント Std.Http の型、エラー、send の上の関数、SystemHttp と TestHttp
+description: HTTP のクライアント（Http エフェクト、SystemHttp と TestHttp）と、HTTP サービスの入口 Http.serve
 ---
 
-`Std.Http` は HTTP のクライアントです。操作は `send` の1つだけで、要求と応答はただの値です。要求を組み立てる処理はハンドラなしでテストでき、送る部分は TestHttp に差し替えればネットワークなしでテストできます。
+`Std.Http` は HTTP のクライアントと、HTTP サービスの入口 `Http.serve` を持ちます。要求（`Std.Http.Request`）と応答（`Std.Http.Response`）はただの値で、クライアントの操作は `send` の1つだけです。要求を組み立てる処理はハンドラなしでテストでき、送る部分は TestHttp に差し替えればネットワークなしでテストできます。
 
 ```emela check
 import Std.Http
 import Std.Http.{Http, ConnectionFailed, TestHttp, TestServer}
+import Std.Http.Request
 import Std.Http.Request.{Request, Get}
+import Std.Http.Response
 import Std.Http.Response.{UnexpectedStatus}
 import Std.State.{State}
 
 const BASE: String = "https://search.example.com"
 
 fn search_request(query: String, page: Int) -> Request {
-  query_string = Http.encode_query([("q", query), ("page", Int.to_string(page))])
-  Http.request(Get, "#{BASE}/search?#{query_string}") |> Http.add_header("accept", "text/plain")
+  query_string = Request.encode_query([("q", query), ("page", Int.to_string(page))])
+  Request.new(Get, "#{BASE}/search?#{query_string}") |> Request.add_header("accept", "text/plain")
 }
 
 fn first_result(query: String) {
-  res = (use Http).send(search_request(query, 1)) |> Http.require_ok
+  res = (use Http).send(search_request(query, 1)) |> Response.require_ok
   Option.or(List.head(String.split(res.body, "\n")), "")
 }
 
@@ -32,7 +34,7 @@ fn the_query_is_encoded() {
 
 @test
 fn a_404_is_not_a_failure_until_require_ok() {
-  server = TestServer(respond: |req, n| Some(Http.response(404, "")), sent: [])
+  server = TestServer(respond: |_, _| Some(Response.new(404, "")), sent: [])
   (text, after) = State.run(server, || {
     with TestHttp {
       first_result("x") escape {
@@ -46,7 +48,9 @@ fn a_404_is_not_a_failure_until_require_ok() {
 }
 ```
 
-## 型
+型と関数の一覧は API リファレンスの [Std.Http](/std/api/std-http/)、[Std.Http.Request](/std/api/std-http-request/)、[Std.Http.Response](/std/api/std-http-response/) にあります。
+
+## 要求と応答
 
 ```emela
 pub enum Method { Get, Head, Post, Put, Patch, Delete, Options }
@@ -54,26 +58,15 @@ pub type Request(method: Method, url: String, headers: List[(String, String)], b
 pub type Response(status: Int, headers: List[(String, String)], body: String)
 ```
 
-| 型 | 説明 |
-|---|---|
-| `Method` | 送れるメソッド。一覧にないメソッドは送れない |
-| `Request` | 要求。ヘッダは書いた順に送る。本文は UTF-8 で送る |
-| `Response` | 応答。`status` は状態コード、`body` は本文のテキスト |
+`Request.new(method, url)` と `Response.new(status, body)` が、ヘッダも本文もない値を作ります。構成子とフィールドは公開されているので、`Request(body: text, ..Request.new(Post, url))` のように更新の構文で作り変えられます。
 
-構成子とフィールドは公開されているので、`Request(body: text, ..Http.request(Post, url))` のように更新の構文で作り変えられます。
+- 本文はテキストだけです。送るときは UTF-8 にし、受けるときは UTF-8 として読みます。本文の先頭の BOM は取り除きます。本文は全部を読み込んでから返します。
+- ヘッダは同じ名前が並びうるので `List[(String, String)]` で持ちます。受けた応答のヘッダは名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます（`set-cookie` だけは1つずつ別の組）。`header` と `header_values` は名前を ASCII の範囲で大文字小文字を区別せずに比べます。
+- `Request.encode_query` と `Request.decode_query` は、クエリ文字列とその組の並びを変換します。受けた要求の URL は `Request.path`、`Request.segments`、`Request.query` で分けて読めます。
 
-`Method` と `Request` は `Std.Http.Request` に、`Response` と `UnexpectedStatus` は `Std.Http.Response` にあります（`import Std.Http.Request.{Request, Get}`）。
+`Std.Http` にある `Http.request`、`Http.add_header`、`Http.header`、`Http.headers`、`Http.encode_query`、`Http.require_ok`、`Http.response` は移行のために残している古い名前で、いずれ取り除かれます。`Request` と `Response` のモジュールの関数を使います。
 
-## エラー
-
-| error | 意味 |
-|---|---|
-| `InvalidUrl(url: String)` | URL として読めない。scheme が `http:` と `https:` 以外のものも |
-| `ConnectionFailed(url: String, message: String)` | 応答を受け取れなかった（名前解決、接続、TLS、リダイレクトの回数超え）。`message` に理由 |
-| `ResponseNotText(url: String)` | 応答の本文が UTF-8 として読めない |
-| `UnexpectedStatus(status: Int, body: String)` | `require_ok` で、状態コードが 2xx でない |
-
-## エフェクト
+## クライアント
 
 ```emela
 pub effect Http {
@@ -82,50 +75,11 @@ pub effect Http {
 }
 ```
 
-ハンドラを書く人が実装するのは `send` だけです。よく使う形は `send` の上のふつうの関数にしてあります。
+ハンドラを書く人が実装するのは `send` だけです。よく使う形は `send` の上のふつうの関数（`Http.get(url)`、`Http.post(url, body)`）にしてあります。
 
-## 関数
-
-| 関数 | シグネチャ | 説明 |
-|---|---|---|
-| `request` | `request(method: Method, url: String) -> Request` | ヘッダなし、本文なしの要求 |
-| `add_header` | `add_header(req: Request, name: String, value: String) -> Request` | ヘッダを末尾に足す |
-| `get` | `get(url: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText uses { Http }` | GET を送る |
-| `post` | `post(url: String, body: String) -> Response fails InvalidUrl \| ConnectionFailed \| ResponseNotText uses { Http }` | 本文つきの POST を送る |
-| `header` | `header(res: Response, name: String) -> Option[String]` | 名前の合う最初のヘッダの値 |
-| `headers` | `headers(res: Response, name: String) -> List[String]` | 名前の合うすべてのヘッダの値を順に |
-| `encode_query` | `encode_query(pairs: List[(String, String)]) -> String` | 各部分をパーセント符号化したクエリ（`q=%E6%9D%B1&page=2`） |
-| `require_ok` | `require_ok(res: Response) -> Response fails UnexpectedStatus` | 2xx ならそのまま返し、それ以外は fail する |
-| `response` | `response(status: Int, body: String) -> Response` | ヘッダなしの応答。TestServer で使う |
-
-`header` と `headers` は名前を ASCII の範囲で大文字小文字を区別せずに比べます。`encode_query` は JS の `encodeURIComponent` を純粋な外部関数として呼びます。URL を部品に分ける型はありません。
-
-## 振る舞い
-
-- 本文はテキストだけを扱います。送るときは UTF-8 にし、受けるときは UTF-8 として読み、読めなければ ResponseNotText です。本文の先頭の BOM は取り除きます。本文は全部を読み込んでから返します（ストリームは後の版）。
-- content-type を書かなければ `text/plain;charset=UTF-8` で送ります。
-- ヘッダは `List[(String, String)]` で持ちます。Map が 0.21 なのと、同じ名前のヘッダが複数並ぶためです。応答のヘッダは名前を小文字にして名前の順に並べ、同じ名前の値は `, ` でつなぎます。`set-cookie` だけは1つずつ別の組にします。
-- 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いからで、失敗にしたいときは `require_ok` を挟みます。
-- 失敗にするのは応答を受け取れなかったときだけで、名前解決、接続、TLS、リダイレクトの回数超えはどれも ConnectionFailed にまとめます。リダイレクトは自動で辿ります。
-- GET と HEAD の空の本文は本文なしで送ります。GET と HEAD に空でない本文を書いたときと、正しくないヘッダは ConnectionFailed です。
-- タイムアウトの設定はありません。`Fiber.timeout` か `Fiber.race` で書きます。`send` を待っている fiber が中断されると、通信を止めます（AbortSignal）。
-
-`Fiber.timeout` で包んだ `Http.get` のエラーは escape で受けます。どのエラーも同じ値にするなら、`_` の腕1つで全部を受けられます。
-
-```emela check
-import Std.Clock.{Clock}
-import Std.Fiber
-import Std.Http
-import Std.Http.{Http}
-
-fn fetch_with_deadline(url: String) -> Option[String] uses { Http, Clock, Async } {
-  Fiber.timeout(2000, || Http.get(url).body) escape {
-    _ -> None
-  }
-}
-```
-
-エラーごとに分けるときは、受けるエラーの構成子を並べて書きます。
+- 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いからで、失敗にしたいときは `Response.require_ok` を挟みます。`require_ok` は 2xx 以外を `UnexpectedStatus` にします。
+- `send` が失敗するのは応答を受け取れなかったときだけです。`http:` と `https:` 以外の URL は InvalidUrl、名前解決、接続、TLS、リダイレクトの回数超えは ConnectionFailed、UTF-8 として読めない本文は ResponseNotText です。リダイレクトは自動で辿ります。
+- タイムアウトの設定はありません。`Fiber.timeout` か `Fiber.race` で書きます。`send` を待っている fiber が中断されると、通信を止めます。
 
 ```emela check
 import Std.Clock.{Clock}
@@ -143,113 +97,53 @@ fn fetch_with_deadline(url: String) -> Option[String] uses { Http, Clock, Async 
 }
 ```
 
-## SystemHttp
+どのエラーも同じ値にするなら、`_` の腕1つで全部を受けられます。
 
-`SystemHttp` は JS の `fetch` を使う本物のハンドラで、Platform に入っています。
+### SystemHttp と TestHttp
 
-Async に依存し、状態を持ちません。Cookie を覚えず、プロキシの環境変数も使いません。C のターゲットの実装はまだなく、`--target c` で `send` に届くコードをビルドするとコンパイルのエラーになります。
+`SystemHttp` は JS の `fetch` を使う本物のハンドラで、Platform に入っています。Async に依存し、状態を持ちません。Cookie を覚えず、プロキシの環境変数も使いません。ネイティブと WASM のターゲットにはまだ実装がなく、`send` に届くコードをそのターゲットでビルドするとコンパイルのエラーになります。
+
+`TestHttp` はテスト用のハンドラで、`State[TestServer]` を使います。`TestServer(respond:, sent:)` の `respond` は、要求と、それより前に送った要求の数（0 から）を受けて応答を返す純粋な関数です。`None` を返すと ConnectionFailed になります。送った要求は `sent` に順に足されます。
+
+## HTTP サービス
+
+関数に `@entry(Http.serve)` を付けると、そのプログラムは HTTP サービスになります。ホストは要求を受けるたびにその関数を1回呼び、返した `Response` を送ります。
 
 ```emela check
-import Std.Platform.{Platform}
-import Std.Console.{Console}
-import Std.Http
-import Std.Http.{Http, InvalidUrl, ConnectionFailed, ResponseNotText}
+import Std.Http.{Http}
+import Std.Http.Request
+import Std.Http.Request.{Request, Get}
+import Std.Http.Response
+import Std.Http.Response.{Response}
 
-fn status_of(url: String) -> String uses { Http } {
-  "#{Http.get(url).status}" escape {
-    InvalidUrl(url:)                   -> "InvalidUrl(#{url})"
-    ConnectionFailed(url: _, message:) -> "ConnectionFailed(#{message})"
-    ResponseNotText(url:)              -> "ResponseNotText(#{url})"
+@entry(Http.serve)
+pub fn app(request: Request) -> Response {
+  Request.segments(request) match {
+    ["hello", name] -> Response.new(200, "Hello, #{name}!")
+    _               -> Response.new(404, "not found")
   }
 }
 
-fn main() {
-  with Platform {
-    console = use Console
-    console.print_line(status_of("ftp://example.com/"))
-    console.print_line(status_of("http://127.0.0.1:1/"))
-  }
-}
-```
-
-```console
-$ emela run main.emel
-InvalidUrl(ftp://example.com/)
-ConnectionFailed(fetch failed: bad port)
-```
-
-## TestHttp と TestServer
-
-`TestHttp` はテスト用のハンドラです。相手のサーバーを `State[TestServer]` に置き、その場で再開します。
-
-```emela
-pub type TestServer(respond: fn(Request, Int) -> Option[Response], sent: List[Request])
-```
-
-- `respond` は、要求と、それより前に送られた要求の数（0 から）を受けて応答を返す純粋な関数です。`None` を返すと ConnectionFailed になります。
-- `sent` に、送られた要求を順に足します。`State.run` が返す最後の状態で確かめます。
-- InvalidUrl と ResponseNotText は起こせません。
-- 遅い応答は作れません。時間の絡むテストは [TestClock](/std/platform/) で書きます。
-
-```emela check
-import Std.Http
-import Std.Http.{Http, ConnectionFailed, TestHttp, TestServer}
-import Std.Http.Request.{Request, Post}
-import Std.Http.Response.{Response, UnexpectedStatus}
-import Std.State.{State}
-
-const API: String = "https://api.example.com"
-
-## todo を作り、新しいリソースの URL を返す。
-fn create_todo(title: String) {
-  req = Request(body: title, ..Http.request(Post, "#{API}/todos"))
-    |> Http.add_header("content-type", "text/plain")
-  res = (use Http).send(req) |> Http.require_ok
-  Option.or(Http.header(res, "Location"), "")
-}
-
-fn created(req: Request, n: Int) -> Option[Response] {
-  Some(Response(status: 201, headers: [("location", "#{API}/todos/#{n + 1}")], body: ""))
-}
-
 @test
-fn returns_the_location() {
-  server = TestServer(respond: created, sent: [])
-  (url, after) = State.run(server, || with TestHttp { create_todo("buy milk") })
-  assert url == "https://api.example.com/todos/1"
-  assert List.map(after.sent, |r| r.body) == ["buy milk"]
-}
-
-@test
-fn a_500_fails_with_unexpected_status() {
-  server = TestServer(respond: |req, n| Some(Http.response(500, "oops")), sent: [])
-  (result, _) = State.run(server, || {
-    with TestHttp {
-      create_todo("x") escape {
-        UnexpectedStatus(status:, body: _) -> "status #{status}"
-      }
-    }
-  })
-  assert result == "status 500"
-}
-
-@test
-fn no_answer_is_connection_failed() {
-  server = TestServer(respond: |req, n| None, sent: [])
-  (result, _) = State.run(server, || {
-    with TestHttp {
-      create_todo("x") escape {
-        ConnectionFailed(url: _, message:) -> message
-        UnexpectedStatus(..)               -> "status"
-      }
-    }
-  })
-  assert result == "TestServer returned no response"
+fn says_hello() {
+  res = app(Request.new(Get, "http://localhost/hello/ada"))
+  assert res.status == 200
+  assert res.body == "Hello, ada!"
 }
 ```
 
-`main` で `with Platform, TestHttp { ... }` と書けば、Platform の SystemHttp だけを TestHttp に置き換えられます（`State.run` の中で）。
+```console no-check
+$ PORT=3000 emela run main.emel
+listening on http://127.0.0.1:3000
+$ curl localhost:3000/hello/ada
+Hello, ada!
+```
 
-:::caution[0.21 で入る予定]
-Http のサーバーは 0.21 で、fiber の上に作ります。同時に走る数の上限（`Semaphore`）も 0.21 です。0.20 の `Std.Http` はクライアントだけです。
-:::
+- `emela run` は既定で `127.0.0.1:8080` で待ちます。環境変数 `HOST` と `PORT` で変えられます。
+- 要求ごとの呼び出しは状態を共有しません。関数の中の `with` は要求ごとに初期化と後片付けをします。
+- 関数がエラーか defect で終わると、原因を標準エラーに1行書き、500 を返します。原因は応答に入りません。
+- `Method` にないメソッドには 405、UTF-8 でない本文や `%` の形の誤った URL には 400 を、関数を呼ばずに返します。
+- HTTP サービスはプロセスで動くので、関数の中で `with Process { ... }` を書けます。
+- JS と WASM のターゲットで動きます。ネイティブのターゲットではまだ使えません。
+
+関数は `Request` を受けて `Response` を返すふつうの関数なので、上の `says_hello` のようにテストから直接呼べます。

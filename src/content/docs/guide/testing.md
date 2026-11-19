@@ -69,6 +69,8 @@ test result: ok. 2 passed; 0 failed; 0 filtered out
 
 `@test` は引数のない fn に付けます。どのファイルにも書けます。実装と同じファイルに書けば、非公開の関数をそのままテストできます。テスト関数は通常のビルドでは取り除かれるので、呼べるのはほかのテスト関数の中からだけです。
 
+プロジェクトの `test/` はテストのルートで、テストにだけ使うモジュールを置きます。ここのモジュールは `@test` がなくても通常のビルドから取り除かれるので、引数を取る補助の関数も置けます。`src/` のモジュールの公開された関数を import して使い、`Pome.toml` の `[dev-dependencies]` に書いた Pome も使えます。
+
 `assert 式` は、式が False のとき defect になります。
 
 ```emela check
@@ -162,8 +164,10 @@ $ echo $?
 | `TestClock` | `State[Instant]` | 仮の時刻で動く。実際の時間は待たない |
 | `TestFileSystem` | `State[TestFiles]` | ファイルとディレクトリを状態に置く |
 | `TestHttp` | `State[TestServer]` | `respond` の関数が応答を返し、送った要求を `sent` に貯める |
+| `TestStdin` | `State[StdinLines]` | まだ読んでいない行を置く。`read_line` は先頭の行を取り出す |
+| `TestStdout`、`TestStderr` | `State[StdoutText]`、`State[StderrText]` | 書いた文字列を `text` の後ろに足していく |
 
-使い方は [Platform](/std/platform/)、[FileSystem](/std/file-system/)、[Http](/std/http/) にあります。State そのものは [状態と資源](/guide/resources/) で扱います。
+使い方は [Platform](/std/platform/)、[FileSystem](/std/file-system/)、[Http](/std/http/) にあります。TestStdin、TestStdout、TestStderr は `Std.Process` にあります。State そのものは [状態と資源](/guide/resources/) で扱います。
 
 TestClock の `sleep` は、どの fiber も先に進めなくなったとき、一番早く起きる予定の時刻まで時刻を進めます。fiber を使うコードも、実際の時計と同じ順で、待たずにテストできます。
 
@@ -193,7 +197,7 @@ fn main() { () }
 
 複数の State を重ねるときは `State.run` を入れ子にします。`with Platform, TestClock { ... }` のように、layer の後ろに書いたハンドラで一部だけを置き換えることもできます。
 
-テスト関数の中で使うエフェクトは、Async を除いてすべて with で供給します。Async はテストランナーが供給するので、`sleep` や fiber はそのまま使えます。
+テスト関数の中で使うエフェクトは、ホストのエフェクト（Async と ProcessHost）を除いてすべて with で供給します。この2つはテストランナーが供給するので、`sleep` や fiber、`with Process { ... }` のハンドラもそのまま使えます。
 
 ```emela check=error
 import Std.Console.{Console}

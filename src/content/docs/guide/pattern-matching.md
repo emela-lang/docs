@@ -25,6 +25,7 @@ fn main() {
   dbg(area(Circle(radius: 1.0))) # 3.14
   dbg(area(Rect(2.0, 3.0))) # 6.0
   dbg(area(Empty)) # 0.0
+  ()
 }
 ```
 
@@ -58,6 +59,7 @@ fn main() {
     None    -> "guest"
   }
   dbg(name) # "bob"
+  ()
 }
 ```
 
@@ -105,6 +107,7 @@ fn main() {
   dbg(describe(-1)) # "minus one"
   dbg(describe(-5)) # "negative"
   dbg(command("q")) # "quit"
+  ()
 }
 ```
 
@@ -125,6 +128,7 @@ fn greet(u: User) -> String {
 fn main() {
   dbg(greet(User(id: 0, name: "root", email: "r@example.com"))) # "hello, admin"
   dbg(greet(User(id: 2, name: "bob", email: "b@example.com"))) # "hello, bob"
+  ()
 }
 ```
 
@@ -163,8 +167,9 @@ fn fizzbuzz(n: Int) -> String {
 }
 
 fn main() {
-  dbg(List.range(1, 16) |> List.map(fizzbuzz) |> String.join(" "))
+  dbg(List.range(1, 16) |> List.map(fizzbuzz) |> List.join(" "))
   # "1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz"
+  ()
 }
 ```
 
@@ -190,6 +195,7 @@ fn main() {
   dbg(sum([1, 2, 3])) # 6
   dbg(first_two(["a", "b", "c"])) # "a, b"
   dbg(first_two(["a"])) # "a"
+  ()
 }
 ```
 
@@ -211,6 +217,7 @@ fn classify(n: Int) -> String {
 fn main() {
   dbg(classify(4)) # "even"
   dbg(classify(7)) # "odd"
+  ()
 }
 ```
 
@@ -227,6 +234,7 @@ fn grade(score: Int) -> String {
 
 fn main() {
   dbg(grade(75)) # "B"
+  ()
 }
 ```
 
@@ -276,6 +284,7 @@ fn f(b: Bool) -> Int {
 
 fn main() {
   dbg(f(True)) # 1
+  ()
 }
 ```
 
@@ -290,10 +299,11 @@ fn main() {
   (a, b) = (1, 2)
   Point(x:, ..) = Point(x: 3, y: 4)
   dbg(a + b + x) # 6
+  ()
 }
 ```
 
-構成子が1つの type やタプル、変数は書けます。enum のバリアントやリテラルのように失敗しうるパターンはエラーになり、match と同じく足りないパターンが示されます。
+構成子が1つの type やタプル、変数は書けます。無名関数の引数（`|(key, value)| ...`）にも同じ制限でパターンを書けます（[束縛と関数](/guide/functions/)）。enum のバリアントやリテラルのように失敗しうるパターンはエラーになり、match と同じく足りないパターンが示されます。
 
 ```emela check=error
 fn main() {
@@ -334,5 +344,6 @@ fn main() {
   dbg(name_of(1)) # "alice"
   dbg(name_of(2)) # "guest"
   dbg(name_of(-1)) # "unavailable"
+  ()
 }
 ```

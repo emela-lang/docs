@@ -3,7 +3,7 @@ title: 他の言語との対応
 description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Emela で何に当たるかと、他の言語の感覚で書くと引っかかるところ
 ---
 
-よく使う言語の書き方が Emela で何に当たるかを並べます。言語の全体を順に知りたいときは [言語ツアー](/start/tour/) から読んでください。
+よく使う言語の書き方が Emela で何に当たるかを並べます。言語の全体を順に知りたいときは [Emela ツアー](/tour/) から読んでください。
 
 ## どの言語にも共通する対応
 
@@ -11,14 +11,14 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 |---|---|
 | null / nil / None | `Option[A]`（`Some(x)` と `None`） |
 | throw / try / catch、Result 型と `?` | `error` を宣言して `fail`、受けるのは `escape` |
-| for / while | `List.map`、`List.fold`、再帰 |
+| for / while | `List.each`、`List.map`、`List.fold`、再帰 |
 | 再代入する変数 | 同じ名前での束縛し直し、可変な状態は `State` |
-| クラスとメソッド `x.f()` | `type` とモジュールの関数、`x \|> f` |
+| クラスとメソッド `x.f()` | `type` と同じモジュールの関数。`x.f()` か `x \|> f` で呼ぶ |
 | interface で依存を渡す、DI、モック | `effect`、`handler`、`with` |
 | リソースの後始末（defer、try-with-resources、Drop） | ハンドラの `init` と `release` |
 | async / await | 印なしの呼び出しと `Fiber` |
 | 文字列補間 | `"Hello, #{name}"` |
-| 型クラス / interface | `trait` と `impl`（0.21 で入る予定） |
+| 型クラス / interface | `trait` と `impl`、`derive` |
 
 ## TypeScript
 
@@ -55,7 +55,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | Go | Emela |
 |---|---|
 | `type User struct { ID int; Name string }` | `type User(id: Int, name: String)` |
-| `func (u User) Greet() string` | `fn greet(u: User) -> String` と `u \|> greet` |
+| `func (u User) Greet() string` | `fn greet(u: User) -> String` と `u.greet()` |
 | `(T, error)` を返す | `-> T fails E` |
 | `if err != nil { return err }` | 何も書かない（自動で伝わる） |
 | `errors.As` / `errors.Is` | `escape { NotFound(..) -> ... }` |
@@ -65,7 +65,8 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | `errgroup.Group` | `Fiber.scope`、`Fiber.all`、`Fiber.map` |
 | `context.WithTimeout` | `Fiber.timeout` |
 | `select` で最初の1つ | `Fiber.race` |
-| チャネル | 一度だけの受け渡しは `Deferred`。キューは予定 |
+| チャネル | 一度だけの受け渡しは `Deferred`、続けて受け渡すなら `Queue` |
+| `semaphore`、ワーカーの数の上限 | `Semaphore` |
 
 goroutine と違い、fiber はスコープより長生きしません。キャンセルのために `ctx` を引数で回す必要もなく、`Fiber.interrupt` で止めるか、スコープの本体が値を返した時点で残っている fiber が中断されます。
 
@@ -99,14 +100,14 @@ goroutine と違い、fiber はスコープより長生きしません。キャ�
 | `None` / `Optional[T]` | `Option[T]` の `None` |
 | `raise NotFound(id)` | `fail NotFound(id:)` |
 | `try` / `except NotFound` | `escape { NotFound(_) -> ... }` |
-| `for x in xs` / 内包表記 | `List.map`、`List.filter`、`List.fold` |
+| `for x in xs` / 内包表記 | `List.each`、`List.map`、`List.filter`、`List.fold` |
 | `x += 1` | `x = x + 1`（束縛し直し） |
 | `mock.patch` | ハンドラの差し替え |
 | `asyncio.gather` / `TaskGroup` / `wait_for` | `Fiber.all` / `Fiber.scope` / `Fiber.timeout` |
 | `print(x)` | `(use Console).print_line(...)`、デバッグなら `dbg(x)` |
 | インデント | `{ }` |
 
-型は静的に決まり、ほとんどは推論されます。`dict` と `set` に当たる `Map` と `Set` は 0.21 で入る予定です。
+型は静的に決まり、ほとんどは推論されます。`dict` と `set` に当たるのは `Std.Map` と `Std.Set`、`json` に当たるのは `Std.Json` と `derive Encode, Decode` です。
 
 ## 引っかかりやすいところ
 
@@ -123,7 +124,7 @@ fn main() {
   sum = List.range(1, 11) |> List.fold(0, |acc, n| acc + n)
   first = List.get([10, 20, 30], 0)
   user = User(id: 1, name: "alice")
-  dbg(user |> greet)
+  dbg(user.greet())
   dbg("#{count} #{sum}")
   dbg(first)
   ()
@@ -137,15 +138,12 @@ $ emela run main.emel
 Some(10)
 ```
 
-ループ構文がないので、繰り返しは `List.fold` のような関数か再帰で書きます。自分への末尾呼び出しはスタックを使いません。添字アクセス `xs[0]` もなく、`List.get` が `Option` を返します。
+ループ構文がないので、繰り返しは `List.each`、`List.fold` のような関数か再帰で書きます。自分への末尾呼び出しはスタックを使いません。添字アクセス `xs[0]` もなく、`List.get` が `Option` を返します。
 
-メソッド呼び出しの構文もありません。`.` で書けるのはフィールドの参照と、能力の値の操作（`(use Users).find(1)`）だけです。
+クラスはありません。`user.greet()` は、`User` を定義したモジュールにある、最初の引数が `User` の関数 `greet` を呼びます。`.` で書けるのは、フィールドの参照、この形の関数の呼び出し、能力の値の操作（`(use Users).find(1)`）です。
 
-`use X` は import とは別物で、エフェクト `X` の能力の値を取り出す式です。能力の値は、引数に渡す、データに入れる、返すのどれもできません。サービスを値として持ち回る書き方はできないので、使わせたいときはクロージャを渡します。`main` に残ってよいエフェクトはなく、使うものは `main` の中の `with` で全部供給します。標準のハンドラは `Std.Platform` の `Platform` にまとまっています。
+`use X` は import とは別物で、エフェクト `X` の能力の値を取り出す式です。能力の値の型は `use X` で、引数に渡したり返したりできます。ただし、それを供給した `with` の外へ持ち出すと警告になります。`main` に残ってよいエフェクトはなく、使うものは `main` の中の `with` で全部供給します。標準のハンドラは `Std.Platform` の `Platform` と、ファイルや引数も含む `Std.Process` の `Process` にまとまっています。
 
 文字列は `+` でつなげず、補間 `"#{a}#{b}"` を使います。数の型の間に暗黙の変換はなく、`Int` は32ビットです。`Float.from_int` や `Int64.from_int` で明示して変換します。
 
-ほかに次の2つもよく引っかかります。
-
-- `escape` に `_` の腕は書けません。受けるエラーを名前で並べます。
-- 名前の大文字と小文字に意味があります。変数と関数は `snake_case`、型・構成子・エフェクト・モジュールは `PascalCase` で、`HTTP` は型名に使えず `Http` と書きます。
+名前の大文字と小文字に意味があります。変数と関数は `snake_case`、型・構成子・エフェクト・モジュールは `PascalCase` で、`HTTP` は型名に使えず `Http` と書きます。
