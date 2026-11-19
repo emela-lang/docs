@@ -39,6 +39,7 @@ interface Compiled extends Checked {
 }
 
 let compiler: Worker | null = null;
+const lspHandlers = new Set<(message: string) => void>();
 let seq = 0;
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
@@ -46,7 +47,11 @@ function compilerWorker(): Worker {
   if (compiler) return compiler;
   const worker = new Worker(`${BASE}/compiler-worker.js`, { type: 'module' });
   worker.onmessage = (event: MessageEvent) => {
-    const { id, ok, result, error } = event.data ?? {};
+    const { id, ok, result, error, lsp } = event.data ?? {};
+    if (typeof lsp === 'string') {
+      for (const handler of lspHandlers) handler(lsp);
+      return;
+    }
     const entry = pending.get(id);
     if (!entry) return;
     pending.delete(id);
@@ -63,7 +68,7 @@ function compilerWorker(): Worker {
   return worker;
 }
 
-function request<T>(op: 'check' | 'format' | 'compile', source: string): Promise<T> {
+function request<T>(op: 'check' | 'format' | 'compile' | 'lspAvailable', source: string): Promise<T> {
   const worker = compilerWorker();
   const id = ++seq;
   return new Promise<T>((resolve, reject) => {
@@ -129,4 +134,30 @@ export async function runEmela(
     };
     worker.postMessage({ files: compiled.files, entry: compiled.entry });
   });
+}
+
+let hasLsp: Promise<boolean> | null = null;
+
+/** Whether the compiler of this release carries the language server (emela-lang/emela#681). */
+export function lspAvailable(): Promise<boolean> {
+  hasLsp ??= request<boolean>('lspAvailable', '').catch(() => false);
+  return hasLsp;
+}
+
+/**
+ * The connection to the language server in the compiler worker, in the shape of
+ * @codemirror/lsp-client's `Transport`: LSP messages as JSON text, both ways.
+ */
+export function lspTransport() {
+  return {
+    send(message: string): void {
+      compilerWorker().postMessage({ lsp: message });
+    },
+    subscribe(handler: (message: string) => void): void {
+      lspHandlers.add(handler);
+    },
+    unsubscribe(handler: (message: string) => void): void {
+      lspHandlers.delete(handler);
+    },
+  };
 }

@@ -1,7 +1,7 @@
 ---
-// The dedicated /playground editor: a source textarea, Run and Format buttons,
-// and an output panel. Shares the compiler worker with the inline Run buttons
-// (src/scripts/emela-runner.ts). The compiler wasm is fetched on first use.
+// The dedicated /playground editor: a source textarea, Run and Format buttons, and an output
+// panel. The markup matches buildPlayground in src/scripts/emela-playground.ts, which wires it.
+// The compiler wasm is fetched on first use.
 const sample = `import Std.Console.{Console}
 import Std.Platform.{Platform}
 
@@ -20,9 +20,8 @@ fn main() {
 }
 `;---
 
-<div class="emela-playground">
+<div class="emela-playground not-content">
   <div class="emela-pg-editor-wrap">
-    <div class="emela-pg-highlight" aria-hidden="true"></div>
     <textarea class="emela-pg-editor" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Emela ソース">{sample}</textarea>
   </div>
   <div class="emela-pg-bar">
@@ -36,85 +35,10 @@ fn main() {
 </div>
 
 <script>
-  import { formatEmela, runEmela } from '../scripts/emela-runner';
-  import { appendChunk, renderError, renderResult, startOutput } from '../scripts/emela-output';
-  import { highlightInto } from '../scripts/emela-highlight';
-
-  function wire(root: HTMLElement): void {
-    if (root.dataset.wired === 'yes') return;
-    const editor = root.querySelector<HTMLTextAreaElement>('.emela-pg-editor');
-    const button = root.querySelector<HTMLButtonElement>('.emela-pg-run');
-    const formatButton = root.querySelector<HTMLButtonElement>('.emela-pg-format');
-    const output = root.querySelector<HTMLElement>('.emela-pg-output');
-    if (!editor || !button || !formatButton || !output) return;
-    root.dataset.wired = 'yes';
-
-    // Syntax highlighting: a highlight layer sits behind the (transparent-text)
-    // textarea. It loads Shiki lazily; until the first render lands the textarea
-    // keeps its own visible text, so the editor is usable immediately.
-    const wrap = editor.closest<HTMLElement>('.emela-pg-editor-wrap');
-    const highlight = root.querySelector<HTMLElement>('.emela-pg-highlight');
-    if (wrap && highlight) {
-      const sync = () => {
-        highlightInto(highlight, editor.value)
-          .then(() => {
-            wrap.dataset.highlighted = 'yes';
-          })
-          .catch(() => {
-            /* keep the plain textarea if Shiki fails to load */
-          });
-      };
-      editor.addEventListener('input', sync);
-      editor.addEventListener('scroll', () => {
-        highlight.scrollTop = editor.scrollTop;
-        highlight.scrollLeft = editor.scrollLeft;
-      });
-      sync();
-    }
-
-    async function run(): Promise<void> {
-      button!.disabled = true;
-      startOutput(output!);
-      try {
-        renderResult(output!, await runEmela(editor!.value, { onChunk: (chunk) => appendChunk(output!, chunk) }));
-      } catch (err) {
-        renderError(output!, String((err as Error)?.message || err));
-      } finally {
-        button!.disabled = false;
-      }
-    }
-
-    async function format(): Promise<void> {
-      formatButton!.disabled = true;
-      try {
-        const result = await formatEmela(editor!.value);
-        if (result.ok) {
-          editor!.value = result.source;
-          editor!.dispatchEvent(new Event('input'));
-        } else {
-          output!.hidden = false;
-          renderError(output!, result.diagnostics.trimEnd());
-        }
-      } catch (err) {
-        output!.hidden = false;
-        renderError(output!, String((err as Error)?.message || err));
-      } finally {
-        formatButton!.disabled = false;
-      }
-    }
-
-    button.addEventListener('click', run);
-    formatButton.addEventListener('click', format);
-    editor.addEventListener('keydown', (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault();
-        run();
-      }
-    });
-  }
+  import { mountPlayground } from '../scripts/emela-playground';
 
   function init(): void {
-    document.querySelectorAll<HTMLElement>('.emela-playground').forEach(wire);
+    document.querySelectorAll<HTMLElement>('.emela-playground').forEach(mountPlayground);
   }
 
   init();

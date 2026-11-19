@@ -1,0 +1,96 @@
+/* Beryl for the Starlight pages.
+   Dark mode is the palette of beryl.vim (lua/beryl/palette.lua; the names in the comments are the
+   names there). Beryl has no light variant: light mode keeps Starlight's structure and takes its
+   hues from the same palette, darkened until text passes WCAG AA (4.5:1) on its background.
+   The tour pages do not load this file; they use beryl.css. */
+
+:root,
+::backdrop {
+  /* Dark mode. */
+  --sl-color-white: #e4f4ef; /* fg */
+  --sl-color-gray-1: #c9dbd6; /* fg and fg_dim, 50% each */
+  --sl-color-gray-2: #afc2bd; /* fg_dim */
+  --sl-color-gray-3: #7f9a93; /* comment: 5.6:1 on bg_dark */
+  --sl-color-gray-4: #55635f; /* gray */
+  --sl-color-gray-5: #1e3732; /* bg_hl: inline code, light hairlines */
+  --sl-color-gray-6: #112b26; /* bg: navigation, sidebar, code blocks */
+  --sl-color-black: #0d201c; /* bg_dark: page */
+
+  --sl-color-accent-low: #10473c; /* bg_visual */
+  --sl-color-accent: #24c0a1; /* emerald_light */
+  --sl-color-accent-high: #5fd9bc; /* keyword: links, 9.8:1 on bg_dark */
+
+  --sl-color-text: var(--sl-color-white); /* 14.9:1 on bg_dark */
+  --sl-color-text-invert: var(--sl-color-black); /* 7.4:1 on accent, 9.8:1 on accent-high */
+
+  /* Hues for the light mode formulas of Starlight. */
+  --sl-hue-orange: 39;
+  --sl-hue-green: 168;
+  --sl-hue-blue: 205;
+  --sl-hue-purple: 266;
+  --sl-hue-red: 17;
+
+  /* Asides and badges. */
+  --sl-color-green-low: #1d453c; /* info_bg */
+  --sl-color-green: #24c0a1; /* emerald_light */
+  --sl-color-green-high: #a9e3d6; /* mint */
+  --sl-color-orange-low: #334231; /* warn_bg */
+  --sl-color-orange: #f2c46d; /* type */
+  --sl-color-orange-high: #f5d392; /* bright.yellow */
+  --sl-color-blue-low: #2d3d45; /* hint_bg */
+  --sl-color-blue: #7fbce8; /* aquamarine */
+  --sl-color-blue-high: #9fcdee; /* bright.blue */
+  --sl-color-purple-low: #36444f; /* bg and number, 20% */
+  --sl-color-purple: #c9a6f5; /* number */
+  --sl-color-purple-high: #d6bcf8; /* bright.magenta */
+  --sl-color-red-low: #36362a; /* error_bg */
+  --sl-color-red: #e07a50; /* error_bright */
+  --sl-color-red-high: #e89b7c; /* bright.red */
+
+  /* Standard error and diagnostics of a run (custom.css). `dbg` writes to standard error, so this
+     is a calm hue; a failed run is marked by the red border of the output. */
+  --emela-stderr: #a4b1ee; /* indigo: 9.0:1 on bg_dark */
+
+  --sl-color-backdrop-overlay: rgb(13 32 28 / 0.66);
+}
+
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+  --sl-color-white: #0d201c; /* bg_dark: headings */
+  --sl-color-gray-1: #112b26; /* bg */
+  --sl-color-gray-2: #1e3732; /* bg_hl: body text, 12.7:1 on white */
+  --sl-color-gray-3: #55635f; /* gray: secondary text, 6.3:1 on white */
+  --sl-color-gray-4: #8da39c;
+  --sl-color-gray-5: #c9d8d3;
+  --sl-color-gray-6: #e7efec;
+  --sl-color-gray-7: #f4f8f7; /* code blocks, navigation */
+  --sl-color-black: #ffffff;
+
+  --sl-color-accent-low: #d5f0e8;
+  --sl-color-accent: #107460; /* emerald_dark: links 5.7:1 on white, button text 5.7:1 */
+  --sl-color-accent-high: #0f6353; /* emerald_deep */
+
+  --sl-color-text: var(--sl-color-gray-2);
+  --sl-color-text-invert: var(--sl-color-black);
+
+  /* Asides and badges: Starlight's light formulas on the Beryl hues above. */
+  --sl-color-green-high: hsl(var(--sl-hue-green), 80%, 22%);
+  --sl-color-green: hsl(var(--sl-hue-green), 70%, 36%);
+  --sl-color-green-low: hsl(var(--sl-hue-green), 50%, 90%);
+  --sl-color-orange-high: hsl(var(--sl-hue-orange), 80%, 25%);
+  --sl-color-orange: hsl(var(--sl-hue-orange), 90%, 60%);
+  --sl-color-orange-low: hsl(var(--sl-hue-orange), 90%, 88%);
+  --sl-color-blue-high: hsl(var(--sl-hue-blue), 80%, 30%);
+  --sl-color-blue: hsl(var(--sl-hue-blue), 70%, 50%);
+  --sl-color-blue-low: hsl(var(--sl-hue-blue), 70%, 92%);
+  --sl-color-purple-high: hsl(var(--sl-hue-purple), 60%, 35%);
+  --sl-color-purple: hsl(var(--sl-hue-purple), 70%, 60%);
+  --sl-color-purple-low: hsl(var(--sl-hue-purple), 70%, 93%);
+  --sl-color-red-high: hsl(var(--sl-hue-red), 70%, 32%);
+  --sl-color-red: hsl(var(--sl-hue-red), 60%, 50%);
+  --sl-color-red-low: hsl(var(--sl-hue-red), 70%, 92%);
+
+  --emela-stderr: #4a55a8; /* indigo, darkened: 5.7:1 on the output background */
+
+  --sl-color-backdrop-overlay: rgb(85 99 95 / 0.66);
+}

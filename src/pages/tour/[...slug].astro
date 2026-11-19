@@ -1,0 +1,138 @@
+---
+// The tour: one lesson per page, outside Starlight so that the text and the editor get the whole
+// window. The text is on the left with the pager under it, the editor and the output on the
+// right. The lessons are the `tour` collection (src/content/tour/, chapters in src/tour.ts); the
+// program of a lesson comes from its ```emela check tour block (src/remark/tour-program.mjs).
+import { render } from 'astro:content';
+import '@fontsource/ibm-plex-sans-jp/400.css';
+import '@fontsource/ibm-plex-sans-jp/700.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/600.css';
+import '@fontsource/ibm-plex-mono/400-italic.css';
+import '../../styles/custom.css';
+import '../../styles/beryl.css';
+import '../../styles/tour.css';
+import { chapters, lessons } from '../../tour';
+
+export async function getStaticPaths() {
+  const all = await lessons();
+  return all.map((lesson, index) => ({
+    params: { slug: lesson.id === 'index' ? undefined : lesson.id },
+    props: { index },
+  }));
+}
+
+const { index } = Astro.props;
+const all = await lessons();
+const lesson = all[index];
+const prev = all[index - 1];
+const next = all[index + 1];
+const { Content, remarkPluginFrontmatter } = await render(lesson);
+const program: string = remarkPluginFrontmatter.program ?? '';
+---
+
+<!doctype html>
+<html lang="ja" class="emela-tour-page" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{lesson.data.title} | Emela ツアー</title>
+    <meta name="description" content={lesson.data.description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="tour-bar">
+      <a class="tour-home" href="/tour/">Emela ツアー</a>
+      <button type="button" class="tour-toc-open" aria-haspopup="dialog">目次</button>
+      <a class="tour-docs" href="/">ドキュメントへ</a>
+    </header>
+
+    <main class="tour-main">
+      <section class="tour-lesson" aria-labelledby="tour-title">
+        <article class="tour-text">
+          <p class="tour-chapter">{lesson.chapter}</p>
+          <h1 id="tour-title">{lesson.data.title}</h1>
+          <Content />
+        </article>
+        <nav class="tour-pager" aria-label="ページ送り">
+          {prev ? <a class="tour-prev" href={prev.href} rel="prev" title={prev.data.title}>‹ 前へ</a> : <span />}
+          <span class="tour-count">{index + 1} / {all.length}</span>
+          {next ? <a class="tour-next" href={next.href} rel="next" title={next.data.title}>次へ ›</a> : <span />}
+        </nav>
+      </section>
+
+      <section class="tour-code emela-playground" aria-label="プログラム">
+        <div class="emela-pg-editor-wrap">
+                <textarea class="emela-pg-editor" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Emela ソース">{program}</textarea>
+        </div>
+        <div class="emela-pg-bar">
+          <button type="button" class="emela-run-btn emela-pg-run"><span aria-hidden="true">▶</span> Run</button>
+          <button type="button" class="emela-run-btn emela-pg-format">整形</button>
+          <button type="button" class="emela-run-btn emela-pg-reset">元に戻す</button>
+          <span class="emela-pg-hint">Ctrl / ⌘ + Enter で実行</span>
+        </div>
+        <div class="emela-run-output emela-pg-output tour-output" hidden></div>
+        <p class="tour-output-empty">▶ Run を押すと、ここに出力が出ます。</p>
+      </section>
+    </main>
+
+    <dialog class="tour-toc" aria-label="目次">
+      <form method="dialog" class="tour-toc-head">
+        <span>目次</span>
+        <button type="submit" aria-label="閉じる">×</button>
+      </form>
+      {
+        chapters.map((chapter) => (
+          <section>
+            <h2>{chapter.title}</h2>
+            <ol>
+              {all
+                .filter((l) => l.chapter === chapter.title)
+                .map((l) => (
+                  <li>
+                    <a href={l.href} aria-current={l.id === lesson.id ? 'page' : undefined}>
+                      {l.data.title}
+                    </a>
+                  </li>
+                ))}
+            </ol>
+          </section>
+        ))
+      }
+    </dialog>
+
+    <script>
+      import { mountPlayground } from '../../scripts/emela-playground';
+
+      const code = document.querySelector<HTMLElement>('.tour-code');
+      if (code) {
+        mountPlayground(code);
+        // The placeholder goes once the output panel shows something.
+        const output = code.querySelector<HTMLElement>('.tour-output');
+        const empty = code.querySelector<HTMLElement>('.tour-output-empty');
+        if (output && empty) {
+          new MutationObserver(() => {
+            empty.hidden = !output.hidden;
+          }).observe(output, { attributes: true, attributeFilter: ['hidden'] });
+        }
+      }
+
+      const toc = document.querySelector<HTMLDialogElement>('.tour-toc');
+      document.querySelector('.tour-toc-open')?.addEventListener('click', () => toc?.showModal());
+      toc?.addEventListener('click', (event) => {
+        if (event.target === toc) toc.close();
+      });
+
+      // PageUp and PageDown move between lessons, except while typing in the editor.
+      document.addEventListener('keydown', (event) => {
+        if (event.target instanceof HTMLTextAreaElement) return;
+        const rel = event.key === 'PageDown' ? 'next' : event.key === 'PageUp' ? 'prev' : null;
+        const link = rel && document.querySelector<HTMLAnchorElement>(`.tour-pager a[rel="${rel}"]`);
+        if (link) {
+          event.preventDefault();
+          location.href = link.href;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,353 @@
+/* The tour (src/pages/tour/): a bar on top, the lesson on the left and the editor on the right,
+   filling the window. The colors are tokens; src/styles/beryl.css gives them the Beryl palette.
+   custom.css styles the editor, the buttons and the output, through the --sl-* variables. */
+
+.emela-tour-page,
+.emela-tour-page body {
+  height: 100%;
+  margin: 0;
+}
+
+.emela-tour-page body {
+  display: flex;
+  flex-direction: column;
+  font-family: 'IBM Plex Sans JP', system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--tour-fg);
+  background: var(--tour-bg);
+}
+
+.emela-tour-page a {
+  color: var(--tour-link);
+}
+
+/* Outside Starlight there is no reset. */
+.emela-tour-page *,
+.emela-tour-page *::before,
+.emela-tour-page *::after {
+  box-sizing: border-box;
+}
+
+.emela-tour-page button {
+  font-family: inherit;
+}
+
+/* The bar on top. */
+.tour-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: var(--sl-nav-height);
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--tour-border);
+  flex: none;
+}
+
+.tour-home {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--tour-heading) !important;
+}
+
+.tour-toc-open {
+  font: inherit;
+  font-size: var(--sl-text-sm);
+  color: var(--tour-fg);
+  background: transparent;
+  border: 1px solid var(--tour-border);
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.8rem;
+  cursor: pointer;
+}
+
+.tour-toc-open:hover {
+  border-color: var(--tour-accent);
+}
+
+.tour-docs {
+  margin-left: auto;
+  font-size: var(--sl-text-sm);
+}
+
+/* The lesson and the editor side by side. */
+.tour-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(20rem, 2fr) 3fr;
+}
+
+.tour-lesson {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--tour-panel);
+  border-right: 1px solid var(--tour-border);
+}
+
+.tour-text {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem 2rem;
+}
+
+.tour-chapter {
+  margin: 0;
+  font-size: var(--sl-text-sm);
+  color: var(--tour-muted);
+}
+
+.tour-text h1 {
+  margin: 0.2rem 0 1.2rem;
+  font-size: 1.75rem;
+  line-height: 1.3;
+  color: var(--tour-heading);
+}
+
+.tour-text h2 {
+  margin: 2rem 0 0.8rem;
+  font-size: 1.2rem;
+  color: var(--tour-heading);
+}
+
+.tour-text p,
+.tour-text ul,
+.tour-text ol {
+  margin: 0 0 1rem;
+}
+
+.tour-text li + li {
+  margin-top: 0.3rem;
+}
+
+.tour-text code {
+  font-family: var(--emela-mono);
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+  color: var(--tour-code-fg);
+  background: var(--tour-code-bg);
+  border-radius: 0.3rem;
+}
+
+/* A callout: a blockquote in a lesson, opened by a bold label (`> **試してみよう**`). */
+.tour-text blockquote {
+  position: relative;
+  margin: 1.5rem 0;
+  padding: 0.9rem 1.1rem 0.9rem 3rem;
+  background: var(--tour-code-bg);
+  border-radius: 0.5rem;
+}
+
+.tour-text blockquote::before {
+  content: '💡';
+  position: absolute;
+  left: 1rem;
+  top: 0.85rem;
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.tour-text blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.tour-text blockquote strong:first-child {
+  display: block;
+  color: var(--tour-heading);
+}
+
+.tour-text blockquote code {
+  background: var(--tour-bg);
+}
+
+.tour-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 2rem;
+  border-top: 1px solid var(--tour-border);
+  flex: none;
+}
+
+.tour-pager a {
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.tour-count {
+  font-size: var(--sl-text-sm);
+  color: var(--tour-muted);
+}
+
+/* The editor fills the right side; the output takes a fixed share under it. */
+.tour-code {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+.tour-code .emela-pg-editor-wrap {
+  flex: 3;
+  min-height: 0;
+  background: var(--tour-editor-bg);
+  border-color: var(--tour-border);
+}
+
+.tour-code .emela-pg-editor,
+.tour-code .emela-pg-editor-wrap .cm-editor {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+}
+
+.tour-code .emela-pg-bar {
+  margin: 0;
+  flex: none;
+}
+
+.tour-code .tour-output,
+.tour-output-empty {
+  flex: 2;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+}
+
+.tour-output-empty {
+  padding: 0.7rem 0.9rem;
+  font-size: var(--sl-text-sm);
+  color: var(--tour-muted);
+  border: 1px dashed var(--tour-border);
+  border-radius: 0.4rem;
+}
+
+.tour-output-empty[hidden] {
+  display: none;
+}
+
+/* The table of contents. */
+.tour-toc {
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 0 1.5rem 1.2rem;
+  color: var(--tour-fg);
+  background: var(--tour-panel);
+  border: 1px solid var(--tour-border);
+  border-radius: 0.6rem;
+}
+
+.tour-toc::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+.tour-toc-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 0;
+  font-weight: 700;
+  background: var(--tour-panel);
+}
+
+.tour-toc-head button {
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--tour-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.tour-toc h2 {
+  margin: 0.8rem 0 0.3rem;
+  font-size: var(--sl-text-sm);
+  color: var(--tour-muted);
+}
+
+.tour-toc ol {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.tour-toc a {
+  text-decoration: none;
+}
+
+.tour-toc a[aria-current='page'] {
+  color: var(--tour-heading);
+  font-weight: 700;
+}
+
+/* A narrow screen: the lesson, then the editor, scrolling as one page. */
+@media (max-width: 52rem) {
+  .emela-tour-page,
+  .emela-tour-page body {
+    height: auto;
+  }
+
+  .tour-main {
+    display: block;
+  }
+
+  .tour-lesson {
+    border-right: 0;
+    border-bottom: 1px solid var(--tour-border);
+  }
+
+  .tour-text {
+    padding: 1.2rem 1rem;
+  }
+
+  /* A callout: a blockquote in a lesson, opened by a bold label (`> **試してみよう**`). */
+.tour-text blockquote {
+  position: relative;
+  margin: 1.5rem 0;
+  padding: 0.9rem 1.1rem 0.9rem 3rem;
+  background: var(--tour-code-bg);
+  border-radius: 0.5rem;
+}
+
+.tour-text blockquote::before {
+  content: '💡';
+  position: absolute;
+  left: 1rem;
+  top: 0.85rem;
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.tour-text blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.tour-text blockquote strong:first-child {
+  display: block;
+  color: var(--tour-heading);
+}
+
+.tour-text blockquote code {
+  background: var(--tour-bg);
+}
+
+.tour-pager {
+    padding: 0.6rem 1rem;
+  }
+
+  .tour-code .emela-pg-editor,
+  .tour-code .emela-pg-editor-wrap .cm-editor {
+    height: auto;
+    min-height: 16rem;
+  }
+
+  .tour-code .tour-output,
+  .tour-output-empty {
+    min-height: 4rem;
+  }
+}

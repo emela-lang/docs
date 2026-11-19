@@ -1,0 +1,55 @@
+/* Beryl, the colorscheme of the tour pages (dark only).
+   Colors come from the palette of beryl.vim (lua/beryl/palette.lua); the names in the comments
+   are the names there. Every text color has at least 4.5:1 contrast on bg and bg_dark. */
+
+.emela-tour-page {
+  color-scheme: dark;
+
+  /* Tour tokens (used by tour.css). */
+  --tour-bg: #0d201c; /* bg_dark */
+  --tour-panel: #0d201c; /* bg_dark */
+  --tour-editor-bg: #112b26; /* bg */
+  --tour-fg: #e4f4ef; /* fg: 14.9:1 on bg_dark, 13.2:1 on bg */
+  --tour-muted: #afc2bd; /* fg_dim: 9.1:1 on bg_dark */
+  --tour-border: #2a433e; /* nontext */
+  --tour-accent: #24c0a1; /* emerald_light */
+  --tour-accent-fg: #0d201c; /* bg_dark: 7.4:1 on emerald_light */
+  --tour-link: #7fbce8; /* aquamarine */
+  --tour-heading: #5fd9bc; /* keyword */
+  --tour-code-bg: #1e3732; /* bg_hl */
+  --tour-code-fg: #f4a77a; /* string: 6.5:1 on bg_hl */
+  --tour-error: #e07a50; /* error_bright */
+  --tour-selection: #10473c; /* bg_visual */
+
+  /* The Starlight variables custom.css uses, so the editor, buttons and output render in Beryl.
+     Starlight's own CSS is not loaded on the tour pages. */
+  --sl-color-accent: var(--tour-accent);
+  --sl-color-black: #0d201c; /* bg_dark */
+  --sl-color-text: var(--tour-fg);
+  --sl-color-text-invert: var(--tour-accent-fg);
+  --sl-color-gray-2: #afc2bd; /* fg_dim: keyboard hint */
+  --sl-color-gray-3: #7f9a93; /* comment: hints and output notes, 5.6:1 on bg_dark */
+  --sl-color-gray-4: #55635f; /* gray: border of a running output */
+  --sl-color-gray-5: #2a433e; /* nontext: borders */
+  --sl-color-gray-6: #0d201c; /* bg_dark: output background */
+  --sl-color-red: #e07a50; /* error_bright: border of a failed output */
+  /* Standard error and diagnostics. `dbg` writes to standard error, so this is a calm hue rather
+     than an alarm; a failed run is marked by the red border instead. */
+  --sl-color-red-high: #a4b1ee; /* indigo: 9.0:1 on bg_dark */
+  --sl-text-sm: 0.875rem;
+  --sl-text-xs: 0.8125rem;
+  --sl-font-mono:
+    ui-monospace, 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono',
+    'Courier New', monospace;
+  --sl-nav-height: 3rem;
+}
+
+/* The tour editor's background. The selector outranks custom.css's
+   `:root[data-theme='dark'] .emela-pg-editor-wrap`. */
+html.emela-tour-page:root .emela-pg-editor-wrap {
+  background: var(--tour-editor-bg);
+}
+
+.emela-tour-page ::selection {
+  background: var(--tour-selection);
+}
