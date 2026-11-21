@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       # Playground が動かすブラウザ用コンパイラを、docs が説明する版（.emela-version）のリリースから取る。
       - id: pin
         run: echo "version=$(cat .emela-version)" >> "$GITHUB_OUTPUT"
