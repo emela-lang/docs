@@ -22,23 +22,27 @@ handler EnvConfig: Config {
 
 handler MemoryStore(prefix: String): Store {
   init {
-    prefix = (use Config).prefix()
-    (use Console).print_line("open store #{prefix}")
+    config <- Config
+    console <- Console
+    prefix = config.prefix()
+    console.print_line("open store #{prefix}")
     MemoryStore(prefix:)
   }
 
   release {
-    (use Console).print_line("close store #{self.prefix}")
+    console <- Console
+    console.print_line("close store #{self.prefix}")
   }
 
   fn get(key) { "#{self.prefix}/#{key}" }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, EnvConfig, MemoryStore {
-    store = use Store
-    (use Console).print_line(store.get("alice"))
-    (use Console).print_line(store.get("bob"))
+    store <- Store
+    console.print_line(store.get("alice"))
+    console.print_line(store.get("bob"))
   }
 }
 ```
@@ -70,25 +74,28 @@ effect Store {
 
 handler MemoryStore(prefix: String): Store {
   init {
-    (use Console).print_line("open")
+    console <- Console
+    console.print_line("open")
     MemoryStore(prefix: "v1")
   }
   release {
-    (use Console).print_line("close")
+    console <- Console
+    console.print_line("close")
   }
   fn get(key) { "#{self.prefix}/#{key}" }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole {
     r = with MemoryStore {
-      (use Console).print_line("body")
+      console.print_line("body")
       if True { fail Boom }
       "unreachable"
     } escape {
       Boom -> "recovered"
     }
-    (use Console).print_line(r)
+    console.print_line(r)
   }
 }
 ```
@@ -125,11 +132,11 @@ handler `Fixed` can only be constructed in its own `init`
 
 init の中では、ハンドラの名前の代わりに `Self(...)` と書いても同じ値を作れます（フィールドのないハンドラなら `Self`）。
 
-init は引数を取れます。`init(prefix: String) { MemoryStore(prefix:) }` と書き、with では `with MemoryStore(prefix: "v1") { ... }` のように渡します。引数は with に入る前、with の外で評価されます。設定をエフェクトから受け取るときは、最初の例の `Config` のように init で use します。
+init は引数を取れます。`init(prefix: String) { MemoryStore(prefix:) }` と書き、with では `with MemoryStore(prefix: "v1") { ... }` のように渡します。引数は with に入る前、with の外で評価されます。設定をエフェクトから受け取るときは、最初の例の `Config` のように init で別名を付けて呼びます。
 
 ### 依存と初期化の順序
 
-init、release、操作の本体で `use` したエフェクトが、そのハンドラの依存です。依存は with の外側のハンドラか、同じ with で先に初期化されたハンドラが満たします。`with H1, ..., Hn { 本体 }` はハンドラを依存の順に並べて init を順に実行し、本体を評価してから、逆の順に release を実行します。
+init、release、操作の本体で呼んだエフェクトが、そのハンドラの依存です。依存は with の外側のハンドラか、同じ with で先に初期化された名前のない項目のハンドラが満たします。`with H1, ..., Hn { 本体 }` はハンドラを依存の順に並べて init を順に実行し、本体を評価してから、逆の順に release を実行します。
 
 途中の init が失敗すると、初期化の済んだハンドラだけを逆順に release し、本体は評価しません。with はその init のエラーで終わるので、escape で受けられます。
 
@@ -148,29 +155,38 @@ effect Db {
 
 handler EnvConfig: Config {
   init {
-    (use Console).print_line("init config")
+    console <- Console
+    console.print_line("init config")
     EnvConfig
   }
-  release { (use Console).print_line("release config") }
+  release {
+    console <- Console
+    console.print_line("release config")
+  }
   fn url() { "db://down" }
 }
 
 handler LocalDb(url: String): Db {
   init {
-    url = (use Config).url()
+    config <- Config
+    url = config.url()
     if url == "db://down" { fail ConnectFailed(url:) }
     LocalDb(url:)
   }
-  release { (use Console).print_line("disconnect") }
+  release {
+    console <- Console
+    console.print_line("disconnect")
+  }
   fn query(sql) { sql }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole {
     with EnvConfig, LocalDb {
-      (use Console).print_line("body")
+      console.print_line("body")
     } escape {
-      ConnectFailed(url:) -> (use Console).print_line("cannot connect to #{url}")
+      ConnectFailed(url:) -> console.print_line("cannot connect to #{url}")
     }
   }
 }
@@ -208,10 +224,14 @@ handler MemoryFiles: Files {
   handler Open(path: String): ReadFile {
     init(path: String) {
       if path == "missing.txt" { fail FileMissing(path:) }
-      (use Console).print_line("open #{path}")
+      console <- Console
+      console.print_line("open #{path}")
       Self(path:)
     }
-    release { (use Console).print_line("close #{self.path}") }
+    release {
+      console <- Console
+      console.print_line("close #{self.path}")
+    }
     fn read() { "contents of #{self.path}" }
   }
 }
@@ -220,7 +240,7 @@ fn concat(a: use ReadFile, b: use ReadFile) -> String { "#{a.read()} + #{b.read(
 
 fn main() {
   with SystemConsole, MemoryFiles {
-    console = use Console
+    console <- Console
     with a = Files.Open("a.txt"), b = Files.Open("b.txt") {
       console.print_line(concat(a, b))
     }
@@ -245,7 +265,7 @@ no missing.txt
 
 - メンバーの引数は内側のハンドラの init の引数で、`fails` はその init の E です。
 - with では `x = Files.Open(引数)` の形で開きます。最も内側で Files を供給するハンドラの Open の init が走り、x はその能力の値になります。with を抜けるときに release が走ります。能力の値 `fs: use Files` からは `fs.Open(引数)` で開けます。
-- メンバーで開いたエフェクトは名前では `use` できません。束縛した x を通してだけ使います。同じ with に `Files.Open` を2つ並べても、a と b はそれぞれのファイルを指します。
+- メンバーで開いたエフェクトは名前では供給されません。束縛した x を通してだけ使います。同じ with に `Files.Open` を2つ並べても、a と b はそれぞれのファイルを指します。
 - 実装する側は、メンバーと同じ名前の内側のハンドラを書きます。括弧の中はそのフィールドで、init はメンバーと同じ名前と型の引数を取ります。内側のハンドラが使うエフェクト（上の Console）は外側のハンドラ（MemoryFiles）の依存になります。
 - init の中でもメンバーを式として開けます（`first = Files.Open(path)`）。開いたハンドラは、開いた側のハンドラが release された後に、開いた順の逆に release されます。開いた能力は `use ReadFile` 型のフィールドに持てます。
 - `suspend handler Open(...)` と宣言したメンバーは、開くときと閉じるときに中断できます（[中断する操作](/guide/suspend/)）。
@@ -272,30 +292,46 @@ effect Cache {
 
 handler EnvConfig: Config {
   init {
-    (use Console).print_line("init config")
+    console <- Console
+    console.print_line("init config")
     EnvConfig
   }
-  release { (use Console).print_line("release config") }
+  release {
+    console <- Console
+    console.print_line("release config")
+  }
   fn url() { "db://local" }
 }
 
 handler LocalDb(url: String): Db {
   init {
-    url = (use Config).url()
-    (use Console).print_line("connect #{url}")
+    config <- Config
+    console <- Console
+    url = config.url()
+    console.print_line("connect #{url}")
     LocalDb(url:)
   }
-  release { (use Console).print_line("disconnect #{self.url}") }
+  release {
+    console <- Console
+    console.print_line("disconnect #{self.url}")
+  }
   fn query(sql) { "#{sql} @ #{self.url}" }
 }
 
 handler DbCache: Cache {
   init {
-    (use Console).print_line("init cache")
+    console <- Console
+    console.print_line("init cache")
     DbCache
   }
-  release { (use Console).print_line("release cache") }
-  fn get(key) { (use Db).query("get #{key}") }
+  release {
+    console <- Console
+    console.print_line("release cache")
+  }
+  fn get(key) {
+    db <- Db
+    db.query("get #{key}")
+  }
 }
 
 layer AppLive {
@@ -309,11 +345,13 @@ handler TestConfig: Config {
 }
 
 fn main() {
+  console <- Console
+  cache <- Cache
   with SystemConsole, AppLive {
-    (use Console).print_line((use Cache).get("a"))
+    console.print_line(cache.get("a"))
   }
   with SystemConsole, AppLive, TestConfig {
-    (use Console).print_line((use Cache).get("b"))
+    console.print_line(cache.get("b"))
   }
 }
 ```
@@ -343,7 +381,7 @@ layer の中で満たされない依存はエラーにならず、with の R に
 ```emela
 layer Storage {
   DbCache
-  LocalDb      # init で Config を use している
+  LocalDb      # init で Config を使っている
 }
 
 fn main() {
@@ -367,8 +405,9 @@ import Std.Platform.{Platform}
 import Std.Console.{Console}
 
 fn main() {
+  console <- Console
   with Platform {
-    (use Console).print_line("hi")
+    console.print_line("hi")
   }
 }
 ```
@@ -380,13 +419,15 @@ import Std.Console.{Console}
 import Std.Process.{Process, Args, Stdout}
 
 fn main() {
+  args <- Args
+  console <- Console
   with Process {
-    names = (use Args).list()
-    out = use Stdout
+    names = args.list()
+    out <- Stdout
     out.print("hello")
     List.map(names, |n| out.print(", #{n}"))
     out.print_line("")
-    (use Console).print_line("#{List.length(names)} names")
+    console.print_line("#{List.length(names)} names")
   }
 }
 ```
@@ -420,7 +461,7 @@ pub fn run[S, A, E, R](
 import Std.State.{State}
 
 fn count_words(words: List[String]) {
-  st = use State[Int]
+  st <- State[Int]
   List.map(words, |w| st.update(|n| n + 1))
   st.get()
 }
@@ -434,7 +475,7 @@ fn main() {
 
 `State.run(initial, body)` は、初期値 initial の状態を供給して body を実行し、body の値と最後の状態の組を返します。body の R から `State[S]` が消えるので、外からは純粋に見えます。`count_words` を呼んでも、`main` の R には何も残りません。
 
-状態の型 S は body の R の `State[...]` から決まるので、`State.run([], ...)` の `[]` の要素の型も推論されます。`update` の一息での実行や、中断をまたぐときの扱いは [State と Fiber](/std/state-fiber/) にあります。
+状態の型 S は body の R の `State[...]` から決まるので、`State.run([], ...)` の `[]` の要素の型も推論されます。`update` の一息での実行や、中断をまたぐときの扱いは [State と Task](/std/state-task/) にあります。
 
 ### body が失敗したとき
 
@@ -446,7 +487,7 @@ import Std.State.{State}
 error TooMany(n: Int)
 
 fn push(x: Int) {
-  st = use State[List[Int]]
+  st <- State[List[Int]]
   st.set(List.append(st.get(), [x]))
   if List.length(st.get()) > 2 { fail TooMany(n: x) }
 }
@@ -483,10 +524,12 @@ type Hits(n: Int)
 type Misses(n: Int)
 
 fn look(key: String) {
+  hits <- State[Hits]
+  misses <- State[Misses]
   if key == "a" {
-    (use State[Hits]).update(|h| Hits(n: h.n + 1))
+    hits.update(|h| Hits(n: h.n + 1))
   } else {
-    (use State[Misses]).update(|m| Misses(n: m.n + 1))
+    misses.update(|m| Misses(n: m.n + 1))
   }
 }
 
@@ -516,13 +559,14 @@ effect Logger {
 
 handler RecordingLogger: Logger {
   fn info(msg) {
-    st = use State[List[String]]
+    st <- State[List[String]]
     st.set(List.append(st.get(), [msg]))
   }
 }
 
 fn greet(name: String) {
-  (use Logger).info("hello #{name}")
+  logger <- Logger
+  logger.info("hello #{name}")
 }
 
 fn main() {
@@ -540,7 +584,47 @@ fn main() {
 
 ## 能力を with の外へ持ち出さない
 
-能力の値と、それを抱えた値（捕まえたクロージャや、能力を入れたデータ）は、供給元の with の外へ出せません。外へ出たクロージャを呼ぶと、release 済みのハンドラを使うことになるためです。
+能力は、with の項目のハンドラが init を終えてから release されるまでの間だけあります。能力の値と、それを抱えた値（捕まえたクロージャや、能力を入れたデータ）は、その能力を作った with の外へ出せません。外へ出たクロージャを呼ぶと、release 済みのハンドラを使うことになるためです。
+
+```emela check=error
+import Std.Console.{Console, SystemConsole}
+
+effect Logger {
+  fn info(msg: String) -> ()
+}
+
+handler FileLogger(name: String): Logger {
+  init { FileLogger(name: "app.log") }
+  release { () }
+  fn info(msg) {
+    console <- Console
+    console.print_line("#{self.name}: #{msg}")
+  }
+}
+
+fn make_greeter() {
+  with log = FileLogger {
+    || log.info("hi") # log を抱えたまま with の外に出る
+  }
+}
+
+fn main() {
+  with SystemConsole {
+    greet = make_greeter()
+    greet()
+  }
+}
+```
+
+```text
+error[E4405]: capability `log` leaves the `with` that made it
+```
+
+- 能力の値の操作を呼ぶと、R にはその能力そのもの（`log`）が載ります。`|| log.info("hi")` の型は `fn() -> () uses { log }` です。
+- with の本体の値の型、本体から出るエラーの型、with の R のどれかにその with が作った能力が残ると、E4405 のエラーです。どの経路で外へ出ようとしても、能力は型と R に残るので、コンパイラが止めます。
+- 能力の値そのものを返したり、データに入れて返したりしても同じです。with の中で引数に渡す、データに入れる、クロージャで捕まえるのはかまいません（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, |n| log.info(n))`）も問題ありません。
+
+別名はどのハンドラにも固定されないので、別名を使うクロージャは with の外へ出せます。そのクロージャのエフェクトは型の R に残り、呼んだ場所のハンドラが供給します。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -552,22 +636,28 @@ effect Logger {
 handler FileLogger(name: String): Logger {
   init { FileLogger(name: "app.log") }
   release { () }
-  fn info(msg) { (use Console).print_line("#{self.name}: #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("#{self.name}: #{msg}")
+  }
 }
 
-handler QuietLogger: Logger {
-  fn info(msg) { () }
+handler PlainLogger: Logger {
+  fn info(msg) {
+    console <- Console
+    console.print_line(msg)
+  }
 }
 
 fn make_greeter() {
+  log <- Logger
   with FileLogger {
-    log = use Logger
-    || log.info("hi") # log を抱えたまま with の外に出る
+    || log.info("hi") # 型は fn() -> () uses { Logger }
   }
 }
 
 fn main() {
-  with SystemConsole, QuietLogger {
+  with SystemConsole, PlainLogger {
     greet = make_greeter()
     greet()
   }
@@ -576,24 +666,7 @@ fn main() {
 
 ```console
 $ emela run main.emel
-warning[W0402]: a value that holds `log` leaves the `with` that provides it
-    ╭─[ main.emel:20:5 ]
-    │
- 18 │   with FileLogger {
-    │        ─────┬────
-    │             ╰────── `log` is released at the end of this `with`
-    │
- 20 │     || log.info("hi") # log を抱えたまま with の外に出る
-    │     ────────┬────────
-    │             ╰────────── the value of the body holds `log`
-────╯
-
-1 warning
-defect: handler FileLogger was used after release
+hi
 ```
 
-コンパイラは、値がどの能力を抱えているかを型とともに追跡し（capture set）、with の本体の値がその with の供給した能力を抱えていれば W0402 の警告を出します。capture set は推論され、ソースには書きません（[エディタ](/tools/editors/)の LSP がホバーで表示します）。実験的な機能 `capture-checking` を有効にすると、この警告はエラー（E0444）になります。コマンドに `--experimental-capture-checking` を付けるか、`Pome.toml` の `[experimental]` に `capture-checking = true` と書きます。
-
-警告のままなので、実行時にも検査します。release 済みのハンドラの操作を呼ぶと `handler <名前> was used after release` の defect になります。この検査が掛かるのは、フィールド、init、release のどれかを持つハンドラだけです。状態を持たないハンドラは、with の外へ持ち出しても動きます。
-
-能力の値そのものを返したり、データに入れて返したりしても同じ扱いです。with の中で引数に渡す、データに入れるのはかまいません（[エフェクトとハンドラ](/guide/effects/)）。with の中で使い終わるクロージャ（`List.map(names, |n| log.info(n))`）も問題ありません。Scope の能力、fiber のハンドル、Deferred、Semaphore、Queue の持ち出しも同じ考え方で防ぎます（[並行処理](/guide/concurrency/)）。
+`greet()` は main の PlainLogger を使います。FileLogger は with を抜けたときに release 済みで、使われません。Task.Group の能力、Task、Deferred、Semaphore、Queue の持ち出しも同じ規則で防ぎます（[並行処理](/guide/concurrency/)）。

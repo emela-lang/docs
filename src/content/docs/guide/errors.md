@@ -155,7 +155,7 @@ fn main() {
 - `_` の腕は E からすべてのタグを消します。`_` より下の腕は冗長として警告（W3101）になります。
 - `_` にはガードを付けられません。
 - 変数で受けることはできません。「NotFound か DbError のどちらか」という値の型はないためです。エラーの中身を見たいときは構成子の名前で受けます。
-- defect と fiber の中断はエラーではないので、`_` でも受けません。
+- defect とタスクの中断はエラーではないので、`_` でも受けません。
 
 ガード付きの腕で一部の値だけ受けたときの E や、関数を受け取る関数の中の escape の扱いは、[型と効果の体系](/reference/type-system/)にあります。
 
@@ -264,18 +264,21 @@ effect Db {
 
 handler FakeDb: Db {
   init {
-    (use Console).print_line("open")
+    console <- Console
+    console.print_line("open")
     FakeDb
   }
   release {
-    (use Console).print_line("close")
+    console <- Console
+    console.print_line("close")
   }
   fn query(sql) { 1 / 0 }
 }
 
 fn main() {
+  db <- Db
   with SystemConsole, FakeDb {
-    _ = (use Db).query("select 1")
+    _ = db.query("select 1")
   }
 }
 ```

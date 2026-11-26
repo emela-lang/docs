@@ -27,7 +27,7 @@ import Std.Platform.{Platform}
 fn main() {
   chapters = ["基本", "データ", "エラー", "エフェクト", "並行処理", "その先へ"]
   with Platform {
-    console = use Console
+    console <- Console
     List.each(List.enumerate(chapters), |(i, title)| {
       console.print_line("#{i + 1}. #{title} ✓")
     })

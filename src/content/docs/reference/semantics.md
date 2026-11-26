@@ -1,6 +1,6 @@
 ---
 title: 実行時の意味
-description: 評価順序、with の実行、エラーと defect の伝播、main の終わり方、中断と再開、fiber、const の評価、終了コード
+description: 評価順序、with の実行、エラーと defect の伝播、main の終わり方、中断と再開、task、const の評価、終了コード
 ---
 
 :::note[規範は仕様]
@@ -85,7 +85,8 @@ handler FixedConfig: Config {
 
 handler NamedLog: Log {
   init {
-    dbg("init NamedLog #{(use Config).name()}")
+    config <- Config
+    dbg("init NamedLog #{config.name()}")
     NamedLog
   }
   release {
@@ -98,8 +99,9 @@ handler NamedLog: Log {
 }
 
 fn main() {
+  log <- Log
   with NamedLog, FixedConfig {
-    (use Log).info("body")
+    log.info("body")
   }
 }
 ```
@@ -118,7 +120,8 @@ NamedLog は init で Config を使うので、書いた順によらず FixedCon
 - 手順3は本体がどの形で終わっても実行します。release は正常終了、エラー、defect、中断のどの場合でも1回実行されます。release の実行中は中断されません。
 - 引数の評価が失敗したときは、まだどの init も実行していないので何も release せず、with はそのエラーで終わります。
 - ある init が失敗したときは、それまでに初期化が済んだハンドラだけを逆順に release し、本体は評価しません。失敗したハンドラ自身の release は実行しません（init が値を返していないため）。with はその init のエラーで終わります。
-- ハンドラの操作の本体で使うエフェクトは、その with の外側のハンドラか、同じ with で先に初期化されたハンドラが供給します。
+- ハンドラの操作の本体で使うエフェクトは、その with の外側のハンドラか、同じ with で先に初期化された名前のない項目のハンドラが供給します。
+- 名前を付けた項目（`x = H`）はエフェクトを名前では供給しません。上書きされることもないので、必ず初期化します。
 - 同じエフェクトを供給するハンドラが並んだときは後ろが優先され、上書きされた前のハンドラは初期化もしません。その引数も評価しません。
 - 複数のエフェクトを実装するハンドラは、そのすべてを供給します。init と release は1回ずつ実行します。
 - ハンドラメンバーの項目（`x = E.M(引数)` や `x = c.M(引数)`）は、E（または c）を供給するハンドラのメンバー M の init を実行します。並び順は、ほかの項目と同じく要求（E か c だけ）で決めます。
@@ -147,7 +150,8 @@ handler FixedConfig: Config {
 
 handler FailingDb: Db {
   init {
-    fail ConnectFailed(reason: (use Config).url())
+    config <- Config
+    fail ConnectFailed(reason: config.url())
   }
   release {
     dbg("release FailingDb")
@@ -156,8 +160,9 @@ handler FailingDb: Db {
 }
 
 fn main() {
+  db <- Db
   with FixedConfig, FailingDb {
-    dbg((use Db).query("select 1"))
+    dbg(db.query("select 1"))
   }
   ()
 }
@@ -281,8 +286,9 @@ handler NoisyLog: Log {
 }
 
 fn main() {
+  log <- Log
   with NoisyLog {
-    (use Log).info("body")
+    log.info("body")
     panic("body failed")
   }
 }
@@ -303,8 +309,8 @@ suspend な操作の呼び出しは次の手順で進みます。
 
 1. suspend な操作を呼ぶと、呼び出し元の残りの計算が継続として取り出され、ハンドラの操作の本体が実行される。
 2. ハンドラが `resume(v)` を呼ぶと、継続が再開し、操作の呼び出し式の値が v になる。
-3. 操作の本体の中でその場で resume した場合、呼び出し元は中断せずに続きを実行する。resume の後に操作の本体の残りがあれば、それを先に実行し終えてから呼び出し元が続く。
-4. 後から resume した場合、その resume の呼び出しの中で呼び出し元が再開し、呼び出し元が次に中断するか終わったところで resume が戻る（値は `()`）。
+3. 操作の本体の中でその場で resume した場合、呼び出し元は中断せずに続きを実行する。resume の後に操作の本体の残りがあれば、それを先に実行し終えてから呼び出し元が続く。resume の後の残りは中断しない（resume の後に中断しうる呼び出しを書くと E4305）。
+4. 後から resume した場合、その resume の呼び出しの中で呼び出し元が再開し、呼び出し元が次に中断するか終わったところで resume が戻る（値は `()`）。操作の本体の残りは、その後に中断せずに最後まで実行する。
 
 ```emela check
 effect Wait {
@@ -320,8 +326,9 @@ handler After: Wait {
 }
 
 fn main() {
+  wait <- Wait
   with After {
-    n = (use Wait).wait()
+    n = wait.wait()
     dbg(n)
   }
   ()
@@ -346,10 +353,10 @@ $ emela run main.emel
 ### resume されない継続
 
 - 中断しない文脈（R が Immediate。その場で resume するハンドラの with の中）で suspend な操作がその場で resume されなかったときは、その継続はもう resume されません（後から resume できるハンドラは依存に Async を持ち、R が Immediate でなくなるため）。この場合は、プログラムの最上位が終わるのを待たず、その時点で中断されたまま巻き戻ります。
-- resume が一度も呼ばれないまま捨てられた場合、その継続は中断されたものとして巻き戻ります。巻き戻るのは、その fiber を待っているスコープ（Fiber.scope か、プログラムの最上位）が終わるときです。継続が捨てられた瞬間を検出することは求めません。
+- resume が一度も呼ばれないまま捨てられた場合、その継続は中断されたものとして巻き戻ります。巻き戻るのは、その task を待っているもの（`Task.Group`、`Task.Background`、プログラムの最上位）が終わるときです。継続が捨てられた瞬間を検出することは求めません。
 - main の継続が中断されたまま巻き戻ったときは、標準エラーに `interrupted` を1行出し、終了コード 130 で終わります。テスト関数の継続が中断されたときは、そのテストの `interrupted` の失敗として報告し、残りのテストを続けます。
 - 中断されたまま巻き戻るときも、途中の with の release を内側から実行します。
-- native のターゲットで、走れる fiber も、待ちの登録（タイマーやファイル記述子）も、届いていない完了もなくなったときは、すべての fiber を中断し、待っている継続を巻き戻し、待っている task を取り消します（[ターゲット](/reference/targets/)）。
+- native のターゲットで、走れる fiber も、待ちの登録（タイマーやファイル記述子）も、届いていない完了もなくなったときは、すべての fiber を中断し、待っている継続を巻き戻し、ホストの待ちを取り消します（[ターゲット](/reference/targets/)）。
 
 ```emela check
 effect Wait {
@@ -364,8 +371,9 @@ handler Dropping: Wait {
 }
 
 fn main() {
+  wait <- Wait
   with Dropping {
-    n = (use Wait).wait()
+    n = wait.wait()
     dbg(n)
   }
   ()
@@ -382,99 +390,129 @@ $ echo $?
 
 ### 継続と fiber
 
-- main かテスト関数が値、エラー、defect のどれかで終わった後に残った継続（resume の後も走り続ける操作の実装など）の中の with は、release しません。
 - 他の fiber への切り替えと、中断の到達が起きるのは中断点だけです。
 - 別の fiber から呼ばれた resume（resume を値として受け渡したとき）は待ち行列に入れ、呼んだ側の一息の区間に割り込ませません。ホストのコールバックと同じ fiber からの resume は、手順3と4のとおりその場で続けます。
-- resume の後も走り続ける操作の実装は、同じ fiber の別の継続として進みます。fiber への中断は本筋の継続にだけ届き、操作の実装の継続は止めません。スコープは操作の実装の継続を待ちません。起動（main かテスト）が中断されたときは、これらの継続も閉じ（release を実行して巻き戻し）、その release の defect は起動の結果にします。
-- イベントループが空になったときは、すべての fiber を中断し、待っている継続すべてを巻き戻します。release の実行中でも打ち切ります。子を待つスコープだけは子の巻き戻りを待ちます。
+- イベントループが空になったときは、すべての fiber を中断し、待っている継続すべてを巻き戻します。release の実行中でも打ち切ります。Task.Group と Task.Background の release だけは task の巻き戻りを待ちます。
 
-## fiber に関わる規則
+## task に関わる規則
 
-fiber の使い方は [並行性](/guide/concurrency/) にあります。ここでは実行時の規則だけを並べます。
+task の使い方は [並行処理](/guide/concurrency/) にあります。ここでは実行時の規則だけを並べます。
 
 ### 切り替え
 
-- fiber は1つのスレッドの上で協調的に切り替わる軽量な実行単位です。並列ではありません。
+- task は fiber の上で走ります。fiber は1つのスレッドの上で協調的に切り替わる軽量な実行単位です。並列ではありません。
 - 切り替えが起きるのは中断点だけです。中断点とは、Async を要求する suspend な操作の呼び出しと、ランタイムが公平性のために挟む譲渡です。
 - 譲渡は中断しうる呼び出しの位置にだけ挟みます。ランタイムは中断しうる呼び出しの回数を数え、一定の回数ごとに他の fiber とホストのコールバックに譲ります。時間でなく回数で数えるので、切り替えの順序は実行のたびに同じになります。回数は規定しません。
 - 中断しうる呼び出しを挟まない区間は一息に実行されます。`st.set(st.get() + 1)` は一息ですが、`x = st.get(); helper(); st.set(x + 1)` は `helper` の R が Immediate でなければ割り込まれえます。
-- Immediate な関数は他の fiber から見て一息に実行されます。譲渡も挟みません。
-- fork は中断点ではありません。子は待ち行列に入り、親が次に中断したときに走り始めます。走り始める前に中断された子は、渡した関数を呼ばずに Interrupt で終わります。
+- Immediate な関数は他の task から見て一息に実行されます。譲渡も挟みません。
+- `start` は中断点ではありません。task は待ち行列に入り、始めた task が次に中断したときに走り始めます。走り始める前に中断された task は、渡した関数を呼ばずに終わります。
 
-### スコープの終わり方
+### Task.Group の終わり方
 
-- 子の fiber はスコープを抜けるまでに必ず終わります。スコープの本体が値を返した時点で残っている子は中断され、すべての子の巻き戻り（release を含む）が終わってから、スコープが本体の値を返します。
-- 子がエラーか defect で終わると、兄弟の fiber（スコープの本体を含む）は中断され、原因はスコープの外へ伝わります。2つ以上の子が失敗したときは、先に失敗したものをスコープの結果にし、後の失敗は注記（`note: another fiber also failed: <原因>`）に足します。
-- スコープの結果は本体と子のうち最初の Fail か Die、なければ本体の終わり方です。本体が外からの中断で巻き戻る途中に子が defect で終われば、その defect が結果になります。
-- スコープは本体が値を返したときか、子が失敗したときに閉じます。閉じた後に fork すると defect になります。兄弟の失敗で巻き戻る途中の fork、deferred、semaphore、queue も defect になり、注記に回ります。
-- 子の中の `use Scope` は、その子が属すスコープ自身を指します。子は兄弟を fork できます。
-- 入れ子のスコープでは、`use Scope` と `Fiber.fork` は最も内側のスコープを指します。外側へ fork するときは、外側で取り出した能力の値を使います（`outer = use Scope` と取り出して `outer.fork(...)`）。
-- 内側の子は内側のスコープと一緒に終わり、外側に fork した子は外側のスコープが終わるまで走ります。
-- 誰も値を入れない Deferred を待つ子は、スコープの終わりで中断されます。
-- 親より長く生きる切り離された fiber はありません。長く走る処理は main の直下のスコープで fork します。
+- Task.Group の task は、その with を抜けるまでに必ず終わります。本体が値で終わった時点で残っている task は中断され、release はすべての task の巻き戻り（release を含む）が終わるまで待ちます。with の値は本体の値です。
+- task が失敗（Fail か Die）で終わると、兄弟の task は中断され、失敗は本体の次の中断点で本体に届きます。本体はそこでその原因で失敗して巻き戻り、すべての task が巻き戻った後に with がその失敗で終わります。2つ以上の task が失敗したときは、先に失敗したものを結果にし、後の失敗は注記（`note: another task also failed: <原因>`）に足します。
+- 本体が外からの中断で巻き戻る途中に task が defect で終われば、その defect が結果になります。
+- グループは本体が終わったときか、task が失敗したときに閉じます。閉じたグループの `start` は defect（`task group was used after it closed`）です。task の失敗による巻き戻りの途中なら注記に回ります。
+- 名前を付けたグループの task は、グループの能力（`tasks.start(...)`）を通して兄弟を始められます。入れ子のグループでは、外側の能力に start した task は外側のグループが終わるまで走り、内側の task は内側のグループと一緒に終わります。
+- task の R は、グループの with の外（囲む with と、同じ with でグループより前に書いた項目）が供給します。本体の中の with や、グループより後に書いた項目が作る能力は task から使えません。
+- 誰も値を入れない Deferred を待つ task は、グループの終わりで中断されます。
+- with より長く生きる task はありません。長く走る処理は、それに頼る処理を囲む with のグループかバックグラウンドで始めます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber, Scope}
+import Std.Task.{Task}
 
 fn main() {
+  console <- Console
+  clock <- Clock
   with SystemConsole, SystemClock {
-    console = use Console
-    clock = use Clock
-    Fiber.scope(|| {
-      outer = use Scope
-      Fiber.scope(|| {
-        outer.fork(|| {
+    with outer = Task.Group {
+      with inner = Task.Group {
+        outer.start(|| {
           clock.sleep(100)
-          console.print_line("outer child")
+          console.print_line("outer task")
         })
-        Fiber.fork(|| {
+        inner.start(|| {
           clock.sleep(100)
-          console.print_line("inner child")
+          console.print_line("inner task")
         })
         clock.sleep(10)
-      })
-      console.print_line("inner scope ended")
+      }
+      console.print_line("inner group ended")
       clock.sleep(200)
-    })
+    }
   }
 }
 ```
 
 ```console
 $ emela run main.emel
-inner scope ended
-outer child
+inner group ended
+outer task
 ```
+
+### Task.Background の終わり方
+
+- バックグラウンドは閉じません。本体の実行中、task の失敗の後、本体が終わって release が待っている間のどれでも `start` できます。`start` が defect になることはありません。
+- release は、待っている間に始めたものも含めて、すべての task が終わるまで待ちます。本体が値で終わっても失敗で終わっても task を中断しません。with の値か失敗は本体のものです。
+- with が外から中断されたときは、task も中断します。release の待ちの間に届いた中断は、release のあいだ待たせたうえで task に渡し、task が巻き戻った後に release が終わります。外から中断された後に始めた task は、走り始める前に中断されます。
+- task が失敗で終わっても、兄弟と本体は止まりません。`on_failure` がその原因を受けて、その task の中で、task が巻き戻った後に呼ばれます。release は `on_failure` も待ちます。with が外から中断されて中断された task には呼びません。
+- `on_failure` の E は空です。`on_failure` の defect は release の defect と同じく扱います。
 
 ### 中断
 
-- 中断は対象の fiber が次の中断点に達したときに効果を持ちます。
-- 中断された fiber はその地点から巻き戻ります。途中の with について、ハンドラの release が内側から順に実行されます。
+- Task.Group の task が中断されるのは、グループの本体が終わったときと、同じグループの兄弟が失敗したときの2通りです。Task.Background の task は、その with が外から中断されたときだけ中断されます。task を中断する関数はありません。1つの task だけを止めるときは、専用のグループで始めてそのグループの with を終えるか、Deferred で止める合図を渡します。
+- 中断は対象の task が次の中断点に達したときに効果を持ちます。
+- 中断された task はその地点から巻き戻ります。途中の with について、ハンドラの release が内側から順に実行されます。
 - release の実行中は中断されません。中断は、実行中の release が終わった後に効きます。
-- 子が中断されるのは、スコープの本体が値を返したとき、兄弟が失敗したとき、`Fiber.interrupt` を呼ばれたときの3通りです。
-- `Fiber.interrupt` は子を中断し、巻き戻り（release を含む）が終わるまで待ちます。終わっている子には何もしません。自分自身への `Fiber.interrupt` は、その場で巻き戻ります（release の中なら release の後）。
-- 届いた中断は受け止める枠（スコープかプログラムの最上位）に達するまで巻き戻りとして続きます。途中で内側のスコープの結果を escape が受けるなどして普通の処理に戻っても、次の中断点でもう一度中断します。
+- 届いた中断は受け止める枠（グループかバックグラウンドの release か、プログラムの最上位）に達するまで巻き戻りとして続きます。途中で内側のグループの失敗を escape が受けるなどして普通の処理に戻っても、次の中断点でもう一度中断します。
 - 閉じた標準出力への書き込みも、書いた fiber をその場から中断として巻き戻し、ほかのすべての fiber を中断します。main の巻き戻りが終わると、標準エラーに何も出さずに終了コード 141 で終わります。閉じた標準エラーへの書き込みは捨てて、プログラムは続きます。
+
+```emela check
+import Std.Clock.{Clock, SystemClock}
+import Std.Task.{Task}
+
+effect Log {
+  fn info(msg: String) -> ()
+}
+
+handler Noisy: Log {
+  release { dbg("release Noisy") }
+  fn info(msg) { () }
+}
+
+fn main() {
+  clock <- Clock
+  with SystemClock {
+    with tasks = Task.Group {
+      tasks.start(|| {
+        with Noisy { clock.sleep(1000) }
+      })
+      clock.sleep(10)
+      dbg("body ends")
+    }
+  }
+  ()
+}
+```
+
+```console
+$ emela run main.emel
+"body ends"
+"release Noisy"
+```
+
+本体が終わると、眠っている task が中断され、その中の with の release が走ります。
 
 ### 失敗の原因
 
-fiber が正常に終わらなかったときの原因は3種類で、監視する側はこの区別を観測できます。
+計算が失敗したときの原因は次の2種類で、受ける側はこの区別を観測できます。中断は原因ではなく、値として受け取ることはありません。
 
 | 原因 | 発生源 | 型に現れるか |
 |---|---|---|
 | Fail | fail | 現れる（E） |
 | Die | defect | 現れない |
-| Interrupt | 中断 | 現れない |
-
-原因ごとに受け取り方が違います。
-
-| 原因 | attempt | await | スコープ |
-|---|---|---|---|
-| Fail | Failure として受ける | 届かない | 兄弟を中断して伝える |
-| Die | Failure として受ける | 届かない | 兄弟を中断して伝える |
-| Interrupt | 受けずに巻き戻る | Failure として受ける | その子だけが終わる |
 
 ```emela check
 import Std.Cause
@@ -497,59 +535,61 @@ fn main() {
 }
 ```
 
-- 待つのは join か await を呼んだ fiber だけです。ほかの fiber はその間も進みます。
-- 子の Fail と Die はスコープに伝わるので、join と await に届くのは成功か Interrupt だけです。終わった子の値は覚えておき、2回目からはすぐ返します。
-- 中断された子を join すると、中断の起こり方（`Fiber.interrupt`、スコープの終わり、resume されずに捨てられた継続）によらず defect（`fiber was interrupted`）になります。
-- release の実行中は中断を待たせるので、その間だけ join と await が失敗した子を見ることがあります。そのとき join は呼んだ fiber を中断として巻き戻し（join の型に E がないため）、await は `Failure(原因)` をそのまま返します。
-- 巻き戻りの途中の attempt は Die も受けません（release の defect を fiber の結果に残すため）。
-- attempt は自分の fiber への中断（Interrupt）を受けません。受けると、中断を握りつぶして走り続ける fiber が書けてしまうためです。Interrupt を観測できるのは、await で子を見るときだけです。
-- 子のエラーをスコープに伝えたくないときは、子の中で attempt に包みます。fork の種類はほかにありません。
+- task の値を受け取るのは `join` だけです。待つのは join を呼んだ task だけで、ほかの task はその間も進みます。終わった task の値は覚えておき、2回目からはすぐ返します。
+- task の Fail と Die はグループに届き、task が中断されるのはグループ全体が巻き戻るときだけなので、呼んだ task が巻き戻っていなければ join は値を返します。release が中断を待たせている間に、失敗したか中断された task を join すると、呼んだ task を中断として巻き戻します（join の型に E がないため）。
+- `Exit.attempt` はその場で f を実行し、Fail と Die を値に変えます。task は始めません。defect を値に変えられる境界です。
+- attempt は自分の task への中断を受けません。受けると、中断を握りつぶして走り続ける task が書けてしまうためです。巻き戻りの途中の attempt は Die も受けません（release の defect を結果に残すため）。
+- task のエラーをグループに届けたくないときは、task の中で attempt に包むか、バックグラウンドで始めます。
 
 ```emela check
-import Std.Clock.{Clock, SystemClock}
+import Std.Task.{Task}
 import Std.Cause
-import Std.Exit.{Success, Failure}
-import Std.Fiber.{Fiber}
+import Std.Exit.{Exit, Success, Failure}
+
+error Boom
 
 fn main() {
-  with SystemClock {
-    Fiber.scope(|| {
-      child = Fiber.fork(|| (use Clock).sleep(1000))
-      Fiber.interrupt(child)
-      Fiber.await(child) match {
-        Success(_)     -> dbg("success")
-        Failure(cause) -> dbg(Cause.to_string(cause)) # "interrupted"
-      }
-      Fiber.join(child) # defect: fiber was interrupted
-    })
+  r = Exit.attempt(|| {
+    with tasks = Task.Group {
+      a = tasks.start(|| 1)
+      b = tasks.start(|| {
+        if True { fail Boom }
+        2
+      })
+      a.join() + b.join()
+    }
+  })
+  r match {
+    Success(n)     -> dbg("#{n}")
+    Failure(cause) -> dbg(Cause.to_string(cause)) # "error: Boom"
   }
+  ()
 }
 ```
 
-### Semaphore と Queue
+### Deferred、Semaphore、Queue
 
-Semaphore と Queue は、Deferred と同じくスコープに属す可変な入れ物です。作れるのは Scope の操作（`Fiber.semaphore`、`Fiber.queue`）だけです。
+Deferred、Semaphore、Queue は可変な入れ物で、それぞれ同じ名前の組み込みのハンドラを with の項目に書いて作ります（`with d = Deferred`、`with s = Semaphore(permits: 10)`、`with q = Queue(capacity: 100)`）。項目の名前がその能力です。release は何もしません（Semaphore の許可は Permits の項目の release が返します）。
 
-- `Fiber.semaphore(permits)` の `permits` が 1 未満なら defect です。`Fiber.queue(capacity)` の `capacity` も同じです。
-- `with_permits(s, n, f)` は n 個の許可が空くまで待って取り、`f` を実行し、`f` がどう終わっても（値、エラー、defect、中断）許可を返します。`f` の中の with の release は許可を返す前に実行します。`f` の中で Fiber.scope を使っていれば、許可を返すのはその子がすべて終わった後です。
+- `Semaphore(permits: p)` の p が 1 未満なら defect です。`Queue(capacity: c)` の c も同じです。
+- `x = s.Permits(n: n)` は n 個の許可が空くまで待って取り、x の release が許可を返します。release は本体がどう終わっても（値、エラー、defect、中断）走り、本体の中の with の release の後に走ります。本体にグループかバックグラウンドの with があれば、その task がすべて終わった後です。`with_permits(s, n, f)` はこの項目を開いて f を実行します。
 - `n` が 1 未満のとき、また s を作ったときの許可の数より多いときは defect です。
-- 許可を待つ fiber は待ち始めた順に受け取ります。先頭の fiber が待っている間は、少ない許可で足りる後ろの fiber も取りません。許可を返すことは中断点ではありません。受け取った fiber は、返した fiber の次の中断点以降に再開します。
-- 許可は呼び出しごとに数えます。`with_permits` の `f` の中で同じ Semaphore の `with_permits` を呼ぶと、さらに許可を取ります。どの fiber も進めなくなったときは、resume されない継続と同じく fiber を中断します。
-- `try_with_permits` は、許可が空いていて s を待つ fiber がいなければ `f` を実行して `Some` を返し、そうでなければ `f` を実行せずに `None` を返します。中断点ではありません。
-- Queue の `offer` は満杯の間、`take` は空の間待ちます。待つ fiber は offer 側と take 側それぞれで待ち始めた順に扱い、値は offer を始めた順に出てきます。
-- 待っている間に中断された fiber は列から抜けます。中断された offer は何も足しません。
+- 許可を待つ task は待ち始めた順に受け取ります。先頭の task が待っている間は、少ない許可で足りる後ろの task も取りません。許可を返すことは中断点ではありません。受け取った task は、返した task の次の中断点以降に再開します。
+- 許可は開くごとに数えます。Permits の本体の中で同じ Semaphore の Permits を開くと、さらに許可を取ります。どの task も進めなくなったときは、resume されない継続と同じく task を中断します。
+- `x = s.TryPermits(n: n)` は、許可が空いていて s を待つ task がいなければ取り、そうでなければ init が NoPermits で失敗します。中断しません。`try_with_permits` はこれを使い、取れなければ f を実行せずに `None` を返します。
+- Queue の `offer` は満杯の間、`take` は空の間待ちます。待つ task は offer 側と take 側それぞれで待ち始めた順に扱い、値は offer を始めた順に出てきます。
+- 待っている間に中断された task は列から抜けます。中断された offer は何も足しません。
 - `close` の後も、すでに入っている値は `take` と `poll` で順に取り出せます。空になった後の `take`、閉じた後の `offer`、閉じたときに待っていた `take` と `offer` は QueueClosed で失敗します。`try_offer` は False を返します。2回目の `close` は何もしません。
-- `try_offer`、`poll`、`size`、`close` と、Semaphore の `available` は中断しません。
-- Semaphore と Queue は Eq も Show も持ちません。dbg は `<semaphore>`、`<queue>` と表示します。
+- Deferred の `complete` と `poll`、Queue の `try_offer`、`poll`、`size`、`close`、Semaphore の `available` は中断しません。
+- dbg はこれらの能力を `<deferred>`、`<semaphore>`、`<queue>` と表示します。
 
 ```emela check
-import Std.Fiber.{Fiber}
-import Std.Queue.{QueueClosed}
+import Std.Task.{Task}
+import Std.Queue.{Queue, QueueClosed}
 
 fn main() {
-  Fiber.scope(|| {
-    q = Fiber.queue(2)
-    Fiber.fork(|| {
+  with q = Queue(capacity: 2), tasks = Task.Group {
+    tasks.start(|| {
       List.each([1, 2, 3], |n| q.offer(n))
       q.close()
     })
@@ -560,7 +600,7 @@ fn main() {
       }
     }
     dbg(drain([]))
-  })
+  }
   ()
 }
 ```
@@ -570,63 +610,9 @@ $ emela run main.emel
 [1, 2, 3]
 ```
 
-### 持ち出しの実行時の検査
+### 持ち出し
 
-能力の値や、能力を抱えた値（能力を捕まえたクロージャやローカルの fn、能力を含むデータ）を、それを供給する with やスコープの外へ出すと、コンパイラは警告 W0402 を出します。実験的な機能 `capture-checking` を有効にすると、警告でなくエラー E0444 になります。エラーが既定でない間は、次の実行時の検査が残ります。
-
-- release 済みのハンドラの操作を呼ぶと defect（`handler PostgresUsers was used after release`）になります。この検査はフィールド、init、release のどれかを持つハンドラにだけ掛かります。
-- 終わったスコープの Scope の操作、ハンドルの join、await、interrupt、Deferred の complete、await、poll、Semaphore と Queue のすべての関数は defect になります。文面は `fiber scope was used after it ended`、`fiber was joined after its scope ended`（awaited、interrupted も同じ形）、`deferred was completed after its scope ended`（awaited も同じ形）、`deferred was polled after its scope ended`、`semaphore was used after its scope ended`、`queue was used after its scope ended` です。
-- スコープの子でない fiber が、スコープが終わるときにその Semaphore か Queue を待っていたら、同じ defect で待つのをやめます。
-- Fiber.scope の値の型のどこかに `Fiber`、`Deferred`、`Semaphore`、`Queue` を含むと、警告でなく常にコンパイルエラー（E0425）です。
-- 子より先に終わる with のハンドラを子が使うことは、型の上では起きません（子の使うエフェクトは Fiber.scope の外で供給するため）。例外は、同じエフェクトをスコープの外でも供給していて、本体の中の with で作ったクロージャを子に渡した場合です。その with が先に終われば、実行時の検査で defect になります。
-
-```emela check
-effect Log {
-  fn info(msg: String) -> ()
-}
-
-handler PrintLog: Log {
-  init { PrintLog }
-  release { () }
-  fn info(msg) {
-    dbg(msg)
-    ()
-  }
-}
-
-fn main() {
-  say = with PrintLog {
-    log = use Log
-    || log.info("hi")
-  }
-  say()
-}
-```
-
-```console
-$ emela run main.emel
-warning[W0402]: a value that holds `log` leaves the `with` that provides it
-    ╭─[ main.emel:17:5 ]
-    │
- 15 │   say = with PrintLog {
-    │              ────┬───
-    │                  ╰───── `log` is released at the end of this `with`
-    │
- 17 │     || log.info("hi")
-    │     ────────┬────────
-    │             ╰────────── the value of the body holds `log`
-────╯
-
-1 warning
-defect: handler PrintLog was used after release
-```
-
-| 持ち出し方 | 既定 | `capture-checking` を有効にしたとき |
-|---|---|---|
-| 能力の値（Scope を含む）か、それを抱えた値を with やスコープの外へ出す | 警告 W0402 と実行時の検査（状態を持つハンドラと Scope） | 静的（E0444） |
-| 能力を捕まえたクロージャを with やスコープの外へ出す | 警告 W0402 と実行時の検査（状態を持つハンドラと Scope） | 静的（E0444） |
-| `Fiber`、`Deferred`、`Semaphore`、`Queue` を型に含む値を Fiber.scope から返す | 静的（E0425） | 静的（E0425） |
-| `Fiber`、`Deferred`、`Semaphore`、`Queue` を State に入れる、クロージャで捕まえて外へ出す | 実行時 | 静的 |
+能力と、型や R に能力を含む値は、その能力を作った with の外へ出られません。これは型検査で止めます（E4405、[型と効果の体系](/reference/type-system/#能力が-with-から漏れないこと)）。0.28 までの capture set の警告と、release 済みのハンドラを使ったときの実行時の検査はなくなりました。Task は TaskGroup の能力に縛られた型なので、グループの with の外へ出られません。
 
 ## 値とメモリ
 

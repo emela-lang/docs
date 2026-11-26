@@ -114,7 +114,7 @@ import Std.Console.{Console, SystemConsole}
 
 fn main() {
   with SystemConsole {
-    out = use Console
+    out <- Console
     List.each(List.range(1, 4), |i| out.print_line("step #{i}"))
   }
 }

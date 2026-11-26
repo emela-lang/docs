@@ -1,9 +1,9 @@
 ---
 title: 実装の状況
-description: emela 0.28.1 で動くもの、ターゲットごとの違い、実験的な機能、仕様にあってまだ動かないもの、既知の不具合
+description: emela 0.29.0 で動くもの、ターゲットごとの違い、実験的な機能、仕様にあってまだ動かないもの、既知の不具合
 ---
 
-このサイトは emela 0.28.1（2026-11-19 のリリース）に合わせて書いています。仕様は emela リポジトリの [`spec/`](https://github.com/emela-lang/emela/tree/main/spec) にあり、コンパイラはそのほとんどを実装しています。ここには、0.28.1 で使えるもの、ターゲットごとの違い、実験的な機能、まだ動かないものをまとめます。各版で入ったものは emela リポジトリの [CHANGELOG](https://github.com/emela-lang/emela/blob/main/CHANGELOG.md) にあります。
+このサイトは emela 0.29.0（2026-11-26 のリリース）に合わせて書いています。仕様は emela リポジトリの [`spec/`](https://github.com/emela-lang/emela/tree/main/spec) にあり、コンパイラはそのほとんどを実装しています。ここには、0.29.0 で使えるもの、ターゲットごとの違い、実験的な機能、まだ動かないものをまとめます。各版で入ったものは emela リポジトリの [CHANGELOG](https://github.com/emela-lang/emela/blob/main/CHANGELOG.md) にあります。
 
 ## 版ごとに入ったもの
 
@@ -19,16 +19,18 @@ description: emela 0.28.1 で動くもの、ターゲットごとの違い、実
 | 0.27 | 無名関数 `\|x\| e`、`uses { R }`、`escape` の `_`、`Std.Array`、`Std.Exit` | [束縛と関数](/guide/functions/)、[エラー](/guide/errors/) |
 | 0.28 | `--target native`、`Std.Process`（引数、標準入出力、`main` の終了コード）、局所関数、`each`、`Std.Json` と `derive Encode, Decode`、`Semaphore` と `Queue`、能力の型 `use E`、1つのハンドラで複数のエフェクトを実装する、handler member、Bun、`emela doctor`、Windows 向けのリリース、ブラウザで動くコンパイラ（[Playground](/playground/)） | [ターゲット](/reference/targets/)、[標準ライブラリ](/std/overview/)、[emela コマンド](/tools/cli/) |
 | 0.28.1 | Playground とツアーのエディタの補完、ホバー、診断（ブラウザで動く言語サーバー）。同じ `with` の `L by P` の不具合などの修正 | [Playground](/playground/)、[エフェクトのラベル](/guide/labels/) |
+| 0.28.2 | 修正だけ（`State[use A]` と `State[use B]` を別のエフェクトにする、引数のある handler member の括弧を省くと E4104 にする、など） | |
+| 0.29 | `Std.Fiber` を `Std.Task` に置き換えた（`Task.Group` と `Task.Background`）。`Deferred`、`Queue`、`Semaphore` を with の項目で作る。エフェクトの別名 `x <- E` と、`use E` を式に書くことの非推奨（W4401）。能力を型と R で区別し、名前を付けた with の項目はエフェクトを名前で供給しない。外部関数のホストの副作用を `External` として R に入れる。組み込みの Trait `Capability`。ハンドラの型パラメータ。`Std.Tcp`（JS）、`Duration.parse` と `Instant.parse`。`main.mjs` を JS のホストで直接起動できる。native の境界の `Bytes`。診断コードを 1000 ずつの帯に振り直した。ターゲット名 `c` を取り除いた | [並行処理](/guide/concurrency/)、[エフェクトとハンドラ](/guide/effects/)、[外部関数](/guide/external/)、[診断コード](/reference/diagnostics/) |
 
 ## ターゲット
 
-| ターゲット | Tier | 0.28.1 での状況 | 実行に要るもの |
+| ターゲット | Tier | 0.29.0 での状況 | 実行に要るもの |
 |---|---|---|---|
 | `js` | 1 | 既定。すべての構文と std が動く | Node.js 22 以降か Bun 1.4.3 以降 |
-| `wasm` | 1 | すべての構文が動く。標準入力と `Http` のクライアントはまだない。利用者の `@external(wasm, ...)` と `@export(wasm, ...)` はまだ書けない | Wasmtime 49 以降 |
-| `native` | 2 | 0.28 で `c` から改名した。書記素クラスタの関数、コールバックを取る外部関数、境界の `Bytes` と `Array`、HTTP サービス、`Http` のクライアントがまだない | C11 のコンパイラ、POSIX の C ヘッダとライブラリ |
+| `wasm` | 1 | すべての構文が動く。標準入力、`Http` のクライアント、`Std.Tcp` はまだない。利用者の `@external(wasm, ...)` と `@export(wasm, ...)` はまだ書けない | Wasmtime 49 以降 |
+| `native` | 2 | 0.28 で `c` から改名した。書記素クラスタの関数、コールバックを取る外部関数、境界の `Array`、HTTP サービス、`Http` のクライアント、`Std.Tcp` がまだない | C11 のコンパイラ、POSIX の C ヘッダとライブラリ |
 
-- `--target c` と `[build].target = "c"` は `native` の古い名前として読み、警告 W0903 を出します。0.29 で取り除きます。
+- 0.28 まで `native` の古い名前として読んだ `c` は、0.29 で取り除きました。`--target c` は引数の誤り、`[build].target = "c"` は E2302 です。
 - native は macOS（arm64）と Linux（x86_64、glibc）だけで動きます。Windows の `emela` は JS と WASM のターゲットを使えます。
 - 細かな違いは [ターゲット](/reference/targets/) にあります。
 
@@ -38,28 +40,25 @@ description: emela 0.28.1 で動くもの、ターゲットごとの違い、実
 
 ```toml
 [experimental]
-capture-checking = true
+some-feature = true
 ```
 
 ```sh
-emela check --experimental-capture-checking
+emela check --experimental-some-feature
 ```
 
-| 名前 | 入った版 | 変えること |
-|---|---|---|
-| `capture-checking` | 0.28 | 能力を持つ値が、それを供給する `with` か `Fiber.scope` の外へ出ると、警告 W0402 の代わりにコンパイル時のエラー E0444 にする |
+0.29.0 には実験的な機能がありません。0.28 で入った `capture-checking` は 0.29 で取り除きました。能力を型と R で区別するようになり、能力を持つ値がそれを作った `with` の外へ出ると、いつもコンパイル時のエラー（E4405）になります。
 
-- 知らない名前、安定した機能、取り除いた機能の名前は警告 W2304 です。
+- 知らない名前、安定した機能、取り除いた機能の名前は警告 W2304 です（``experimental feature `capture-checking` was removed``）。
 - フラグは `check`、`build`、`run`、`test` が受け取ります。言語サーバーは `Pome.toml` だけを見るので、フラグだけで有効にした機能はエディタの診断に出ません。
-- 0.29 では `capture-checking` を既定にし、W0402 と実行時の検査を外す予定です（[emela#666](https://github.com/emela-lang/emela/issues/666)）。
 
 ## 仕様にあって、まだ動かないもの
 
-| 機能 | 0.28.1 での動き |
+| 機能 | 0.29.0 での動き |
 |---|---|
-| 持ち出しの静的な検査（capture set） | 既定は警告 W0402 だけで、実際に使うと実行時の defect（`handler ... was used after release`、`fiber scope was used after it ended`）になる。`capture-checking` で E0444 にできる |
 | 相互再帰の末尾呼び出しの警告 | 出ない（[emela#265](https://github.com/emela-lang/emela/issues/265)） |
-| 能力の型の組み込み Trait `Capability` | 採択済みで、まだない（``cannot find trait `Capability` in this scope``） |
+| `Std.Tcp` の native と WASM の実装 | `SystemTcp` は JS にだけある。native と WASM で操作を呼ぶと E5001 |
+| `Instant.parse` の秒を持つ UTC からのずれ（`±HH:MM:SS`） | 採択済みで、まだ読めない |
 | `emela pome publish` | コマンドがない（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできる |
 | `FileSystem` と `Http` でのバイナリ | `Std.Bytes` はあるが、`FileSystem` と `Http` は UTF-8 のテキストだけを扱う |
 | derive できる Trait | `Eq`、`Ord`、`Show`、`Encode`、`Decode`、`ObjectKey`、`Shaped` だけ。Trait の作者が導出規則を書く構文は未決 |
@@ -69,11 +68,11 @@ emela check --experimental-capture-checking
 
 ## 既知の不具合
 
-0.28.1 で分かっている、仕様と違う動きです。
+0.29.0 で分かっている、仕様と違う動きです。
 
 | 不具合 | 回避のしかた |
 |---|---|
-| 仕様は WASM の `SystemClock.sleep` と `Std.FileSystem` をまだ使えないとしているが、0.28.1 では動く | 仕様の側を直す |
+| 仕様は WASM の `SystemClock.sleep` と `Std.FileSystem` をまだ使えないとしているが、0.29.0 では動く | 仕様の側を直す |
 
 ほかの不具合は [GitHub の issue](https://github.com/emela-lang/emela/issues) にあります。
 

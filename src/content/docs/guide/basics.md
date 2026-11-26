@@ -103,7 +103,7 @@ error TooLong(length: Int)
 fn check_name(name: String) -> String
   fails Empty | TooLong
   uses { Console } {
-  out = use Console
+  out <- Console
   out.print_line("checking #{name}")
   n = String.length(name)
   if n == 0 { fail Empty }

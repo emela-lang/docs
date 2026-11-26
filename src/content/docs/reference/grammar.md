@@ -163,9 +163,11 @@ pub fn area(s: Shape) -> Float {
 }
 
 fn main() {
+  counter <- Counter
+  console <- Console
   with AppTest {
-    n = (use Counter).next()
-    (use Console).print_line("#{n} #{area(Rect(2.0, 3.0))}")
+    n = counter.next()
+    console.print_line("#{n} #{area(Rect(2.0, 3.0))}")
   }
 }
 ```
@@ -299,8 +301,9 @@ fn pair() -> (Int, fn(Int) -> Int fails {} uses {}) {
 
 ```ebnf
 block      = "{" { stmt NL } "}"
-stmt       = binding | local_fn | expr
+stmt       = binding | effect_alias | local_fn | expr
 binding    = pattern [ ":" type ] "=" expr
+effect_alias = lower_name "<-" type_ref [ "[" type { "," type } "]" ]
 local_fn   = "fn" lower_name "(" [ params ] ")" [ signature ] block
 
 expr       = "fail" expr
@@ -314,7 +317,7 @@ cmp_expr   = add_expr [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) add_expr ]
 add_expr   = mul_expr { ( "+" | "-" ) mul_expr }
 mul_expr   = unary    { ( "*" | "/" | "%" ) unary }
 unary      = ( "!" | "-" ) unary
-           | "use" type_ref [ "[" type { "," type } "]" ]
+           | "use" type_ref [ "[" type { "," type } "]" ]        (* 非推奨。W4401 *)
            | lambda
            | postfix
 postfix    = primary { "(" [ args ] ")" | "." lower_name | "." type_name "(" [ args ] ")" }
@@ -380,7 +383,8 @@ fn main() {
 - `||` は、被演算子の位置では引数のない無名関数、被演算子の後では or_expr の演算子です。
 - ブロックの最後の文が式のとき、その値がブロックの値になります。最後が束縛のとき、ブロックの値は `()` です。最後の文にローカルの fn は置けません（E1214）。
 - 文が束縛か式かは、パターンとして読める並びの直後に `=` または `:` があるかで区別します。左辺がパターンとして読めなければ E1111 です。
-- `use X` の操作をその場で呼ぶときは、`(use X).op(...)` と括弧で囲みます。`use X` の直後に `.` や `(` を書くと E1108 です。
+- lower_name の直後に `<-` が続く文は effect_alias（エフェクトの別名、[エフェクト](/guide/effects/#エフェクトの別名)）です。
+- 式の `use X` は非推奨です（W4401）。0.30 でエラーになります。`use X` の操作をその場で呼ぶときは `(use X).op(...)` と括弧で囲み、`use X` の直後に `.` や `(` を書くと E1108 です。
 - 引数の並びでは名前付き引数の後に位置引数を書けません（E1107）。
 - `by` の右の型引数（`Hits by State[Int]`）は effect を指すときだけ、引数は handler を指すときだけ書けます（[ラベル](/guide/labels/)）。
 - 式としての `Self` は handler の値で、handler の init の中でだけ、フィールドを渡して呼ぶか単独で書けます。

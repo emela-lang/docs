@@ -24,7 +24,7 @@ import Std.Console.{Console, SystemConsole}
 
 fn main() {
   with SystemConsole {
-    console = use Console
+    console <- Console
     console.print_line("Hello, world!")
   }
 }
@@ -38,7 +38,7 @@ $ emela run
 Hello, world!
 ```
 
-`emela run` はプロジェクトを JavaScript にコンパイルして Node.js で実行します。パスを省くと `.` を対象にします。プログラムの出力の前に、起動したコマンドを ``running `node ...` `` の1行で標準エラーに出します（このサイトの例では省いています）。
+`emela run` はプロジェクトを JavaScript にコンパイルして Node.js で実行します。パスを省くと `.` を対象にします。プログラムの出力の前に、起動したコマンドを ``running `node .../target/emela/js/main.mjs` `` の1行で標準エラーに出します（このサイトの例では省いています）。
 
 `Pome.toml` は次の形です。
 
@@ -47,7 +47,7 @@ Hello, world!
 # Replace with the source path of your repository (e.g. github.com/alice/hello).
 name = "github.com/your-name/hello"
 version = "0.1.0"
-emela = "0.28.0"
+emela = "0.29.0"
 ```
 
 `Pome.toml` を置いたディレクトリがプロジェクトです。`emela` は渡されたパスから祖先をたどり、最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。`name` は Pome を公開するときのソースパス、`emela` はビルドに要るコンパイラの最低の版です。`emela new github.com/alice/hello` のようにソースパスを渡すと、`name` にそのまま入ります。書ける内容（依存、既定のターゲット、実験的な機能など）は [プロジェクトと Pome](/tools/pome/) にあります。
@@ -69,7 +69,7 @@ fn greeting(name: String) -> String {
 
 fn main() {
   with SystemConsole {
-    console = use Console
+    console <- Console
     console.print_line(greeting("world"))
   }
 }
@@ -80,7 +80,7 @@ fn greets_by_name() {
 }
 ```
 
-画面への出力も副作用なので、エフェクト `Console` の操作として呼びます。`use Console` で能力の値を取り出し、`console.print_line(...)` と書きます。
+画面への出力も副作用なので、エフェクト `Console` の操作として呼びます。`console <- Console` で `Console` に別名 `console` を付け、`console.print_line(...)` と書きます。別名は値を作らず、呼んだ時点でいちばん内側の `Console` のハンドラが働きます（[エフェクトとハンドラ](/guide/effects/)）。
 
 `with SystemConsole { ... }` は、本体の中で使う `Console` を、ホストの標準出力に書くハンドラで供給します。`main` の型に残ってよいエフェクトはありません。`with` を外すと、`Console` が供給されていないというエラーになります。`Console`、`Clock`、`Random`、`Http` をまとめて供給するときは `Std.Platform` の `with Platform`、ファイルやプロセスの引数、標準入力も使うときは `Std.Process` の `with Process` と書きます（[プラットフォーム](/std/platform/)）。
 
@@ -91,7 +91,7 @@ $ emela run
 Hello, world!
 ```
 
-出力は `target/emela/js` に書き出され、`main.mjs` がエントリです。コンパイルだけなら `emela build` で、出力先は同じです。`--out-dir` で変えられます。
+出力は `target/emela/js` に書き出され、`main.mjs` がエントリです。コンパイルだけなら `emela build` で、出力先は同じです。`node target/emela/js/main.mjs` と直接起動しても `main` が動きます。`--out-dir` で変えられます。
 
 ```text
 target/emela/js/

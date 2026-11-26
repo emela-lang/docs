@@ -12,13 +12,21 @@ import Std.State.{State}
 effect AuditLog of Console
 
 handler StderrConsole: Console {
-  fn print_line(text) { (use Console).print_error_line(text) }
-  fn print_error_line(text) { (use Console).print_error_line(text) }
+  fn print_line(text) {
+    console <- Console
+    console.print_error_line(text)
+  }
+  fn print_error_line(text) {
+    console <- Console
+    console.print_error_line(text)
+  }
 }
 
 fn transfer(from: String, to: String, amount: Int) {
-  (use Console).print_line("sent #{amount} from #{from} to #{to}")
-  (use AuditLog).print_line("transfer #{from} -> #{to}: #{amount}")
+  console <- Console
+  audit <- AuditLog
+  console.print_line("sent #{amount} from #{from} to #{to}")
+  audit.print_line("transfer #{from} -> #{to}: #{amount}")
 }
 
 fn main() {
@@ -60,7 +68,7 @@ effect AuditLog of Console           # 供給が要る
 effect DebugLog of Console default   # Console を供給する with が一緒に供給する
 ```
 
-`effect L of E` は、E と同じ操作を持つエフェクト L を宣言します。L を E のラベル、E を L の元のエフェクトと呼びます。`(use AuditLog).print_line(...)` のように E の操作をそのまま呼べますが、R に載るのは AuditLog で、Console とは別のエフェクトとして数えます。
+`effect L of E` は、E と同じ操作を持つエフェクト L を宣言します。L を E のラベル、E を L の元のエフェクトと呼びます。`audit <- AuditLog` と別名を付けて `audit.print_line(...)` のように E の操作をそのまま呼べますが、R に載るのは AuditLog で、Console とは別のエフェクトとして数えます。
 
 元のエフェクトには、操作か[ハンドラのメンバー](/guide/resources/#ハンドラのメンバー)を持つ利用者のエフェクトを書きます。ラベルのラベルや、Async のような組み込みのエフェクトのラベルは作れません。ラベルを実装するハンドラも書けないので、元のエフェクトのハンドラを書いて、次の `by` で差し込みます。
 
@@ -68,7 +76,7 @@ effect DebugLog of Console default   # Console を供給する with が一緒に
 
 ## with でラベルを供給する
 
-with にはハンドラと layer に加えてラベルの項目を書けます。書き方は2つあります。`L by P` は、ラベル L の担い手として P を差し込みます。P には E のハンドラ、E そのもの、E の別のラベルを書けます。複数のエフェクトを実装するハンドラ（`handler H: A + B`）を書いたときは、そのうち E の実装が使われます。`L` だけを書くと、本体の中の E を L の担い手に任せます。
+with にはハンドラと layer に加えてラベルの項目を書けます。書き方は2つあります。`L by P` は、ラベル L の担い手として P を差し込みます。P には E のハンドラ、E そのもの、E の別のラベルを書けます。複数のエフェクトを実装するハンドラ（`handler H: A + B`）を書いたときは、そのうち E の実装が使われます。`L` だけを書くと、本体の中の E を L の担い手に任せます。ラベルの項目は、ハンドラを作らないので名前を付けられません（`x = L` や `x = L by E` は E4105）。本体でラベルを使うときは、名前を付けずに供給し、本体で `audit <- AuditLog` と別名を付けます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -77,12 +85,25 @@ effect AuditLog of Console
 effect DebugLog of Console default
 
 handler PrefixConsole: Console {
-  fn print_line(text) { (use Console).print_line("[audit] #{text}") }
-  fn print_error_line(text) { (use Console).print_error_line("[audit] #{text}") }
+  fn print_line(text) {
+    console <- Console
+    console.print_line("[audit] #{text}")
+  }
+  fn print_error_line(text) {
+    console <- Console
+    console.print_error_line("[audit] #{text}")
+  }
 }
 
-fn audit() { (use Console).print_line("user 1 logged in") }
-fn debug() { (use Console).print_line("cache miss") }
+fn audit() {
+  console <- Console
+  console.print_line("user 1 logged in")
+}
+
+fn debug() {
+  console <- Console
+  console.print_line("cache miss")
+}
 
 fn report() -> () uses { AuditLog, DebugLog } {
   with AuditLog { audit() } # audit の中の Console を AuditLog が担う
@@ -100,7 +121,7 @@ $ emela run main.emel
 cache miss
 ```
 
-`audit` はラベルを知らないまま、普通に `use Console` を書いています。`report` の `with AuditLog { audit() }` がその Console を AuditLog の担い手に回し、`main` が AuditLog の担い手として PrefixConsole を差し込んでいます。PrefixConsole の依存の Console は、ハンドラと同じく同じ with の SystemConsole が満たします。
+`audit` はラベルを知らないまま、普通に `console <- Console` と書いています。`report` の `with AuditLog { audit() }` がその Console を AuditLog の担い手に回し、`main` が AuditLog の担い手として PrefixConsole を差し込んでいます。PrefixConsole の依存の Console は、ハンドラと同じく同じ with の SystemConsole が満たします。
 
 ### 元のエフェクトに戻す
 
@@ -112,7 +133,8 @@ import Std.Console.{Console, SystemConsole}
 effect AuditLog of Console
 
 fn transfer() {
-  (use AuditLog).print_line("audited")
+  audit <- AuditLog
+  audit.print_line("audited")
 }
 
 fn main() {
@@ -134,13 +156,21 @@ import Std.Console.{Console, SystemConsole}
 effect DebugLog of Console default
 
 handler Tagged: Console {
-  fn print_line(text) { (use Console).print_line("[debug] #{text}") }
-  fn print_error_line(text) { (use Console).print_error_line(text) }
+  fn print_line(text) {
+    console <- Console
+    console.print_line("[debug] #{text}")
+  }
+  fn print_error_line(text) {
+    console <- Console
+    console.print_error_line(text)
+  }
 }
 
 fn work() -> () uses { DebugLog, Console } {
-  (use DebugLog).print_line("step")
-  (use Console).print_line("result")
+  debug_log <- DebugLog
+  console <- Console
+  debug_log.print_line("step")
+  console.print_line("result")
 }
 
 fn main() {
@@ -169,8 +199,9 @@ import Std.Console.{Console, SystemConsole}
 effect AuditLog of Console
 
 fn main() {
+  audit <- AuditLog
   with SystemConsole {
-    (use AuditLog).print_line("x")
+    audit.print_line("x")
   }
 }
 ```
@@ -196,10 +227,12 @@ effect Hits of State[Int]
 effect Misses of State[Int]
 
 fn look(key: String) {
+  hits <- Hits
+  misses <- Misses
   if key == "a" {
-    (use Hits).update(|n| n + 1)
+    hits.update(|n| n + 1)
   } else {
-    (use Misses).update(|n| n + 1)
+    misses.update(|n| n + 1)
   }
 }
 

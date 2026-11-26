@@ -134,6 +134,7 @@ fn main() {
 - 値が文脈の型（Int か Int64）の範囲を超えればエラーになります（E3004）。2の補数として読み替えないので、`0xFFFF_FFFF` は Int では書けず、Int64 なら書けます。
 - 負の数はリテラルではなく、単項マイナスを付けた式です。リテラル自体は正の数として範囲を見るので、Int の最小値 `-2147483648` は式のリテラルとしては書けません。式では `-2147483647 - 1` と書きます。
 - パターンでは、数のリテラルの前に `-` を書けます（[パターンマッチ](/guide/pattern-matching/)）。範囲は `-` と数を1つの値として見るので、パターンの中では `-2147483648` を書けます。
+- `<-` は1つのトークンです（エフェクトの別名 `x <- E`）。負の数との比較は `<` と `-` の間に空白を入れて `a < -1` と書きます。式の被演算子の後の `<-`（`a<-1`、`a <- 1`）と、`x <- R` の R がエフェクトの名前でないもの（`x <- 1`）は E1113 です。
 
 ```emela check=error
 fn main() {
@@ -226,7 +227,8 @@ fn lookup(id: Int) -> String
   fails NotFound | Invalid
   uses { Users } {
   if id < 0 { fail Invalid }
-  name = (use Users).find(id)
+  users <- Users
+  name = users.find(id)
     |> Option.or_fail(NotFound(id:)) # 規則1: 前の行の続き
   parts = [
     "user ",
@@ -338,7 +340,7 @@ fn main() {
 - `True`、`False`、`Some`、`None` は Prelude の enum の構成子です。
 - `panic`、`todo`、`dbg` は Prelude の関数です。
 - `resume` はハンドラの引数に付ける慣習的な名前です。
-- `Immediate`、`Async`、`Eq` などは組み込みの Trait やエフェクトの名前です。
+- `Immediate`、`Async`、`Eq`、`Capability`、`External` などは組み込みの Trait やエフェクトの名前です。
 
 ## 注釈
 

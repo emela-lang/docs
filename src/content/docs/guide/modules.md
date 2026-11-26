@@ -86,7 +86,7 @@ import Std.Console.{Console, SystemConsole}
 fn main() {
   xs: Option[List[Int]] = Some([1, 2])
   with SystemConsole {
-    out = use Console
+    out <- Console
     out.print_line("#{List.length([1, 2, 3])}") # 3
   }
   dbg(xs) # Some([1, 2])

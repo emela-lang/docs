@@ -3,7 +3,7 @@ title: emela コマンド
 description: new、check、build、run、test、fmt、doc、pome、lsp、doctor の引数と出力、実験的な機能のフラグ、環境変数、終了コード
 ---
 
-`emela` は、プロジェクトの作成、検査、ビルド、実行、テスト、整形、文書の生成、依存の管理、言語サーバー、環境の診断を1つにまとめたコマンドです。規範となる規則は仕様の [付録 B コマンド](https://github.com/emela-lang/emela/blob/main/spec/tooling/commands.md) と [テストランナー](https://github.com/emela-lang/emela/blob/main/spec/tooling/test-runner.md) にあります。このページの出力は emela 0.28.1 のものです。
+`emela` は、プロジェクトの作成、検査、ビルド、実行、テスト、整形、文書の生成、依存の管理、言語サーバー、環境の診断を1つにまとめたコマンドです。規範となる規則は仕様の [付録 B コマンド](https://github.com/emela-lang/emela/blob/main/spec/tooling/commands.md) と [テストランナー](https://github.com/emela-lang/emela/blob/main/spec/tooling/test-runner.md) にあります。このページの出力は emela 0.29.0 のものです。
 
 ```console no-check
 $ emela --help
@@ -42,7 +42,7 @@ Options:
 | `emela lsp` | 言語サーバーとして動く |
 | `emela doctor [PATH]` | 各ターゲットが使うプログラムがあり、版が足りているかを調べる |
 
-`--help` の文面は英語です。各サブコマンドの `--help` は、そのコマンドが受け取る実験的な機能のフラグも並べます。
+`--help` の文面は英語です。各サブコマンドの `--help` は、そのコマンドが受け取る実験的な機能のフラグも並べます（0.29.0 には実験的な機能がないので、フラグも並びません）。このページの `--help` は、`-h, --help` の行と引数の説明を省いて載せています。
 
 ## 渡すパス
 
@@ -88,10 +88,10 @@ created library `kv`
 ## emela check
 
 ```text
-Usage: emela check [OPTIONS] [PATH]
+Usage: emela check [PATH]
 
-Options:
-      --experimental-capture-checking  Enable the experimental feature `capture-checking` (since 0.28.0): ...
+Arguments:
+  [PATH]  Entry file or project directory [default: .]
 ```
 
 - 型を検査して診断を出します。何も書き出しません。
@@ -107,23 +107,23 @@ Usage: emela build [OPTIONS] [PATH]
 Options:
       --out-dir <OUT_DIR>  Output directory [default: <project>/target/emela/<target>]
       --target <TARGET>    The target [default: `[build].target` of Pome.toml, or js]
-      --experimental-capture-checking
 ```
 
 - 出力先はプロジェクトなら `<プロジェクト>/target/emela/<ターゲット>`、単独のファイルならファイルのあるディレクトリの `target/emela/<ターゲット>` です。`--out-dir` で変えられます。前の出力は消さずに上書きします。
 - `test/` と `[dev-dependencies]` は読みません。`test/` の中のファイルを渡すとエラー（E2006）です。
 - ライブラリだけのプロジェクト（`src/lib.emel` だけ）では、検査だけをして何も書き出しません。
+- 標準エラーが端末で、コーディングエージェントの中でないときは、キャッシュにない依存を取得している間と native の C コンパイラを動かしている間、その進み具合を1行で描き直して出します。パイプや CI では出しません（`check`、`run`、`test`、`emela pome` も同じです）。
 
 ### --target
 
 | 値 | 書き出すもの |
 |---|---|
-| `js` | `main.mjs` とランタイム `emela_runtime.mjs`。`@external` が指すファイルは `emela_core/`、`emela_project/`、`emela_pomes/` に写す |
+| `js` | `main.mjs` とランタイム `emela_runtime.mjs`。`@external` が指すファイルは `emela_core/`、`emela_project/`、`emela_pomes/` に写す。`node target/emela/js/main.mjs` のように JS のホストで `main.mjs` を直接起動すると `main` を実行する |
 | `wasm` | WASI 0.3 のコンポーネント `main.wasm` 1つ |
 | `native` | 実行ファイル `main` とヘッダ `emela.h`。ほかに出力した C などを置く |
 
 - 省けば `Pome.toml` の `[build].target`、それもなければ `js` です。`--target` が優先します。
-- `--target c` は `native` を選び、警告（W0903）を出します。0.29 で取り除きます。
+- 値は `js`、`native`、`wasm` のどれかです。0.29 で `c` を取り除いたので、`--target c` は引数の誤り（終了コード 2）、`Pome.toml` の `[build].target = "c"` は知らないターゲット（E2302）です。`native` に書き換えます。
 - ターゲットごとに要るものと違いは [ターゲット](/reference/targets/) にあります。
 
 ```console no-check
@@ -140,20 +140,19 @@ Usage: emela run [OPTIONS] [PATH] [-- <ARGS>...]
 Options:
       --out-dir <OUT_DIR>  Output directory [default: <project>/target/emela/<target>]
       --target <TARGET>    The target [default: `[build].target` of Pome.toml, or js]
-      --experimental-capture-checking
 ```
 
 - `build` と同じ出力先に書き出してから実行します。
 - 診断はプログラムを起動する前に出します。エラーがあれば起動しません。
-- 起動する前に、起動するコマンドを ``running `<コマンド>` `` の1行で標準エラーに出します。この行を POSIX のシェルに貼れば同じコマンドが動きます（JS の起動用のモジュールは `<launcher>` と書きます）。このサイトの例ではこの行を省いています。
+- 起動する前に、起動するコマンドを ``running `<コマンド>` `` の1行で標準エラーに出します。この行を POSIX のシェルに貼れば同じコマンドが動きます。このサイトの例ではこの行を省いています。
 - プログラムへの引数は `--` の後に書きます（`emela run -- a b`）。`Std.Process` の `Args` で読めます。標準入力はプログラムが引き継ぎます。
-- `js` は JS のホスト（既定は `node`）で、`native` は実行ファイル `main` を直接、`wasm` は `wasmtime run -S p3=y` で動かします。
+- `js` は JS のホスト（既定は `node`）に `main.mjs`（HTTP サービスなら `serve.mjs`）を渡して、`native` は実行ファイル `main` を直接、`wasm` は `wasmtime run -S p3=y` で動かします。`--` の後の引数は、そのままプログラムに渡ります。
 - `main` が返した値は表示しません。`main` が `ExitCode` を返したときは、その終了コードで終わります。
 - エントリに `main` がなく、HTTP サービスでもなければエラー（E2009）です。HTTP サービス（`@entry(Http.serve)`）は `127.0.0.1:8080` で待ち受けます。`--addr <host>:<port>` か環境変数 `HOST` と `PORT` で変えられます。
 
 ```console no-check
 $ emela run
-running `node --input-type=module -e <launcher> -- /path/to/hello/target/emela/js/main.mjs`
+running `node /path/to/hello/target/emela/js/main.mjs`
 Hello, world!
 ```
 
@@ -166,7 +165,6 @@ Options:
       --out-dir <OUT_DIR>    Output directory [default: <project>/target/emela/test, or test-native for `--target native`]
       --target <TARGET>      The target [default: `[build].target` of Pome.toml, or js]
       --reporter <REPORTER>  How results are shown [default: agent inside a coding agent, pretty at a terminal, plain otherwise]
-      --experimental-capture-checking
 ```
 
 - `src/` と `test/` の `@test` を付けた関数を1つずつ実行します。
@@ -316,7 +314,7 @@ Options:
 
 ```console no-check
 $ emela doctor --target wasm
-emela 0.28.1+2d3fe7d
+emela 0.29.0+22e4931
 
 js
   ok       node 22.23.4 (/usr/local/bin/node)
@@ -337,7 +335,7 @@ pome
 
 `check`、`build`、`run`、`test` は、実験的な機能ごとに `--experimental-<名前>` を受け取ります。その1回の実行だけ、ビルドする Pome（単独のファイルなら読むファイル）で機能を有効にします。`Pome.toml` の `[experimental]` に足す形で働き、依存には効かず、`Pome.toml` で有効にした機能を無効にもできません。
 
-- 0.28.1 の実験的な機能は `capture-checking` だけです（[実装の状況](/start/status/#実験的な機能)）。
+- 0.29.0 には実験的な機能がありません。0.28 の `capture-checking` は 0.29 で取り除きました（[実装の状況](/start/status/#実験的な機能)）。
 - `--experimental-` で始まり、知らない機能、安定した機能、取り除いた機能を指すフラグはエラーにせず、警告（W2304）にします。
 - 言語サーバーはフラグを持たず、`Pome.toml` だけを見ます。
 
@@ -346,13 +344,17 @@ $ emela check --experimental-foo
 warning[W2304]: unknown experimental feature `foo`
 
 1 warning
+$ emela check --experimental-capture-checking
+warning[W2304]: experimental feature `capture-checking` was removed
+
+1 warning
 ```
 
 ## 環境変数
 
 | 変数 | 働き |
 |---|---|
-| `EMELA_JS_HOST` | `run` と `test` が使う JS のホスト。なければ `node`。`node` と同じく `--input-type=module -e` を受け付けるもの（Node.js と Bun） |
+| `EMELA_JS_HOST` | `run` と `test` が使う JS のホスト。なければ `node`（Node.js と Bun） |
 | `EMELA_NODE` | 古い名前。読むと警告（W9101）を出す。`EMELA_JS_HOST` があればそちらを使う |
 | `EMELA_CC` | native が使う C コンパイラ。なければ PATH の `cc`。値全体で1つのプログラムを指す |
 | `EMELA_CC_ARGS` | C コンパイラに足すフラグ。空白で区切り、コマンドラインの最後に付ける |
@@ -365,10 +367,10 @@ warning[W2304]: unknown experimental feature `foo`
 
 ```console no-check
 $ EMELA_JS_HOST=bun emela run main.emel
-running `bun --input-type=module -e <launcher> -- /path/to/target/emela/js/main.mjs`
+running `bun /path/to/target/emela/js/main.mjs`
 1
 $ EMELA_JS_HOST=/nonexistent/node emela run main.emel
-running `/nonexistent/node --input-type=module -e <launcher> -- /path/to/target/emela/js/main.mjs`
+running `/nonexistent/node /path/to/target/emela/js/main.mjs`
 error[E9101]: `/nonexistent/node` not found
    = note: install Node.js 22 or later or Bun 1.4.3 or later and add it to PATH, or set EMELA_JS_HOST to the JS host
 
@@ -394,10 +396,12 @@ error[E9101]: `/nonexistent/node` not found
 import Std.Process.{Args, Process, Stderr}
 
 fn main() {
+  args <- Args
+  stderr <- Stderr
   with Process {
-    (use Args).get(0) match {
+    args.get(0) match {
       None -> {
-        (use Stderr).print_line("usage: greet <name>")
+        stderr.print_line("usage: greet <name>")
         Process.exit_code(2)
       }
       Some(name) -> {

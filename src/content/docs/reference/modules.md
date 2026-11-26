@@ -66,8 +66,9 @@ description: ファイルからモジュール名を決める規則、プロジ�
 import Std.Console.{Console, SystemConsole}
 
 fn main() {
+  console <- Console
   with SystemConsole {
-    (use Console).print_line("hello")
+    console.print_line("hello")
   }
 }
 ```
@@ -93,11 +94,12 @@ import Std.Console    # error[E1201]: imports must come before declarations
 - 型の位置で名前 X がどこにも見つからず、同じ名前の core のモジュール X に型 X があれば、その型になります。`Option[List[User]]` は import なしで書けます。この規則は自分で書いたモジュールには当てはまりません。
 - core のモジュールはソースのモジュールと同じ表に入り、単独ファイルでも常に読みます。import なしで書けるのは、名前が1つの区切りだけの core のモジュールです。
 - Immediate と Async は import なしで見えます。
+- `External` は Prelude の名前として扱います。モジュールの中で書いた `External` はそのモジュールの外部関数のホストの副作用を表すエフェクトで、別のモジュール M のものは `M.External` と書きます（[外部関数](/guide/external/)）。モジュールが `External` という名前の定義や import を持つと W2102 で、そのモジュールの組み込みの External は名前で書けなくなります。
 - 同梱の std のモジュールは `Std` の下にあり、import が要ります。import せずに `Std` を書くと E2101 です。
 
 ```emela check=error
 fn main() {
-  out = use Std.Console.Console   # error[E2101]: cannot find module or trait `Std` in this scope
+  out <- Std.Console.Console # error[E2101]: cannot find module or trait `Std` in this scope
 }
 ```
 

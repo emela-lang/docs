@@ -3,7 +3,7 @@ title: 外部関数
 description: "@external による JS と C の関数の宣言、呼べる場所、ホストの型、境界を越えられる型、例外と失敗、非同期のホスト関数"
 ---
 
-`@external` は、ホスト（JS や C）の関数を Emela から呼ぶための逃げ道です。本体のない `fn` に付けて宣言し、副作用のあるものはハンドラの中でしか呼べません。そのため、外部関数を使っても、すべての副作用は名前の付いたエフェクトを通ります。
+`@external` は、ホスト（JS や C）の関数を Emela から呼ぶための逃げ道です。本体のない `fn` に付けて宣言します。副作用のある外部関数を呼ぶと、宣言したモジュールのエフェクト `External` が R に載り、それを外せるのはそのモジュールのハンドラだけです。そのため、外部関数を使っても、すべての副作用は名前の付いたエフェクトを通ります。
 
 ```emela check
 import Std.Console.{Console}
@@ -22,9 +22,10 @@ handler HostConsole: Console {
 }
 
 fn main() {
+  console <- Console
   d = hypot(3.0, 4.0) # uses {} なので、どこからでも呼べる
   with HostConsole {
-    (use Console).print_line("distance: #{d}")
+    console.print_line("distance: #{d}")
   }
 }
 ```
@@ -69,17 +70,52 @@ suspend fn sleep_milliseconds(ms: Int) -> ()
 ```
 
 :::note
-ビルドのターゲットは `js`、`native`、`wasm` で、使う注釈はそれぞれ `js`、`c`、`wasm` です。ターゲット名の `c` は `native` の古い名前で、使うと警告（W0903）が出ます（[ターゲット](/reference/targets/)）。
+ビルドのターゲットは `js`、`native`、`wasm` で、使う注釈はそれぞれ `js`、`c`、`wasm` です。注釈の言語の `c` とターゲット名は別物です。0.28 まで `native` の古い名前だったターゲット名の `c` は、0.29 で取り除きました（[ターゲット](/reference/targets/)）。
 :::
 
 ## 呼べる場所
 
-| 宣言 | 意味 | 呼べる場所 |
+| 宣言 | 意味 | 呼び出しが R に足すもの |
 |---|---|---|
-| `uses {}` を明記 | 純粋だと宣言する | どこからでも |
-| `uses` を省略 | ホストの副作用を持つ | ハンドラの init、release、操作の本体の中だけ |
-| `uses { ProcessHost }` か `uses { PageHost }` | ホストの副作用を持ち、そのホストでだけ動く | ハンドラの init、release、操作の本体の中だけ |
-| `suspend fn` | 完了を待つ必要がある。Async を要求する | ハンドラの中だけ |
+| `uses {}` を明記 | 純粋だと宣言する | 何も足さない |
+| `uses` を省略 | ホストの副作用を持つ | 宣言したモジュールの `External` |
+| `uses { ProcessHost }` か `uses { PageHost }` | ホストの副作用を持ち、そのホストでだけ動く | `External` と、そのホストのエフェクト |
+| `suspend fn` | 完了を待つ必要がある | Async と `External`（`uses {}` でも）、uses 節のホストのエフェクト |
+
+モジュールはどれもエフェクト `External` を1つ持ちます。外部関数のホストの副作用を表すエフェクトで、操作はありません。`uses {}` でない外部関数を呼ぶか関数の値として参照すると、宣言したモジュールの `External` が R に載ります。宣言に `External` は書きません。
+
+R から `External` を外すのは、そのモジュールで宣言したハンドラの init、release、操作の本体だけです。with も `main` も外しません。そのため、外部関数を呼ぶ普通の関数を書いてもかまいませんが、その関数の R にも `External` が残り、最後はそのモジュールのハンドラの中から呼ぶことになります。
+
+```emela check
+import Std.Console.{Console}
+
+@external(js, "console.log")
+@external(c, "puts")
+fn host_print(text: String) -> ()
+
+fn tagged(tag: String, text: String) { host_print("[#{tag}] #{text}") }
+
+handler TaggedConsole: Console {
+  fn print_line(text) { tagged("out", text) }
+  fn print_error_line(text) { tagged("err", text) }
+}
+
+fn main() {
+  console <- Console
+  with TaggedConsole {
+    console.print_line("hello")
+    console.print_error_line("oops")
+  }
+}
+```
+
+```console
+$ emela run main.emel
+[out] hello
+[err] oops
+```
+
+`tagged` の R は `{ External }` で、`TaggedConsole` の操作の本体がそれを外します。ハンドラの外で外部関数を呼ぶと、`External` が残ってエラー（E4301）になります。
 
 ```emela check=error
 @external(js, "console.log")
@@ -91,16 +127,20 @@ fn main() {
 ```
 
 ```text
-error: external function `console_log` can only be used in handlers
+error[E4301]: effect `Main.External` is not provided in `main`
+   = help: `External` of `Main` is removed only in the handlers of `Main`; call it in a handler of `Main`, or declare in `Main` an effect and a handler that call it
 ```
+
+- モジュールの中で `External` と書けば、そのモジュールの External を指します。ほかのモジュールの External は `M.External` と書きます。モジュールが違えば、別のエフェクトです。
+- `External` のハンドラは書けず（E4003）、`use External` も書けず（E4402）、with や layer にも並べられません。
+- `External` は Immediate です。
+- 外部関数を参照する関数の値は、型の uses に `External` を持ちます。型の許す場所ならどこへでも持ち回れますが、呼べるのはそのモジュールのハンドラの中だけです。
 
 `uses {}` の宣言が正しいかどうかを、コンパイラは検証できません。宣言した人が責任を持ちます。
 
 uses 節に書けるのはホストのエフェクト ProcessHost と PageHost だけです（ほかは E5002）。`uses { ProcessHost }` は、ホストが OS のプロセスでなければ動かないことを表します。この外部関数を呼ぶハンドラは ProcessHost を要求します。ProcessHost は with で消えずに R に残るので、そのハンドラを使う関数は ProcessHost が与えられる `main` やテスト関数から呼ぶことになります。同梱の SystemArgs や SystemFileSystem がこの形です。
 
-制限は呼び出しだけでなく参照にも掛かります。uses を省略した外部関数を関数の値としてハンドラの外へ持ち出すこともできません。外部関数のホストの副作用は R に載らず、外から見えるのはそれを包んだハンドラのエフェクトです。
-
-suspend fn の外部関数は JS では Promise を返す関数に対応します。呼び出した fiber は完了まで中断します。
+suspend fn の外部関数は JS では Promise を返す関数に対応します。呼び出したタスクは完了まで中断します。
 
 ## JS のファイルを指す例
 
@@ -119,7 +159,7 @@ host-demo/
 [pome]
 name = "github.com/acme/host-demo"
 version = "0.1.0"
-emela = "0.28.0"
+emela = "0.29.0"
 ```
 
 ```js
@@ -179,8 +219,8 @@ handler NodeHost: Host {
 
 fn main() {
   with SystemConsole, NodeHost {
-    host = use Host
-    console = use Console
+    host <- Host
+    console <- Console
     console.print_line("platform: #{host.platform()}")
     host.pause(100)
     console.print_line("port: #{host.port("8080")}")
@@ -201,13 +241,15 @@ port: 80
 
 ### AbortSignal
 
-JS では、suspend fn の外部関数の最後の引数に、ランタイムが `AbortSignal` を足して渡します。待っている fiber が中断されると abort します。通信やタイマーを止めるためのもので、使わない関数は無視してかまいません。
+JS では、suspend fn の外部関数の最後の引数に、ランタイムが `AbortSignal` を足して渡します。待っているタスクが中断されると abort します。通信やタイマーを止めるためのもので、使わない関数は無視してかまいません。
 
-上の `host.mjs` の `wait` を `Fiber.timeout` の中で待たせると、違いが分かります。
+上の `host.mjs` の `wait` を `Task.timeout`（`import Std.Task.{Task}`）の中で待たせると、違いが分かります。
 
 ```emela
-r = Fiber.timeout(50, || (use Host).pause(10000))
-(use Console).print_line("#{r}")    # None
+host <- Host
+console <- Console
+r = Task.timeout(50, || host.pause(10000))
+console.print_line("#{r}") # None
 ```
 
 `signal` で `clearTimeout` する `wait` なら、プログラムは 50 ミリ秒ほどで終わります。`signal` を無視する `wait` だと、`None` を出した後もタイマーが残り、プロセスが終わるまで 10 秒かかります。
@@ -272,9 +314,11 @@ handler JsTimer: Timer {
 }
 
 fn main() {
+  timer <- Timer
+  console <- Console
   with SystemConsole, JsTimer {
-    (use Timer).later(10, || dbg("fired"))
-    (use Console).print_line("scheduled")
+    timer.later(10, || dbg("fired"))
+    console.print_line("scheduled")
   }
 }
 ```
@@ -285,7 +329,7 @@ scheduled
 "fired"
 ```
 
-ホストはコールバックがその場で終わることを前提に呼ぶので、外部関数に渡す関数は Immediate（中断しない）でなければなりません。中断しうるエフェクトを使う関数を渡すとエラーです。
+ホストはコールバックを、ハンドラのない状態で、後から呼ぶことがあります。そのため、コールバックの R に載せてよいのは、ホストのエフェクト（ProcessHost と PageHost）と、呼ぶ外部関数を宣言したモジュールの `External` だけです。ほかのエフェクトか能力を使う関数を渡すとエラー（E5003）です。ほかのモジュールの `External` も載せられません。
 
 ```emela check=error
 import Std.Clock.{Clock, SystemClock}
@@ -299,23 +343,33 @@ effect Timer {
 
 handler JsTimer: Timer {
   suspend fn later(ms, resume) {
-    set_timeout(|| (use Clock).sleep(1), ms)
+    set_timeout(
+      || {
+        clock <- Clock
+        clock.sleep(1)
+      },
+      ms,
+    )
     resume(())
   }
 }
 
 fn main() {
-  with SystemClock, JsTimer { (use Timer).later(10) }
+  with SystemClock, JsTimer {
+    timer <- Timer
+    timer.later(10)
+  }
 }
 ```
 
 ```text
-error: effect `Clock` may suspend, but callbacks passed to external function `set_timeout` must be `Immediate`
+error[E5003]: effect `Clock` cannot be used by a callback of external function `set_timeout`: the host calls it without handlers
+   = help: capture the capability of a named item (`with g = H { ... }`) and call its operations
 ```
 
-コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送ります（[並行処理](/guide/concurrency/)）。
+コールバックからファイルや通信を扱いたいときは、Deferred や Queue でタスクに合図を送り、タスクの側で扱います（[並行処理](/guide/concurrency/)）。
 
-native のターゲットは、関数型（コールバック）と Bytes、Array を境界で受け渡せません。エントリからたどれる外部関数がこれらを受け取るか返すと、コンパイルエラー（E5201、E5204）です。
+native のターゲットは、関数型（コールバック）と Array を境界で受け渡せません。エントリからたどれる外部関数がこれらを受け取るか返すと、コンパイルエラー（E5201、E5204）です。Bytes は 0.29 から渡せます。
 
 ### C の型
 
@@ -328,11 +382,12 @@ native のターゲットは、関数型（コールバック）と Bytes、Arra
 | Float | `double` | `double` |
 | Bool | `bool`（C99 の `_Bool`） | `bool` |
 | String | `const char *`（NUL 終端の UTF-8） | `char *`（NUL 終端。`malloc` で確保したもの） |
+| Bytes | `const uint8_t *data, size_t len`（2つの引数） | `em_bytes`（`emela.h` の構造体。`data` は `malloc` で確保するか、`len` が 0 なら NULL） |
 | `()` | 引数にしない | `void` |
 | `@external type` | `void *` | `void *` |
 | 関数型 | なし（E5201） | なし（E5201） |
 
-C に渡す String の写しは呼び出しの間だけ有効です。後から使うなら C の側で写します。C から受け取った String は、ランタイムが Emela の文字列に写した後すぐに `free` します。`size_t` や `int` のような表にない型は、C の側に小さな関数を書いて表の型に直します。
+C に渡す String と Bytes は呼び出しの間だけ有効です（suspend fn では完了を知らせるまで）。後から使うなら C の側で写します。C から受け取った String と `em_bytes` の `data` は、ランタイムが Emela の値に写した後すぐに `free` します。`size_t` や `int` のような表にない型は、C の側に小さな関数を書いて表の型に直します。
 
 ## C のファイルを指す例
 
@@ -351,7 +406,7 @@ counter/
 [pome]
 name = "github.com/acme/counter"
 version = "0.1.0"
-emela = "0.28.0"
+emela = "0.29.0"
 
 [build]
 target = "native"
@@ -441,12 +496,13 @@ handler NativeCounter(handle: Handle): Counter {
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, NativeCounter {
-    counter = use Counter
+    counter <- Counter
     counter.bump()
     counter.pause(20)
     counter.bump()
-    (use Console).print_line(counter.label("count = "))
+    console.print_line(counter.label("count = "))
   }
 }
 ```
@@ -462,9 +518,9 @@ count = 12
 
 C には Promise にあたるものがないので、`native` のターゲットの suspend fn の外部関数は、完了を後からランタイムに知らせる形で書きます。上の `counter_pause` がこの形です。
 
-C の関数は型の表の引数の後ろに完了を待っている fiber を表す `em_task *task` を受け取り、`void` を返します。完了は戻り値の型に応じた `em_complete_int`、`em_complete_string`、`em_complete_unit` などの関数で、1つの `task` についてちょうど1回知らせます（2回目は defect です）。C の関数の中ですぐに呼んでも、後から呼んでもかまいません。
+C の関数は型の表の引数の後ろに完了を待っているタスクを表す `em_task *task` を受け取り、`void` を返します。完了は戻り値の型に応じた `em_complete_int`、`em_complete_string`、`em_complete_bytes`、`em_complete_unit` などの関数で、1つの `task` についてちょうど1回知らせます（2回目は defect です）。C の関数の中ですぐに呼んでも、後から呼んでもかまいません。
 
-待ちの登録には `em_after(ms, task, callback, ctx)`（ミリ秒の後）、`em_on_readable` と `em_on_writable`（ファイル記述子の準備ができたら）を使います。待っている fiber が中断されると、`em_on_cancel` で登録したコールバックが呼ばれます（JS の `AbortSignal` にあたります）。
+待ちの登録には `em_after(ms, task, callback, ctx)`（ミリ秒の後）、`em_on_readable` と `em_on_writable`（ファイル記述子の準備ができたら）を使います。待っているタスクが中断されると、`em_on_cancel` で登録したコールバックが呼ばれます（JS の `AbortSignal` にあたります）。
 
 ## 例外と失敗
 
@@ -511,8 +567,8 @@ handler JsNumbers: Numbers {
 
 fn main() {
   with SystemConsole, JsNumbers {
-    numbers = use Numbers
-    console = use Console
+    numbers <- Numbers
+    console <- Console
     console.print_line("#{numbers.parse("2.5")}")
     n = numbers.parse("abc") escape { BadNumber(text:) -> 0.0 }
     console.print_line("#{n}")
@@ -574,6 +630,6 @@ allow = ["github.com/emela-lang/x/platform-cloudflare"]
 
 - `allow` には Pome のソースパスを並べ、版は書きません。依存の依存も、ここに書かなければ `@external` を使えません。
 - 許していない依存の `@external` はコンパイルエラー（E2303）です。`@export` も `@external` と同じに数えます。`emela pome add --allow-external <ソースパス>` は、依存を足すときに `allow` にも書き足します。
-- 依存の中の `@external` の関数は `pub` にできません（E0237）。ホストに触れる Pome は、外へはエフェクトか、外部関数を呼ぶ普通の関数として見せます。
+- 依存の中の `@external` の関数も `pub` にできます（0.29 から）。ほかのモジュールから呼んでも、R に載るのは宣言したモジュールの `External`（`M.External`）で、それを外すのはそのモジュールのハンドラだけです。ホストに触れる Pome は、外へはエフェクトとハンドラとして見せます。
 
 ライブラリはふつう純粋な Emela と std のエフェクトの上に書き、どのターゲットでも同じ意味で動くようにします。多くのプログラムが使うホストの機能は、std に platform のエフェクトか値の型として足します。特定のホストにしかない機能は、ターゲット専用の Pome に置きます（[Pome](/tools/pome/)）。

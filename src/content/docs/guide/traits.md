@@ -145,7 +145,7 @@ type User(id: Int, name: String)
 
 fn main() {
   with SystemConsole {
-    console = use Console
+    console <- Console
     console.print_line("#{Circle(radius: 1.0)} #{Rect(1.0, 2.0)} #{Empty}")
     console.print_line("#{(1, "a")} #{[1, 2, 3]} #{()}")
     console.print_line("#{User(id: 1, name: "alice")}")

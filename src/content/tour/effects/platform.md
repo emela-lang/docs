@@ -15,7 +15,7 @@ pub effect Console {
 
 本当に画面に書くのはハンドラ `SystemConsole` です。時計の `Clock` には `SystemClock`、乱数の `Random` には `SystemRandom` があります。`Platform` は、こうしたホストのハンドラをまとめて名前を付けたものです。`with Platform` と書くと、全部をまとめて渡せます。
 
-`Console` のハンドラも自分で書けます。右の `Loud` は、受け取った行を大文字にして、外側の `Console` に書きます。ハンドラの中の `use Console` は、`with Loud` の外側にあるハンドラ（ここでは `Platform` の `SystemConsole`）を指します。
+`Console` のハンドラも自分で書けます。右の `Loud` は、受け取った行を大文字にして、外側の `Console` に書きます。ハンドラの操作の中で `Console` の操作を呼ぶと、`with Loud` の外側にあるハンドラ（ここでは `Platform` の `SystemConsole`）が働きます。
 
 `announce` は1文字も変えずに、`with` の中だけ出力が変わります。
 
@@ -28,15 +28,18 @@ import Std.Platform.{Platform}
 
 handler Loud: Console {
   fn print_line(text) {
-    (use Console).print_line(String.to_ascii_uppercase(text))
+    console <- Console
+    console.print_line(String.to_ascii_uppercase(text))
   }
   fn print_error_line(text) {
-    (use Console).print_error_line(text)
+    console <- Console
+    console.print_error_line(text)
   }
 }
 
 fn announce(event: String) {
-  (use Console).print_line("#{event} starts now")
+  console <- Console
+  console.print_line("#{event} starts now")
 }
 
 fn main() {

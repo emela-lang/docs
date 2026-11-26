@@ -20,7 +20,7 @@ fn main() {
 }
 ```
 
-`swap[A, B]` のように名前の後に型引数を宣言します。fn、type、enum、effect に書けます。型に適用するときも `[ ]` を使い、`List[Int]`、`Pair[String, List[Int]]` のようになります。`swap(p)` の `A` と `B` は `p` の型から決まります。
+`swap[A, B]` のように名前の後に型引数を宣言します。fn、type、enum、effect、handler に書けます（ハンドラの型引数は[エフェクトとハンドラ](/guide/effects/#型引数を持つハンドラ)）。型に適用するときも `[ ]` を使い、`List[Int]`、`Pair[String, List[Int]]` のようになります。`swap(p)` の `A` と `B` は `p` の型から決まります。
 
 ```emela check
 enum Tree[A] {
@@ -69,6 +69,18 @@ fn first[Item](xs: List[Item]) -> Option[Item] { # type parameter `Item` shadows
 
 fn main() {
   dbg(first([1, 2])) # Some(1)
+  ()
+}
+```
+
+fn の型（引数、戻り値、`fails`、`uses`）に現れない型引数は、呼び出しから決められないので警告（W3002）になります。
+
+```emela check
+# type parameter `A` of `twice` does not appear in its signature
+fn twice[A](x: Int) -> Int { x * 2 }
+
+fn main() {
+  dbg(twice(1)) # 2
   ()
 }
 ```
@@ -170,7 +182,7 @@ fn hello(req: Request) -> Response {
 }
 
 fn logged(req: Request) -> Response fails NotFound uses { Console } {
-  out = use Console
+  out <- Console
   out.print_line("GET #{req.path}")
   if req.path == "/" { Response(status: 200, body: "ok") } else { fail NotFound(path: req.path) }
 }

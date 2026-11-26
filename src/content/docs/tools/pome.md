@@ -58,7 +58,7 @@ fn says_hello() {
 [pome]
 name = "github.com/emela-lang/quince"   # source path
 version = "0.3.2"
-emela = "0.28.0"                         # 要るコンパイラの最小の版
+emela = "0.29.0"                         # 要るコンパイラの最小の版
 module = "Quince"                        # 依存されたときのルート名（省略可）
 license = "MIT OR Apache-2.0"            # SPDX のライセンス式（省略可）
 
@@ -157,7 +157,7 @@ warning[W2303]: `MIT/Apache-2.0` is not an SPDX license expression
 - ホストに触る依存が、いつもアプリケーションの `Pome.toml` に一覧として現れるようにするためです。
 - その Pome をビルドするときだけ効き、依存されたときは無視します。
 - `allow` に書いたのに依存グラフにない Pome は警告（W2302）です。
-- 依存の Pome の `@external` の fn は pub にできません（E0237）。ホストへの道は、その Pome のハンドラを通します。
+- 依存の Pome の `@external` の fn も pub にできます（0.29 から）。ほかのモジュールから呼んでも、ホストの副作用のある外部関数は宣言したモジュールの `External` を R に足し、それを外すのはそのモジュールのハンドラだけなので、ホストへの道はその Pome のハンドラを通ります（[外部関数](/guide/external/)）。
 - `emela pome add --allow-external` は、足す Pome と、それが新しく持ち込む Pome のうち `@external` を使うものを `allow` に足します。
 
 ### [build]
@@ -167,7 +167,7 @@ warning[W2303]: `MIT/Apache-2.0` is not an SPDX license expression
 | `target` | `build`、`run`、`test` の既定のビルド対象。`js`、`wasm`、`native`。省けば `js` |
 
 - コマンドの `--target` が優先します。`check` はターゲットを取りませんが、`[build].target` が正しいかは確かめます。
-- `c` は `native` の古い名前で、警告（W0903）を出します。0.29 で取り除きます。
+- 0.28 まで `native` の古い名前として読んだ `c` は、0.29 で取り除きました。今は知らないターゲット（E2302）です。`[pome].targets` の `"c"` も同じく知らないターゲットのエラーです。
 - `[replace]` と同じく、その Pome をビルドするときだけ効き、依存されたときは無視します。
 - 知らないターゲットはエラー（E2302）です。
 
@@ -301,8 +301,8 @@ the cached dependencies match Pome.lock
 - `[dev-dependencies]` が空になれば表ごと消します。`[dependencies]` は空でも残します。
 - 誤りは `error: ` で始まる1行を標準エラーに出し、終了コード 1 で終わります。
 
-:::caution[0.28.1 にないもの]
-仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.28.1 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
+:::caution[0.29.0 にないもの]
+仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.29.0 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
 :::
 
 ## 持たないもの

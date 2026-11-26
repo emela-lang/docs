@@ -1,9 +1,9 @@
 ---
 title: エフェクトとハンドラ
-description: effect と操作、use と能力の値、with による供給、handler、R の推論
+description: effect と操作、エフェクトの別名と能力の値、with による供給、handler、R の推論
 ---
 
-副作用は `effect` で宣言した操作を通してしか起こせません。操作を呼ぶ関数は `use` で能力の値を取り出し、操作の中身は `handler` が実装し、どのハンドラを使うかは呼ぶ側が `with` で決めます。関数が使うエフェクトは、エラーの E と並んで型の一部（R）になります。
+副作用は `effect` で宣言した操作を通してしか起こせません。操作を呼ぶ関数は `x <- X` でエフェクトに名前を付け、操作の中身は `handler` が実装し、どのハンドラを使うかは呼ぶ側が `with` で決めます。関数が使うエフェクトは、エラーの E と並んで型の一部（R）になります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -13,11 +13,14 @@ effect Logger {
 }
 
 handler ConsoleLogger: Logger {
-  fn info(msg) { (use Console).print_line("[info] #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("[info] #{msg}")
+  }
 }
 
 fn greet(name: String) {
-  log = use Logger
+  log <- Logger
   log.info("hello #{name}")
 }
 
@@ -57,9 +60,9 @@ effect Users {
 
 ハンドラは宣言された範囲を超えて失敗できないので、ハンドラを差し替えても呼び出し側の E は変わりません。
 
-## use で能力を取り出す
+## エフェクトの別名
 
-`use X` は、エフェクト X の能力の値を返す式です。操作はこの値を通して `log.info(...)` の形で呼びます。
+`x <- X` は、エフェクト X の別名 x をブロックの残りで使えるようにする文です。操作は `x.op(...)` の形で呼びます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -69,19 +72,21 @@ effect Logger {
 }
 
 handler ConsoleLogger: Logger {
-  fn info(msg) { (use Console).print_line("[info] #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("[info] #{msg}")
+  }
 }
 
 fn greet(names: List[String]) {
-  log = use Logger
+  log <- Logger
   log.info("start")
 
   # 呼ばずに書くと関数の値になる
   info = log.info
   List.map(names, info)
 
-  # その場で取り出して呼ぶ
-  (use Logger).info("done")
+  log.info("done")
 }
 
 fn main() {
@@ -99,11 +104,19 @@ $ emela run main.emel
 [info] done
 ```
 
-- 一度しか使わないなら `(use Logger).info(...)` と書けます。`Logger.info(...)` のようにエフェクト名で直接呼ぶ形はありません。
-- `log.info` と呼ばずに書くと関数の値になり、`List.map` などに渡せます。
+- 別名は値ではありません。`log.info(...)` が、呼んだ時点で X を名前で供給している最も内側のハンドラの操作を呼び、R に X を載せます。
+- 別名を書けるのは `x.op(...)` と `x.op` の受け手だけです。引数に渡したり変数に入れたりするとエラー（E4404）です。
+- `log.info` と呼ばずに書くと関数の値になり、`List.map` などに渡せます。X は、その関数の値を呼ぶたびに決まります。
+- `Logger.info(...)` のようにエフェクト名で直接呼ぶ形はありません。
 - 呼び出し側には副作用や中断を示す印（`await` や `!`）を付けません。
 
-能力の値は、ほかの値と同じく関数の引数に渡すことも、データ構造に入れることも、関数から返すこともできます。特定のハンドラの能力を別の関数に使わせたいときは、その能力の値を渡します。型は `use Db` と書きます。
+:::caution[`use X` は非推奨]
+0.28 までは `log = use Logger` や `(use Logger).info(...)` と、式の `use X` で能力の値を取り出していました。0.29 では式の `use X` は非推奨の警告（W4401）になり、0.30 でエラーになります。`log <- Logger` に書き換えてください。型の `use X`（下の能力の型）はそのまま使えます。
+:::
+
+### 能力の値
+
+特定のハンドラを別の関数に使わせたいときは、with の項目に名前を付けて `x = H` と書きます。x はその項目のハンドラの能力の値で、ほかの値と同じく関数の引数に渡すことも、データ構造に入れることも、関数から返すこともできます。能力の値の型は `use Db` と書きます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -115,12 +128,18 @@ effect Db {
 
 handler PrimaryDb: Db {
   fn query(sql) { ["primary row"] }
-  fn execute(rows) { (use Console).print_line("primary <- #{rows}") }
+  fn execute(rows) {
+    console <- Console
+    console.print_line("primary <- #{rows}")
+  }
 }
 
 handler ReplicaDb: Db {
   fn query(sql) { ["replica row"] }
-  fn execute(rows) { (use Console).print_line("replica <- #{rows}") }
+  fn execute(rows) {
+    console <- Console
+    console.print_line("replica <- #{rows}")
+  }
 }
 
 fn copy(from: use Db, to: use Db) {
@@ -128,12 +147,8 @@ fn copy(from: use Db, to: use Db) {
 }
 
 fn main() {
-  with SystemConsole, PrimaryDb {
-    primary = use Db
-    with ReplicaDb {
-      replica = use Db
-      copy(replica, primary)
-    }
+  with SystemConsole, primary = PrimaryDb, replica = ReplicaDb {
+    copy(replica, primary)
   }
 }
 ```
@@ -147,7 +162,7 @@ primary <- ["replica row"]
 
 - `use Db` は型で、型を書ける場所ならどこにでも書けます。ハンドラのフィールドの型にもできます。
 - 能力の値に呼べるのは、そのエフェクトの操作だけです。中身を調べる操作はなく、`==` も使えません。
-- 能力の値（やそれを捕まえたクロージャ）を with の中で下の関数へ渡すのはかまいませんが、with の外へ持ち出すと警告（W0402）になります（[状態と資源](/guide/resources/#能力を-with-の外へ持ち出さない)）。
+- 能力の値の操作を呼ぶと、R にはエフェクトではなくその能力そのもの（`primary`）が載ります。能力の値は、それを作った with の外へ持ち出せません。持ち出すとエラー（E4405）です（[状態と資源](/guide/resources/#能力を-with-の外へ持ち出さない)）。
 
 ## with でハンドラを供給する
 
@@ -161,11 +176,11 @@ with SystemConsole, ConsoleLogger { greet("alice") }
 
 同じ with に並べたハンドラの依存は、同じ with の別のハンドラが満たしてかまいません。`ConsoleLogger` は Console を使いますが、同じ with の `SystemConsole` が供給するので動きます。並び順は問わず、`with ConsoleLogger, SystemConsole` でもかまいません。同じエフェクトのハンドラを2つ並べたときは後ろが優先され、前のものは初期化もされません。
 
-項目は `x = H` の形でも書けます。本体の中で x はその項目のハンドラの能力の値になり、同じ with のほかの項目が同じエフェクトを供給していても、x はこの項目のハンドラを指します。
+項目は `x = H` の形でも書けます。本体の中で x はその項目のハンドラの能力の値になり、同じ with のほかの項目が同じエフェクトを供給していても、x はこの項目のハンドラを指します。名前を付けた項目は、エフェクトを名前では供給しません。本体が名前で使うエフェクト（別名や、本体が呼ぶ関数の R）は、外側の with か呼び出し元が供給します。同じ with のほかのハンドラの依存も満たしません。
 
 ### どのハンドラが使われるか
 
-`use X` は、書いた位置から見て最も内側の with のハンドラを指します。同じ関数の中に該当する with がなければ、呼び出し元から渡されたものを指します。
+別名の操作は、呼んだ時点でそのエフェクトを名前で供給している最も内側の with のハンドラに届きます。同じ関数の中に該当する with がなければ、呼び出し元から渡されたものに届きます。名前を付けた項目の能力の値は、内側の with で同じエフェクトが上書きされても、その項目のハンドラを指したままです。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -175,30 +190,34 @@ effect Logger {
 }
 
 handler Outer: Logger {
-  fn info(msg) { (use Console).print_line("outer: #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("outer: #{msg}")
+  }
 }
 
 handler Inner: Logger {
-  fn info(msg) { (use Console).print_line("inner: #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("inner: #{msg}")
+  }
 }
 
 fn main() {
-  with SystemConsole, Outer {
-    outer = use Logger
+  log <- Logger
+  with SystemConsole, outer = Outer {
     with Inner {
-      (use Logger).info("a") # inner: a
+      log.info("a") # inner: a
       outer.info("b") # outer: b
     }
   }
   with SystemConsole, Outer, Inner {
-    (use Logger).info("c") # inner: c（後ろが優先）
+    log.info("c") # inner: c（後ろが優先）
   }
 }
 ```
 
-外側で取り出した `outer` は、内側の with で Logger が上書きされても Outer を指したままです。
-
-無名関数の中の `use X` は、まず無名関数を囲む with（同じトップレベルの関数の中のもの）を見ます。囲む with がなければ、無名関数を呼んだ側のハンドラを指します。
+無名関数と局所の fn の中の呼び出しは、その関数を呼んだ側が供給します。関数を作った場所を囲む with は使いません。無名関数が使うエフェクトは、その型の R に残り、呼ぶ場所で供給されます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
@@ -208,24 +227,32 @@ effect Logger {
 }
 
 handler Outer: Logger {
-  fn info(msg) { (use Console).print_line("outer: #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("outer: #{msg}")
+  }
 }
 
 handler Inner: Logger {
-  fn info(msg) { (use Console).print_line("inner: #{msg}") }
+  fn info(msg) {
+    console <- Console
+    console.print_line("inner: #{msg}")
+  }
 }
 
 fn main() {
-  say = |m| (use Logger).info(m) # 囲む with がない
+  log <- Logger
   with SystemConsole, Outer {
-    near = |m| (use Logger).info(m) # Outer に囲まれている
+    say = |m| log.info(m) # Outer に囲まれているが、Outer は使わない
     with Inner {
       say("a") # inner: a（呼んだ場所の Logger）
-      near("b") # outer: b
     }
+    say("b") # outer: b
   }
 }
 ```
+
+決まったハンドラを無名関数に使わせたいときは、名前を付けた項目の能力の値を無名関数で捕まえます。能力の値は、捕まえた先でもそのハンドラを指します。
 
 関数を受け取る関数の中で with を書いたとき、引数の関数の効果が型の上でどう扱われるかは[型と効果の体系](/reference/type-system/)にあります。
 
@@ -255,10 +282,10 @@ handler SampleUsers: Users {
 }
 
 fn main() {
-  with SystemConsole, SampleUsers {
-    users = use Users
-    (use Console).print_line("#{users.count()} users")
-    (use Console).print_line(users.find(2).name)
+  console <- Console
+  with SystemConsole, users = SampleUsers {
+    console.print_line("#{users.count()} users")
+    console.print_line(users.find(2).name)
   }
 }
 ```
@@ -286,7 +313,10 @@ effect Execute {
 
 handler MemoryDb: Query + Execute {
   fn query(sql) { ["row 1", "row 2"] }
-  fn execute(sql) { (use Console).print_line("execute: #{sql}") }
+  fn execute(sql) {
+    console <- Console
+    console.print_line("execute: #{sql}")
+  }
 }
 
 fn count_rows(db: use Query) -> Int { List.length(db.query("select *")) }
@@ -333,7 +363,8 @@ effect Logger {
 }
 
 fn main() {
-  (use Logger).info("x")
+  log <- Logger
+  log.info("x")
 }
 ```
 
@@ -341,7 +372,7 @@ fn main() {
 effect `Logger` is not provided in `main`
 ```
 
-ホストのエフェクトは、ハンドラを書けず、`use` もできない、ホストだけが供給するエフェクトです。Async は「後から再開される」こと（[中断する操作](/guide/suspend/)）、ProcessHost はホストが OS のプロセスであること（引数、標準入出力、環境変数、ファイルシステムを持つ）を表します。どちらも `main` とテスト関数には最初から与えられます。ふつうの `main` は `with Platform { ... }` か `with Process { ... }` と書いて、同梱のハンドラをまとめて供給します（[状態と資源](/guide/resources/#platform-と-process)）。
+ホストのエフェクトは、ハンドラを書けず、別名も能力の値も作れない、ホストだけが供給するエフェクトです。Async は「後から再開される」こと（[中断する操作](/guide/suspend/)）、ProcessHost はホストが OS のプロセスであること（引数、標準入出力、環境変数、ファイルシステムを持つ）を表します。どちらも `main` とテスト関数には最初から与えられます。ふつうの `main` は `with Platform { ... }` か `with Process { ... }` と書いて、同梱のハンドラをまとめて供給します（[状態と資源](/guide/resources/#platform-と-process)）。
 
 ## エフェクトの型引数
 
@@ -361,7 +392,9 @@ handler NameStore: Store[String] {
 }
 
 fn read_both() -> (Int, String) uses { Store[Int], Store[String] } {
-  ((use Store[Int]).load(), (use Store[String]).load())
+  ints <- Store[Int]
+  names <- Store[String]
+  (ints.load(), names.load())
 }
 
 fn main() {
@@ -371,7 +404,38 @@ fn main() {
 }
 ```
 
-`Store[Int]` と `Store[String]` は別のエフェクトとして扱うので、同じ with に並べても上書きし合いません。`use Store[Int]` の型引数は省けません。ハンドラは `handler IntStore: Store[Int]` のように具体的な型について実装します。同梱の `State[S]` がこの形です（[状態と資源](/guide/resources/)）。
+`Store[Int]` と `Store[String]` は別のエフェクトとして扱うので、同じ with に並べても上書きし合いません。型引数は省けません。別名でも `ints <- Store[Int]` と書き、uses 節や型の `use Store[Int]` でも書きます（省くと E4008）。ハンドラは `handler IntStore: Store[Int]` のように具体的な型について実装します。同梱の `State[S]` がこの形です（[状態と資源](/guide/resources/)）。
+
+### 型引数を持つハンドラ
+
+ハンドラも名前の後ろに型引数を宣言できます。1つの定義で、どの型の Store も実装できます。
+
+```emela check
+effect Store[S] {
+  fn load() -> S
+}
+
+handler Fixed[S](value: S): Store[S] {
+  init(value: S) { Fixed(value:) }
+  fn load() { self.value }
+}
+
+fn read_both() -> (Int, String) uses { Store[Int], Store[String] } {
+  ints <- Store[Int]
+  names <- Store[String]
+  (ints.load(), names.load())
+}
+
+fn main() {
+  with Fixed(value: 42), Fixed[String](value: "alice") {
+    _ = dbg(read_both()) # (42, "alice")
+  }
+}
+```
+
+- 型引数は with の項目ごとに1回決まります。init の引数から推論するか、`Fixed[String](...)` のように名前の後ろに書きます。決まらないとエラー（E4107）です。
+- 同じ with に同じハンドラを並べるとき、型引数が決まっていないと、どちらがどちらを上書きするか決められずに E4107 になります。上の例では1つ目は引数から Int に決まり、2つ目は型引数を書いています。
+- ハンドラの型引数は、コロンの後のエフェクト、フィールドの型、init の引数の型のどれかに現れなければなりません（E4013）。
 
 ## テストでハンドラを差し替える
 
@@ -398,13 +462,15 @@ handler SampleUsers: Users {
 }
 
 fn greeting(id: Int) {
-  user = (use Users).find(id) escape { NotFound(_) -> User(id: 0, name: "guest") }
+  users <- Users
+  user = users.find(id) escape { NotFound(_) -> User(id: 0, name: "guest") }
   "Hello, #{user.name}!"
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SampleUsers {
-    (use Console).print_line(greeting(1))
+    console.print_line(greeting(1))
   }
 }
 

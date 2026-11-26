@@ -15,7 +15,7 @@ const DIR: String = "notes"
 
 ## `notes/<day>.txt` に1行足し、ファイルの行数を返す。
 fn note(day: String, text: String) {
-  fs = use FileSystem
+  fs <- FileSystem
   fs.create_directory(DIR)
   path = Path.join(DIR, "#{day}.txt")
   fs.append_text(path, "#{text}\n")
@@ -24,18 +24,20 @@ fn note(day: String, text: String) {
 
 ## `notes/<day>.txt` の中身。なければその旨を返す。
 fn show(day: String) {
-  (use FileSystem).read_text(Path.join(DIR, "#{day}.txt")) escape {
+  fs <- FileSystem
+  fs.read_text(Path.join(DIR, "#{day}.txt")) escape {
     FileNotFound(path:) -> "no notes in #{path}"
   }
 }
 
 fn main() {
   with Process {
-    console = use Console
+    console <- Console
+    fs <- FileSystem
     console.print_line(String.trim(show("monday")))
     n = note("monday", "buy milk")
     console.print_line("#{n} note(s)")
-    console.print_line("#{(use FileSystem).list_directory(DIR)}")
+    console.print_line("#{fs.list_directory(DIR)}")
   }
 }
 ```
@@ -68,7 +70,7 @@ no notes in notes/monday.txt
 - UTF-8 として読めないファイルは、置換文字に置き換えずに InvalidText で失敗します。読んで書き戻したときに中身が壊れないようにするためです。先頭の BOM は残します。
 - 相対パスはプロセスの現在のディレクトリから解きます。正規化（`..` の解決）、絶対パスへの変換、`~` の展開はしません。
 
-操作がすべて `suspend fn` なのは、同期の API だと読み書きの間すべての fiber が止まるからです。そのため外部関数のコールバックの中では FileSystem を使えません。コールバックからは Deferred で fiber に合図を送り、fiber の側でファイルを扱います（[State と Fiber](/std/state-fiber/)）。
+操作がすべて `suspend fn` なのは、同期の API だと読み書きの間すべてのタスクが止まるからです。そのため外部関数のコールバックの中では FileSystem を使えません。コールバックからは Deferred でタスクに合図を送り、タスクの側でファイルを扱います（[State と Task](/std/state-task/)）。
 
 ## エラー
 
@@ -101,7 +103,7 @@ import Std.State.{State}
 
 ## `from` を `to` に写し、行数を返す。
 fn copy(from: String, to: String) {
-  fs = use FileSystem
+  fs <- FileSystem
   text = fs.read_text(from)
   fs.write_text(to, text)
   String.split(text, "\n") |> List.length
@@ -130,7 +132,7 @@ fn a_missing_file_is_reported() {
 }
 ```
 
-State と `State.run` は [State と Fiber](/std/state-fiber/) に、テストの書き方は [テスト](/guide/testing/) にあります。
+State と `State.run` は [State と Task](/std/state-task/) に、テストの書き方は [テスト](/guide/testing/) にあります。
 
 ## Std.Path
 

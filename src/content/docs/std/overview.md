@@ -15,8 +15,10 @@ fn greeting(name: Option[String]) -> String {
 }
 
 fn main() {
+  console <- Console
+  env <- Env
   with Process {
-    (use Console).print_line(greeting((use Env).get("USER")))
+    console.print_line(greeting(env.get("USER")))
   }
 }
 ```
@@ -43,8 +45,8 @@ Prelude と core は純粋で、それだけで書いた関数は純粋です。
 | 層 | 性質 | モジュール |
 |---|---|---|
 | 値 | 純粋で、ホストに依らない | `Std.Map`、`Std.Set`、`Std.Array`、`Std.Bytes`、`Std.Instant`、`Std.Duration`、`Std.Path`、`Std.Dynamic`、`Std.Json`、`Std.Shape` |
-| エフェクト | 並行性と状態 | `Std.State`、`Std.Fiber`、`Std.Exit`、`Std.Cause`、`Std.Deferred`、`Std.Semaphore`、`Std.Queue` |
-| platform | ホストとの境界。エフェクトと本物のハンドラ | `Std.Console`、`Std.Process`、`Std.Clock`、`Std.Random`、`Std.Env`、`Std.FileSystem`、`Std.Http`、`Std.Platform` |
+| エフェクト | 並行性と状態 | `Std.State`、`Std.Task`、`Std.Exit`、`Std.Cause`、`Std.Deferred`、`Std.Semaphore`、`Std.Queue` |
+| platform | ホストとの境界。エフェクトと本物のハンドラ | `Std.Console`、`Std.Process`、`Std.Clock`、`Std.Random`、`Std.Env`、`Std.FileSystem`、`Std.Http`、`Std.Tcp`、`Std.Platform` |
 | テスト | 差し替え用のハンドラ | `TestClock`、`TestConsole` など。それぞれのエフェクトと同じモジュールにある |
 
 ## どのページに何があるか
@@ -56,8 +58,9 @@ Prelude と core は純粋で、それだけで書いた関数は純粋です。
 | [Process と Platform](/std/platform/) | `Std.Platform`、`Std.Process`、`Std.Console`、`Std.Clock`、`Std.Instant`、`Std.Duration`、`Std.Random`、`Std.Env` |
 | [FileSystem と Path](/std/file-system/) | `Std.FileSystem`、`Std.Path` |
 | [Http](/std/http/) | `Std.Http`、`Std.Http.Request`、`Std.Http.Response` |
+| API リファレンスの [Std.Tcp](/std/api/std-tcp/) | `Std.Tcp`（0.29 から。TCP の接続と、TLS への昇格。0.29.0 で動くのは JS のターゲットだけ） |
 | [JSON と Dynamic](/std/json/) | `Std.Json`、`Std.Dynamic`、`Std.Shape` |
-| [State と Fiber](/std/state-fiber/) | `Std.State`、`Std.Fiber`、`Std.Exit`、`Std.Cause`、`Std.Deferred`、`Std.Semaphore`、`Std.Queue` |
+| [State と Task](/std/state-task/) | `Std.State`、`Std.Task`、`Std.Exit`、`Std.Cause`、`Std.Deferred`、`Std.Semaphore`、`Std.Queue` |
 
 ## なぜ Std の下に置くのか
 
@@ -143,7 +146,7 @@ fn main() {
 |---|---|---|
 | `to_*` | 失敗しない変換 | `Int.to_string`、`Int64.to_int` |
 | `from_*` | 失敗しない作成 | `Float.from_int`、`Instant.from_unix_milliseconds` |
-| `parse` | 失敗しうる、文字列からの変換 | `Int.parse`、`Bool.parse` |
+| `parse` | 失敗しうる、文字列からの変換 | `Int.parse`、`Bool.parse`、`Duration.parse`、`Instant.parse` |
 | `is_*` | Bool を返す判定 | `List.is_empty`、`Option.is_some` |
 
 ### 変換の置き場所
