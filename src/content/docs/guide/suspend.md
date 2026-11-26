@@ -11,9 +11,9 @@ import Std.Clock.{Clock, SystemClock}
 import Std.Instant.{Instant}
 
 fn countdown(n: Int) {
-  console = use Console
-  clock = use Clock
-  List.map(List.range(0, n), |i| {
+  console <- Console
+  clock <- Clock
+  List.each(List.range(0, n), |i| {
     clock.sleep(100)
     console.print_line("#{n - i}")
   })
@@ -74,16 +74,19 @@ effect Ask {
 
 handler LengthAnswer: Ask {
   suspend fn ask(question, resume) {
-    (use Console).print_line("before resume")
+    console <- Console
+    console.print_line("before resume")
     resume(String.length(question))
-    (use Console).print_line("after resume")
+    console.print_line("after resume")
   }
 }
 
 fn main() {
+  console <- Console
+  ask <- Ask
   with SystemConsole, LengthAnswer {
-    n = (use Ask).ask("hello")
-    (use Console).print_line("got #{n}")
+    n = ask.ask("hello")
+    console.print_line("got #{n}")
   }
 }
 ```
@@ -98,6 +101,33 @@ got 5
 - 実装の引数は操作の引数の後ろに resume を1つ足したものです。名前は `resume` でなくてもかまいません。
 - その場で resume したときは、resume の後の本体の残りを実行し終えてから呼び出し元が続きます。上の出力で `after resume` が `got 5` より先に出るのはそのためです。
 - 本体が resume せずに失敗したときは、そのエラーが操作の呼び出しの結果になります。
+
+### resume の後に中断しない
+
+suspend fn の実装では、resume を呼んだ後（または resume を変数に入れる、クロージャで捕まえる、引数に渡すといった使い方の後）に、中断しうる呼び出しを書けません（E4305）。呼び出し元はもう再開しているので、そこで待つ仕事は誰にも待たれないからです。
+
+```emela check=error
+import Std.Clock.{Clock}
+
+effect Ask {
+  suspend fn ask(question: String) -> Int
+}
+
+handler Lazy: Ask {
+  suspend fn ask(question, resume) {
+    clock <- Clock
+    resume(String.length(question))
+    clock.sleep(100) # resume の後に中断しうる
+  }
+}
+```
+
+```text
+error[E4305]: call to `sleep` may suspend after `resume` has been called
+  = help: start the rest with `Spawn` before calling `resume`
+```
+
+if や match の片方の枝だけで resume する場合も含め、resume の後に届きうる呼び出しはすべて検査します。呼び出し元が再開した後も続ける仕事は、resume の前に `Spawn`（[Task.Background](/guide/concurrency/#taskbackground)）で始めます。
 
 ### resume は高々1回
 
@@ -116,8 +146,9 @@ handler Twice: Ask {
 }
 
 fn main() {
+  ask <- Ask
   with Twice {
-    _ = dbg((use Ask).ask("x"))
+    _ = dbg(ask.ask("x"))
   }
 }
 ```
@@ -150,10 +181,12 @@ handler JsTimer: Timer {
 }
 
 fn main() {
+  console <- Console
+  timer <- Timer
   with SystemConsole, JsTimer {
-    (use Console).print_line("waiting")
-    (use Timer).wait(200)
-    (use Console).print_line("done")
+    console.print_line("waiting")
+    timer.wait(200)
+    console.print_line("done")
   }
 }
 ```
@@ -162,9 +195,9 @@ fn main() {
 
 ## Async
 
-Async は「後から再開される」ことを表すホストのエフェクトです。供給できるのはホストだけで、ハンドラも `use Async` も書けません。
+Async は「後から再開される」ことを表すホストのエフェクトです。供給できるのはホストだけで、ハンドラも `x <- Async` も書けません。
 
-resume を後から呼ぶ手段（外部関数のコールバック、`@external suspend fn`、fiber の fork）は Async を要求します。コンパイラは、suspend fn の実装で `resume` を `resume(v)` と直接呼ぶ以外の使い方（変数に入れる、クロージャで捕まえる、引数に渡す）を見ると、後から呼びうるとみなしてハンドラの依存に Async を足します。上の JsTimer も同梱の SystemClock も Async に依存するので、`with JsTimer { ... }` の R には Async が残ります。
+resume を後から呼ぶ手段（外部関数のコールバック、`@external suspend fn`、別のタスク）は Async を要求します。コンパイラは、suspend fn の実装で `resume` を `resume(v)` と直接呼ぶ以外の使い方（変数に入れる、クロージャで捕まえる、引数に渡す）を見ると、後から呼びうるとみなしてハンドラの依存に Async を足します。上の JsTimer も同梱の SystemClock も Async に依存するので、`with JsTimer { ... }` の R には Async が残ります。
 
 `main` とテスト関数の R はホストのエフェクト（Async と ProcessHost）を除いて空であればよいので、Async が残っても動きます。uses 節で効果がないと宣言した関数の中では、エラーになります。
 
@@ -183,7 +216,8 @@ handler JsTimer: Timer {
 }
 
 fn pause() -> () uses {} {
-  with JsTimer { (use Timer).wait(10) }
+  timer <- Timer
+  with JsTimer { timer.wait(10) }
 }
 ```
 
@@ -207,15 +241,17 @@ handler InstantClock: Clock {
 
 # uses {} と書いても通る
 fn nap() -> () uses {} {
+  clock <- Clock
   with InstantClock {
-    (use Clock).sleep(1000)
+    clock.sleep(1000)
   }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole {
     nap()
-    (use Console).print_line("woke")
+    console.print_line("woke")
   }
 }
 ```
@@ -233,9 +269,11 @@ import Std.Console.{Console, SystemConsole}
 fn run_now[R: Immediate](f: fn() -> () uses { R }) -> () uses { R } { f() }
 
 fn main() {
+  console <- Console
+  clock <- Clock
   with SystemConsole, SystemClock {
-    run_now(|| (use Console).print_line("ok")) # 通る
-    run_now(|| (use Clock).sleep(10)) # Clock は中断しうる
+    run_now(|| console.print_line("ok")) # 通る
+    run_now(|| clock.sleep(10)) # Clock は中断しうる
   }
 }
 ```
@@ -244,7 +282,7 @@ fn main() {
 effect `Clock` may suspend, but `R` of `run_now` must be `Immediate`
 ```
 
-[外部関数](/guide/external/)に渡すコールバックも Immediate でなければなりません。ホストのコールバックの中では待てないためです。コールバックからファイルや通信を扱いたいときは、[Deferred](/guide/concurrency/) で fiber に合図を送り、fiber の側で扱います。
+[外部関数](/guide/external/)に渡すコールバックも Immediate でなければなりません。ホストのコールバックの中では待てないためです。コールバックからファイルや通信を扱いたいときは、[Deferred](/guide/concurrency/#deferred) でタスクに合図を送り、タスクの側で扱います。
 
 制約の細かい規則は[型と効果の体系](/reference/type-system/)にあります。
 
@@ -262,8 +300,9 @@ effect Stamp {
 
 handler Slow: Stamp {
   fn stamp() {
-    (use Clock).sleep(10)
-    (use Clock).now()
+    clock <- Clock
+    clock.sleep(10)
+    clock.now()
   }
 }
 ```
@@ -291,19 +330,21 @@ effect Stamp {
 # 本体の R が Immediate なので通る
 handler Settled: Stamp {
   fn stamp() {
+    clock <- Clock
     with InstantClock {
-      (use Clock).sleep(10)
-      (use Clock).now()
+      clock.sleep(10)
+      clock.now()
     }
   }
 }
 
 fn main() {
-  with Settled { _ = dbg((use Stamp).stamp()) }
+  stamp <- Stamp
+  with Settled { _ = dbg(stamp.stamp()) }
 }
 ```
 
-`fn now() { (use Clock).now() }` のように fn の操作だけを呼ぶ本体も通り、Clock はハンドラの依存になります。
+`clock <- Clock` を書いて `clock.now()` のように fn の操作だけを呼ぶ本体も通り、Clock はハンドラの依存になります。
 
 ハンドラのメンバーも同じです。`suspend` を付けずに宣言したメンバー（`handler Open(path: String): ReadFile`）を実装する内側のハンドラの init と release は、fn の操作の本体と同じ規則で検査します。開くときや閉じるときに待つなら、エフェクトの宣言で `suspend handler Open(...)` にします。
 
@@ -321,8 +362,9 @@ handler Silent: Ask {
 }
 
 fn main() {
+  ask <- Ask
   with Silent {
-    _ = dbg((use Ask).ask("x"))
+    _ = dbg(ask.ask("x"))
   }
 }
 ```
@@ -334,8 +376,8 @@ $ echo $?
 130
 ```
 
-上の Silent は Async に依存しないので、後から resume されることはありません。そのため継続はその場で巻き戻ります。後から resume しうるときは、その fiber を待っているスコープ（`Fiber.scope` かプログラムの最上位）が終わるときに巻き戻ります。
+上の Silent は Async に依存しないので、後から resume されることはありません。そのため継続はその場で巻き戻ります。後から resume しうるときは、そのタスクを待っている with（`Task.Group` か `Task.Background`）かプログラムの最上位が終わるときに巻き戻ります。
 
 `main` の継続が巻き戻ると、標準エラーに `interrupted` を1行出し、終了コード 130 で終わります。エラー（1）とも defect（101）とも終了コードで見分けられます。巻き戻りの細かい規則は[実行時の意味](/reference/semantics/)にあります。
 
-複数の処理を中断点で切り替えながら進めるのが fiber です（[並行処理](/guide/concurrency/)）。
+複数の処理を中断点で切り替えながら進めるのがタスクです（[並行処理](/guide/concurrency/)）。

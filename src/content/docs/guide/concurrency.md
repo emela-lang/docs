@@ -1,27 +1,30 @@
 ---
 title: 並行処理
-description: fiber、組み合わせ関数、Fiber.scope と fork、中断、Exit と Cause、Deferred、Semaphore、Queue、持ち出しの禁止
+description: タスク、組み合わせ関数、Task.Group と Task.Background、中断、Exit と Cause、Deferred、Semaphore、Queue、with の外へ持ち出せないもの
 ---
 
-複数の待ちを重ねるには fiber を使います。fiber は1つのスレッドの上で協調的に切り替わる軽量な実行単位で、必ずスコープの中で起動し、スコープを抜けるまでに終わります。`async` や `await` のような専用の構文はなく、すべて `Std.Fiber` の関数で書きます。
+複数の待ちを重ねるにはタスクを使います。タスクは並行に進める仕事の単位で、必ず with の項目（`Task.Group` か `Task.Background`）の中で始め、その with を抜けるまでに終わります。`async` や `await` のような専用の構文はなく、すべて `Std.Task` の関数と with の項目で書きます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task}
 
 fn tick(name: String, n: Int, ms: Int) -> Int uses { Clock, Console } {
-  List.map(List.range(0, n), |i| {
-    (use Clock).sleep(ms)
-    (use Console).print_line("#{name} #{i}")
+  clock <- Clock
+  console <- Console
+  List.each(List.range(0, n), |i| {
+    clock.sleep(ms)
+    console.print_line("#{name} #{i}")
   })
   n
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    (a, b) = Fiber.both(|| tick("a", 3, 100), || tick("b", 2, 130))
-    (use Console).print_line("done #{a + b}")
+    (a, b) = Task.both(|| tick("a", 3, 100), || tick("b", 2, 130))
+    console.print_line("done #{a + b}")
   }
 }
 ```
@@ -36,41 +39,49 @@ a 2
 done 5
 ```
 
-2つの `tick` が交互に進み、全体は約300ミリ秒で終わります。`tick` 自身は fiber のことを知りません。
+2つの `tick` が交互に進み、全体は約300ミリ秒で終わります。`tick` 自身はタスクのことを知りません。
+
+:::note[0.28 までの Std.Fiber]
+0.29 で `Std.Fiber` はなくなり、`Std.Task` に置き換わりました。`Fiber.scope` と `Fiber.fork` は `with tasks = Task.Group { ... }` と `tasks.start(...)` に、`Fiber.both` などの組み合わせ関数は `Task.both` などになります。`Fiber.await` と `Fiber.interrupt` に当たるものはありません（[中断](#中断)）。
+:::
 
 ## 切り替わる場所
 
-fiber は並列には動かないので、速くなるのは待ちを重ねられるときだけです。待たない計算を fiber に分けても、合計の時間は変わりません。
+タスクは1つのスレッドの上の fiber で動き、並列には動かないので、速くなるのは待ちを重ねられるときだけです。待たない計算をタスクに分けても、合計の時間は変わりません。
 
-切り替えが起きるのは中断点だけです。`sleep` やファイル、通信のような Async を要求する suspend な操作を呼んだときと、ランタイムが公平性のために挟む譲渡がそれにあたります。中断しうる呼び出しを挟まない区間は一息に実行されるので、中断しうる呼び出しのどこででも他の fiber に切り替わりうるものとして書きます。
+切り替えが起きるのは中断点だけです。`sleep` やファイル、通信のような Async を要求する suspend な操作を呼んだときと、ランタイムが公平性のために挟む譲渡がそれにあたります。中断しうる呼び出しを挟まない区間は一息に実行されるので、中断しうる呼び出しのどこででも他のタスクに切り替わりうるものとして書きます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
 import Std.State.{State}
+import Std.Task.{Task}
 
-fn pause() -> () uses { Clock } { (use Clock).sleep(0) }
+fn pause() -> () uses { Clock } {
+  clock <- Clock
+  clock.sleep(0)
+}
 
 # 中断点がないので一息に進む
 fn safe() -> () uses { State[Int] } {
-  st = use State[Int]
+  st <- State[Int]
   st.set(st.get() + 1)
 }
 
-# get と set の間に中断点があるので、他の fiber が割り込む
+# get と set の間に中断点があるので、他のタスクが割り込む
 fn racy() -> () uses { State[Int], Clock } {
-  st = use State[Int]
+  st <- State[Int]
   x = st.get()
   pause()
   st.set(x + 1)
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    (_, a) = State.run(0, || Fiber.map(List.range(0, 10), |i| safe()))
-    (_, b) = State.run(0, || Fiber.map(List.range(0, 10), |i| racy()))
-    (use Console).print_line("safe: #{a}, racy: #{b}")
+    (_, a) = State.run(0, || Task.map(List.range(0, 10), |i| safe()))
+    (_, b) = State.run(0, || Task.map(List.range(0, 10), |i| racy()))
+    console.print_line("safe: #{a}, racy: #{b}")
   }
 }
 ```
@@ -80,43 +91,45 @@ $ emela run main.emel
 safe: 10, racy: 1
 ```
 
-`racy` では10個の fiber が全員 0 を読んでから書くので、結果は 1 です。読んで書く処理は `st.update(|n| n + 1)` にすれば一息になります（`update` の `f` は純粋です）。細かい規則は [意味論](/reference/semantics/) にあります。
+`racy` では10個のタスクが全員 0 を読んでから書くので、結果は 1 です。読んで書く処理は `st.update(|n| n + 1)` にすれば一息になります（`update` の `f` は純粋です）。細かい規則は [意味論](/reference/semantics/) にあります。
 
 ## 組み合わせ関数
 
 ふだんの並行処理は次の5つの関数で足ります。
 
-- `Fiber.both(f, g)` は型の違う2つを並行に実行して組で返します。
-- `Fiber.map(xs, f)` は各要素に `f` を並行に適用し、元の順で返します。
-- `Fiber.all(fs)` は関数のリストを並行に実行し、元の順で返します。
-- `Fiber.race(fs)` は最初に終わったものを採り、残りを中断します。最初に終わったものがエラーなら、そのエラーで失敗します。
-- `Fiber.timeout(ms, f)` は `f` を `ms` ミリ秒まで待ちます。間に合えば `Some`、間に合わなければ `f` を中断して `None` です。時間は Clock で測ります。
+- `Task.both(f, g)` は型の違う2つを並行に実行して組で返します。
+- `Task.map(xs, f)` は各要素に `f` を並行に適用し、元の順で返します。
+- `Task.all(fs)` は関数のリストを並行に実行し、元の順で返します。
+- `Task.race(fs)` は最初に終わったものを採り、残りを中断します。最初に終わったものがエラーなら、そのエラーで失敗します。
+- `Task.timeout(ms, f)` は `f` を `ms` ミリ秒まで待ちます。間に合えば `Some`、間に合わなければ `f` を中断して `None` です。時間は Clock で測ります。
 
-どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `|| ...` で包んで渡します。型は [State と Fiber](/std/state-fiber/) にあります。
+どれも、1つが失敗すれば残りを中断して、そのエラーで失敗します。後で実行するものは `|| ...` で包んで渡します。型は [State と Task](/std/state-task/) にあります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task}
 
 error NotFound(id: Int)
 
 fn fetch(id: Int, ms: Int) -> String fails NotFound uses { Clock, Console } {
-  (use Clock).sleep(ms)
-  (use Console).print_line("fetched #{id}")
+  clock <- Clock
+  console <- Console
+  clock.sleep(ms)
+  console.print_line("fetched #{id}")
   if id < 0 { fail NotFound(id:) } else { "user #{id}" }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    console = use Console
-    (a, b) = Fiber.both(|| fetch(1, 200), || fetch(2, 100))
+    (a, b) = Task.both(|| fetch(1, 200), || fetch(2, 100))
     console.print_line("both: #{a}, #{b}")
-    names = Fiber.map([3, 4, 5], |id| fetch(id, 100 * (6 - id)))
+    names = Task.map([3, 4, 5], |id| fetch(id, 100 * (6 - id)))
     console.print_line("map: #{names}")
-    first = Fiber.race([|| fetch(6, 300), || fetch(7, 100)])
+    first = Task.race([|| fetch(6, 300), || fetch(7, 100)])
     console.print_line("race: #{first}")
-    late = Fiber.timeout(100, || fetch(8, 1000))
+    late = Task.timeout(100, || fetch(8, 1000))
     console.print_line("timeout: #{late}")
   }
 }
@@ -141,19 +154,21 @@ timeout: None
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task}
 
 error TooSlow(ms: Int)
 
 fn slow() -> Int uses { Clock } {
-  (use Clock).sleep(500)
+  clock <- Clock
+  clock.sleep(500)
   1
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    r = Fiber.timeout(100, || slow()) |> Option.or_fail(TooSlow(ms: 100))
-    (use Console).print_line("#{r}")
+    r = Task.timeout(100, || slow()) |> Option.or_fail(TooSlow(ms: 100))
+    console.print_line("#{r}")
   }
 }
 ```
@@ -167,29 +182,30 @@ $ echo $?
 
 同時に走る数に上限を付ける（「1000件を最大10並行で」）には [Semaphore](#semaphore) を使います。
 
-## Fiber.scope と fork
+## Task.Group
 
-途中で join したい、Deferred を使いたい、のような込み入った形には `Fiber.scope` と `Fiber.fork` を直接使います。5つの組み合わせ関数もこの上に Emela で書かれた普通の関数です。
+途中で join したい、Deferred を使いたい、のような込み入った形には `Task.Group` を直接使います。5つの組み合わせ関数もこの上に Emela で書かれた普通の関数です。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task}
 
 fn main() {
+  console <- Console
+  clock <- Clock
   with SystemConsole, SystemClock {
-    console = use Console
-    n = Fiber.scope(|| {
-      Fiber.fork(|| console.print_line("child runs"))
-      Fiber.fork(|| {
-        (use Clock).sleep(1000)
+    n = with tasks = Task.Group {
+      tasks.start(|| console.print_line("child runs"))
+      tasks.start(|| {
+        clock.sleep(1000)
         console.print_line("never printed")
       })
       console.print_line("parent first")
-      (use Clock).sleep(10)
+      clock.sleep(10)
       1
-    })
-    console.print_line("scope returned #{n}")
+    }
+    console.print_line("group returned #{n}")
   }
 }
 ```
@@ -198,23 +214,68 @@ fn main() {
 $ emela run main.emel
 parent first
 child runs
-scope returned 1
+group returned 1
 ```
 
-`Fiber.scope(body)` は fiber を起動する能力 `Scope` を供給して `body` を実行し、`Fiber.fork(f)` は `f` を子の fiber として起動してハンドル `Fiber[A]` を返します。fork は中断点ではないので、子は親が次に中断したときに走り始めます。`parent first` が先に出るのはこのためです。
+- `with tasks = Task.Group { 本体 }` はタスクのグループを作り、タスクを始める能力 `tasks` を本体に渡します。
+- `tasks.start(f)` は `f` をグループのタスクとして始め、`Task[A]` を返します。start は中断点ではないので、タスクは始めた側が次に中断したときに走り始めます。`parent first` が先に出るのはこのためです。
+- `task.join()`（`Task.join(task)` と同じ）はタスクの値を待ちます。待つのは join を呼んだタスクだけで、ほかのタスクはその間も進みます。
+- 本体が値を返した時点で残っているタスクは中断され、すべてのタスクの巻き戻りが終わってから with が値を返します。上の `never printed` が出ないのはこのためです。
 
-本体が値を返した時点で残っている子は中断され、すべての子の巻き戻りが終わってから scope が値を返します。親より長生きする fiber はないので、常駐する処理は main の直下のスコープで fork します。子の値を待つには `Fiber.join(fiber)` を使います。待つのは join を呼んだ fiber だけで、ほかの fiber はその間も進みます。
+with より長生きするタスクはないので、常駐する処理は、それに頼る処理全体を囲む with で始めます。
 
-fork できるのは scope に渡した関数と、そこから呼ばれた関数の中だけです。補助の関数は `use Scope` でスコープを受けます。どのスコープに fork するかは、関数の R の Scope に出ます。
-
-### 子が失敗したとき
-
-子がエラーか defect で終わると、兄弟の fiber（スコープの本体を含む）は中断され、原因がスコープの外へ伝わります。
+タスクを始める補助の関数は、グループの能力を引数で受けます。型は `use TaskGroup[E, R]` で、E と R はグループのタスクの fails と uses です。型引数にすると、呼ぶ側のグループに別のエラーやエフェクトがあっても渡せます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task, TaskGroup}
+
+fn fetch(url: String) -> () uses { Clock, Console } {
+  clock <- Clock
+  console <- Console
+  clock.sleep(String.length(url) * 10)
+  console.print_line("fetched #{url}")
+}
+
+# 呼んだ側のグループにタスクを足す
+fn crawl[E, R](
+  tasks: use TaskGroup[E, { Clock, Console, R }],
+  urls: List[String],
+) -> List[Task[()]] {
+  List.map(urls, |url| tasks.start(|| fetch(url)))
+}
+
+fn main() {
+  console <- Console
+  with SystemConsole, SystemClock {
+    with tasks = Task.Group {
+      started = crawl(tasks, ["/a", "/bb", "/c"])
+      List.each(started, |task| task.join())
+    }
+    console.print_line("all fetched")
+  }
+}
+```
+
+```console
+$ emela run main.emel
+fetched /a
+fetched /c
+fetched /bb
+all fetched
+```
+
+`crawl` が返したタスクを本体で join しているので、with は3つとも終わるまで待ちます。join しなければ、本体が終わった時点で3つとも中断されます。
+
+### タスクが失敗したとき
+
+タスクがエラーか defect で終わると、兄弟のタスクは中断され、本体は次の中断点でその原因で失敗します。with はすべてのタスクの巻き戻りが終わってから、その原因で失敗します。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+import Std.Clock.{Clock, SystemClock}
+import Std.Task.{Task}
 
 effect Job {
   fn name() -> String
@@ -222,11 +283,13 @@ effect Job {
 
 handler Tracked(name: String): Job {
   init {
-    (use Console).print_line("start job")
+    console <- Console
+    console.print_line("start job")
     Tracked(name: "job")
   }
   release {
-    (use Console).print_line("release #{self.name}")
+    console <- Console
+    console.print_line("release #{self.name}")
   }
   fn name() { self.name }
 }
@@ -234,24 +297,27 @@ handler Tracked(name: String): Job {
 error Boom(id: Int)
 
 fn work(id: Int, ms: Int) -> Int fails Boom uses { Clock, Console } {
+  clock <- Clock
+  console <- Console
   with Tracked {
-    (use Clock).sleep(ms)
+    clock.sleep(ms)
     if id == 2 { fail Boom(id:) }
-    (use Console).print_line("work #{id} done")
+    console.print_line("work #{id} done")
     id
   }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    r = Fiber.scope(|| {
-      a = Fiber.fork(|| work(1, 300))
-      b = Fiber.fork(|| work(2, 100))
-      Fiber.join(a) + Fiber.join(b)
-    }) escape {
+    r = with tasks = Task.Group {
+      a = tasks.start(|| work(1, 300))
+      b = tasks.start(|| work(2, 100))
+      a.join() + b.join()
+    } escape {
       Boom(id:) -> 0 - id
     }
-    (use Console).print_line("result #{r}")
+    console.print_line("result #{r}")
   }
 }
 ```
@@ -265,15 +331,15 @@ release job
 result -2
 ```
 
-子の fails はスコープの fails に合流します。上の `Fiber.scope(...)` の型は `Int fails Boom` で、escape で受けられます。中断された `work(1, 300)` は途中の with の release を実行して巻き戻り、`work 1 done` は出ません。子のエラーをスコープに伝えたくないときは、子の中を `Exit.attempt` で包みます（[エラーを値にする](#エラーを値にする)）。
+タスクの fails はグループの fails に合流し、with の fails になります。上の with の型は `Int fails Boom` で、escape で受けられます。中断された `work(1, 300)` は途中の with の release を実行して巻き戻り、`work 1 done` は出ません。タスクのエラーでグループを止めたくないときは、タスクの中を `Exit.attempt` で包むか、[Task.Background](#taskbackground) で始めます。
 
-### 子が使うハンドラ
+### タスクが使うハンドラ
 
-子の中で使うハンドラは `Fiber.scope` を呼んだ時点のものです。スコープの本体の中に書いた with は、子には配られません。
+タスクの R は、グループの with の外で供給します。グループを囲む with と、同じ with でグループより前に書いた項目がそれにあたります。グループの本体の中に書いた with は、タスクには届きません。
 
 ```emela check=error
 import Std.Clock.{SystemClock}
-import Std.Fiber.{Fiber, Scope}
+import Std.Task.{Task}
 
 effect Users {
   fn find(id: Int) -> String
@@ -284,55 +350,112 @@ handler PostgresUsers: Users {
 }
 
 fn main() {
+  users <- Users
   with SystemClock {
-    Fiber.scope(|| {
-      s = use Scope
+    with tasks = Task.Group {
       with PostgresUsers {
-        s.fork(|| (use Users).find(1))
+        tasks.start(|| users.find(1))
       }
       ()
-    })
+    }
   }
 }
 ```
 
 ```text
-error: effect `Users` is not provided in `main`
-  = note: fibers forked in `Fiber.scope` get their handlers from where `Fiber.scope` is called, so `with` inside it does not reach them
+error[E4301]: effect `Users` is not provided in `main`
+  = note: tasks get their handlers from outside the `with` of their group, so `with` inside it does not reach them
+  = help: provide it with `with` outside the group
 ```
 
-直すには、with をスコープの外に出します（`with PostgresUsers { Fiber.scope(|| { ... }) }`）。子が使うエフェクトは Fiber.scope の外で供給するので、子より先に終わる with のハンドラを子が使うことは、型の上では起きません。
+直すには、with をグループの外に出します（`with PostgresUsers, tasks = Task.Group { ... }`）。タスクが使うエフェクトはグループの外で供給するので、タスクより先に終わる with のハンドラをタスクが使うことは、型の上で起きません。
 
-## 中断
+## Task.Background
 
-`Fiber.interrupt(fiber)` は子を中断し、巻き戻りが終わるまで待ちます。
+結果を見ない仕事（監査のログ、計測値の送信）は `Task.Background` で始めます。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
-import Std.Exit.{Success, Failure}
 import Std.Cause.{Cause}
+import Std.Task.{Task}
 
-fn heartbeat() -> () uses { Clock, Console } {
-  List.map(List.range(0, 100), |i| {
-    (use Clock).sleep(100)
-    (use Console).print_line("beat #{i}")
-  })
-  ()
+error Lost(id: Int)
+
+fn audit(id: Int) -> () fails Lost uses { Clock, Console } {
+  clock <- Clock
+  console <- Console
+  clock.sleep(100)
+  if id == 2 { fail Lost(id:) }
+  console.print_line("audited #{id}")
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    Fiber.scope(|| {
-      beat = Fiber.fork(|| heartbeat())
-      (use Clock).sleep(350)
-      Fiber.interrupt(beat)
-      Fiber.await(beat) match {
-        Success(_)     -> (use Console).print_line("finished")
-        Failure(cause) -> (use Console).print_line("stopped: #{Cause.to_string(cause)}")
-      }
-    })
+    with bg = Task.Background(
+      on_failure: |cause| console.print_line("failed: #{Cause.to_string(cause)}"),
+    ) {
+      bg.start(|| audit(1))
+      bg.start(|| audit(2))
+      bg.start(|| audit(3))
+      console.print_line("responded")
+    }
+    console.print_line("background done")
+  }
+}
+```
+
+```console
+$ emela run main.emel
+responded
+audited 1
+failed: error: Lost
+audited 3
+background done
+```
+
+- `bg.start(f)` は `f` をタスクとして始め、`()` を返します。`f` は `()` を返す関数です。値の要るタスクはグループで始めます。
+- release は、本体が値で終わっても失敗で終わっても、タスクを中断せずにすべて終わるまで待ちます。release が待っている間に始めたタスクも待ちます。
+- タスクが失敗しても、兄弟と本体は止まりません。そのタスクが巻き戻った後に、そのタスクの中で `on_failure` が原因を受け取ります。`on_failure` の R は、タスクの R と同じく with の外で供給します。
+- with が外から中断されたときだけ、タスクも中断されます。このとき `on_failure` は呼ばれません。
+- background は閉じないので、start はいつ呼んでも defect になりません。
+
+[HTTP サービス](/std/http/#http-サービス) の関数は、要求ごとの Background が名前で供給する `Spawn` でタスクを始められます。
+
+## 中断
+
+タスクを中断する関数はありません。タスクが中断されるのは次の2つのときだけです。
+
+- グループのタスクは、グループの本体が終わったときと、同じグループの兄弟が失敗したときに中断されます。
+- background のタスクは、background の with が外から中断されたときに中断されます。
+
+1つのタスクだけを止めたいときは、そのタスクだけのグループで始めて、その with を終わらせます。
+
+```emela check
+import Std.Console.{Console, SystemConsole}
+import Std.Clock.{Clock, SystemClock}
+import Std.Task.{Task}
+
+fn heartbeat() -> () uses { Clock, Console } {
+  clock <- Clock
+  console <- Console
+  List.each(List.range(0, 100), |i| {
+    clock.sleep(100)
+    console.print_line("beat #{i}")
+  })
+}
+
+fn main() {
+  console <- Console
+  clock <- Clock
+  with SystemConsole, SystemClock {
+    # heartbeat だけのグループ。本体が終わると heartbeat は中断される
+    with tasks = Task.Group {
+      tasks.start(|| heartbeat())
+      clock.sleep(350)
+    }
+    console.print_line("stopped")
   }
 }
 ```
@@ -342,21 +465,21 @@ $ emela run main.emel
 beat 0
 beat 1
 beat 2
-stopped: interrupted
+stopped
 ```
 
-中断は、対象の fiber が次の中断点に達したときに効きます。そこから巻き戻り、途中の with の release が内側から順に実行されます。release の実行中は中断されず、中断は release が終わった後に効きます。
+中断は、対象のタスクが次の中断点に達したときに効きます。そこから巻き戻り、途中の with の release が内側から順に実行されます。release の実行中は中断されず、中断は release が終わった後に効きます。
 
-中断された子を `Fiber.join` すると defect（`fiber was interrupted`）になります。中断されうる子の結果を見たいときは、上のように `Fiber.await` を使います。
+走り続けるタスクに自分で止まってもらうときは、[Deferred](#deferred) で止める合図を渡します。
 
 ## エラーを値にする
 
-fiber が正常に終わらなかったときの原因は、`Std.Cause` の `Cause[E]` で表します。原因は fail によるエラー（Fail）、defect（Die）、中断（Interrupt）の3種類で、型の E に現れるのは Fail だけです。`Std.Exit` の `Exit.attempt(f)` は `f` をその場で実行し、Fail と Die を値（`Exit[A, E]`）に変えます。
+計算が失敗したときの原因は、`Std.Cause` の `Cause[E]` で表します。原因は fail によるエラー（Fail）と defect（Die）の2種類で、型の E に現れるのは Fail だけです。中断は原因ではなく、値として受け取ることはありません。`Std.Exit` の `Exit.attempt(f)` は `f` をその場で実行し、Fail と Die を値（`Exit[A, E]`）に変えます。タスクは始めません。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Exit.{Exit, Success, Failure}
-import Std.Cause.{Cause, Fail, Die, Interrupt}
+import Std.Cause.{Cause, Fail, Die}
 
 error NotFound(id: Int)
 
@@ -370,16 +493,15 @@ fn describe(id: Int) -> String {
   Exit.attempt(|| find(id)) match {
     Success(name) -> name
     Failure(cause) -> Cause.kind(cause) match {
-      Fail      -> "fail: #{Cause.to_string(cause)}"
-      Die       -> "die: #{Cause.to_string(cause)}"
-      Interrupt -> "interrupt"
+      Fail -> "fail: #{Cause.to_string(cause)}"
+      Die  -> "die: #{Cause.to_string(cause)}"
     }
   }
 }
 
 fn main() {
+  console <- Console
   with SystemConsole {
-    console = use Console
     console.print_line(describe(1))
     console.print_line(describe(0))
     console.print_line(describe(-1))
@@ -396,55 +518,55 @@ die: defect: negative id
 
 `Exit[A, E]` は `Success(A)` か `Failure(Cause[E])` で、バリアントは `import Std.Exit.{Success, Failure}` で取り込みます。Cause から中身のエラーは取り出せません。種類を見る（`Cause.kind`）か、文字列にする（`Cause.to_string`）か、`Cause.raise` で起こし直して escape で受けます。attempt の外では、defect は escape を素通りします。
 
-子のエラーでスコープを止めたくないときは、子の中を attempt で包みます。
+タスクのエラーでグループを止めたくないときは、タスクの中を attempt で包みます。
 
 ```emela
-s.fork(|| {
+tasks.start(|| {
   Exit.attempt(|| handle(conn)) match {
     Success(_) -> ()
-    Failure(cause) -> (use Console).print_error_line(Cause.to_string(cause))
+    Failure(cause) -> console.print_error_line(Cause.to_string(cause))
   }
 })
 ```
 
-原因ごとに attempt、await、スコープのどこで受けるかの表は [意味論](/reference/semantics/) にあります。
+attempt は自分のタスクの中断を受け取りません。受け取れると、タスクが中断を握りつぶして走り続けられてしまうからです。細かい規則は [意味論](/reference/semantics/) にあります。
 
 ## Deferred
 
-Deferred は一度だけ値を入れられる入れ物で、fiber の間で値を受け渡します。`Fiber.deferred()` で作り、作ったスコープに属します。
+Deferred は一度だけ値を入れられる入れ物で、タスクの間で値を受け渡します。`with d = Deferred` で空の Deferred を作り、`d` がその能力です。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
 import Std.Deferred.{Deferred}
+import Std.Task.{Task}
 
-fn poll_loop(n: Int, stop: Deferred[()]) -> Int uses { Clock } {
-  Deferred.poll(stop) match {
+fn poll_loop(n: Int, stop: use Deferred[()]) -> Int uses { Clock } {
+  clock <- Clock
+  stop.poll() match {
     Some(_) -> n
     None -> {
-      (use Clock).sleep(100)
+      clock.sleep(100)
       poll_loop(n + 1, stop)
     }
   }
 }
 
 fn main() {
+  console <- Console
+  clock <- Clock
   with SystemConsole, SystemClock {
-    console = use Console
-    Fiber.scope(|| {
-      ready = Fiber.deferred()
-      stop = Fiber.deferred()
-      worker = Fiber.fork(|| {
-        (use Clock).sleep(50)
-        Deferred.complete(ready, "port 8080")
+    with ready = Deferred, stop = Deferred, tasks = Task.Group {
+      worker = tasks.start(|| {
+        clock.sleep(50)
+        ready.complete("port 8080")
         poll_loop(0, stop)
       })
-      console.print_line("ready: #{Deferred.await(ready)}")
-      (use Clock).sleep(250)
-      Deferred.complete(stop, ())
-      console.print_line("rounds: #{Fiber.join(worker)}")
-    })
+      console.print_line("ready: #{ready.await()}")
+      clock.sleep(250)
+      stop.complete(())
+      console.print_line("rounds: #{worker.join()}")
+    }
   }
 }
 ```
@@ -455,35 +577,40 @@ ready: port 8080
 rounds: 3
 ```
 
-`Deferred.complete(d, v)` は最初の1回だけ値を入れて True を返し、2回目からは何もせず False です。`Deferred.await(d)` は値が入るまで待ち、`Deferred.poll(d)` は待たずに `Some(値)` か `None` を返します。走り続ける子から途中の値を受け取る（上の `ready`）、止める合図を配る（上の `stop`）のに使い、`Fiber.race` もこれで書かれています。外から強制的に止めるのは `Fiber.interrupt` です。
+- `d.complete(v)` は最初の1回だけ値を入れて True を返し、2回目からは何もせず False です。`d.await()` は値が入るまで待ち、`d.poll()` は待たずに `Some(値)` か `None` を返します。complete と poll は中断しません。
+- 1つの Deferred をいくつのタスクが待ってもかまいません。値が入ると全員が再開します。
+- 走り続けるタスクから途中の値を受け取る（上の `ready`）、止める合図を配る（上の `stop`）のに使い、`Task.race` もこれで書かれています。
+- 値の型は推論されます。書くときは `Deferred[Port]` です。補助の関数は `use Deferred[()]` の型で能力を受けます。
 
-外部関数のコールバックの中では待てないので、コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送り、fiber の側で扱います。
+外部関数のコールバックの中では待てないので、コールバックからファイルや通信を扱いたいときは、Deferred でタスクに合図を送り、タスクの側で扱います。
 
 ## Semaphore
 
-Semaphore は、あるコードを同時に実行する fiber の数を絞ります。決まった数の許可を持ち、fiber は許可を取っている間だけそのコードを実行します。`Fiber.semaphore(n)` で作り、Deferred と同じく作ったスコープに属します。
+Semaphore は、あるコードを同時に実行するタスクの数を絞ります。決まった数の許可を持ち、タスクは許可を取っている間だけそのコードを実行します。`with s = Semaphore(permits: n)` で作ります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
 import Std.Semaphore.{Semaphore}
+import Std.Task.{Task}
 
 fn load(id: Int) -> Int uses { Clock, Console } {
-  (use Console).print_line("start #{id}")
-  (use Clock).sleep(100)
-  (use Console).print_line("end #{id}")
+  clock <- Clock
+  console <- Console
+  console.print_line("start #{id}")
+  clock.sleep(100)
+  console.print_line("end #{id}")
   id * 10
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    total = Fiber.scope(|| {
-      db = Fiber.semaphore(2)
-      xs = Fiber.map([1, 2, 3, 4], |id| Semaphore.with_permit(db, || load(id)))
+    total = with db = Semaphore(permits: 2) {
+      xs = Task.map([1, 2, 3, 4], |id| Semaphore.with_permit(db, || load(id)))
       List.fold(xs, 0, |a, b| a + b)
-    })
-    (use Console).print_line("total #{total}")
+    }
+    console.print_line("total #{total}")
   }
 }
 ```
@@ -502,25 +629,27 @@ total 100
 ```
 
 - `Semaphore.with_permit(s, f)` は許可が空くまで待ってから1つ取り、`f` を実行して返します。`f` が値、エラー、defect、中断のどれで終わっても許可は返り、`f` の中の with の release はその前に走ります。
-- `with_permits(s, n, f)` は n 個の許可を取ります。待たずに取れるときだけ実行する `try_with_permit`（取れなければ `None`）と、空いている数を返す `available` もあります。
-- 待っている fiber は待ち始めた順に許可を受け取ります。
-- `f` の中で fork した fiber は許可を持ちません。
+- `with_permits(s, n, f)` は n 個の許可を取ります。待たずに取れるときだけ実行する `try_with_permit`（取れなければ `None`）もあります。`s.available()` は空いている許可の数です。
+- 許可は handler member でもあり、`with held = s.Permits(n: 2) { ... }` と開けます。release で許可が返ります。待たない `s.TryPermits(n: 2)` は、取れなければ `NoPermits` で失敗します。
+- 待っているタスクは待ち始めた順に許可を受け取ります。
+- `f` の中で始めたタスクは許可を持ちません。
 
 ## Queue
 
-Queue は fiber の間で値を順に受け渡します。決まった数まで値をためられ、閉じて「もう値は来ない」と知らせられます。`Fiber.queue(capacity)` で作り、作ったスコープに属します。
+Queue はタスクの間で値を順に受け渡します。決まった数まで値をためられ、閉じて「もう値は来ない」と知らせられます。`with q = Queue(capacity: n)` で作ります。
 
 ```emela check
 import Std.Console.{Console, SystemConsole}
 import Std.Clock.{SystemClock}
-import Std.Fiber.{Fiber}
 import Std.Queue.{Queue, QueueClosed}
+import Std.Task.{Task}
 
 # キューが閉じて空になるまで取り出す
-fn drain(jobs: Queue[String], done: Int) {
-  Some(Queue.take(jobs)) escape { QueueClosed -> None } match {
+fn drain(jobs: use Queue[String], done: Int) -> Int uses { Console, Async } {
+  console <- Console
+  Some(jobs.take()) escape { QueueClosed -> None } match {
     Some(job) -> {
-      (use Console).print_line("job #{job}")
+      console.print_line("job #{job}")
       drain(jobs, done + 1)
     }
     None -> done
@@ -528,17 +657,17 @@ fn drain(jobs: Queue[String], done: Int) {
 }
 
 fn main() {
+  console <- Console
   with SystemConsole, SystemClock {
-    n = Fiber.scope(|| {
-      jobs = Fiber.queue(2)
-      worker = Fiber.fork(|| drain(jobs, 0))
-      List.map(["a", "b", "c"], |j| Queue.offer(jobs, j))
-      Queue.close(jobs)
-      Fiber.join(worker)
-    }) escape {
+    n = with jobs = Queue(capacity: 2), tasks = Task.Group {
+      worker = tasks.start(|| drain(jobs, 0))
+      List.each(["a", "b", "c"], |j| jobs.offer(j))
+      jobs.close()
+      worker.join()
+    } escape {
       QueueClosed -> 0
     }
-    (use Console).print_line("handled #{n}")
+    console.print_line("handled #{n}")
   }
 }
 ```
@@ -551,72 +680,38 @@ job c
 handled 3
 ```
 
-- `Queue.offer(q, v)` は末尾に足し、いっぱいの間は待ちます。`Queue.take(q)` は先頭を取り出し、空の間は待ちます。待たない版の `try_offer`（足せたら True）と `poll`（`Some` か `None`）もあります。
-- `Queue.close(q)` で閉じると、残っている値は `take` で順に取り出せ、空になった後の `take` と、閉じた後の `offer` は `QueueClosed` で失敗します。
-- 待っている fiber は待ち始めた順に進みます。値は `offer` を始めた順に出てきます。
+- `q.offer(v)` は末尾に足し、いっぱいの間は待ちます。`q.take()` は先頭を取り出し、空の間は待ちます。待たない版の `q.try_offer(v)`（足せたら True）と `q.poll()`（`Some` か `None`）、数を返す `q.size()` もあります。
+- `q.close()` で閉じると、残っている値は `take` で順に取り出せ、空になった後の `take` と、閉じた後の `offer` は `QueueClosed` で失敗します。
+- 待っているタスクは待ち始めた順に進みます。値は `offer` を始めた順に出てきます。
+- 値の型は推論されます。書くときは `Queue[Job](capacity: 100)` です。
 
-## スコープの外へ持ち出せないもの
+## with の外へ持ち出せないもの
 
-Scope の能力、fiber のハンドル（`Fiber[A]`）、Deferred、Semaphore、Queue は、スコープの外へ持ち出せません。
+グループと background の能力、`Task[A]`、Deferred、Semaphore、Queue の能力は、それを作った with の外へ持ち出せません。`Task[A]` はグループの能力に縛られた型なので、タスクを返す with も、タスクを join する関数を返す with もエラーです。
 
 ```emela check=error
 import Std.Clock.{Clock, SystemClock}
-import Std.Fiber.{Fiber}
+import Std.Task.{Task}
 
 fn main() {
+  clock <- Clock
   with SystemClock {
-    f = Fiber.scope(|| {
-      Fiber.fork(|| (use Clock).sleep(10))
-    })
+    t = with tasks = Task.Group {
+      tasks.start(|| clock.sleep(10))
+    }
     ()
   }
 }
 ```
 
 ```text
-error: a `Fiber` cannot leave the `Fiber.scope` that started it
+error[E4405]: capability `tasks` leaves the `with` that made it
 ```
 
-`Option[Fiber[User]]` のように、値の型のどこかに `Fiber`、`Deferred`、`Semaphore`、`Queue` のどれかが含まれていればエラー（E0425）です。型で止まらない持ち出し（State に入れる、クロージャで捕まえて返す）は実行時に検査します。
-
-```emela check
-import Std.Console.{Console, SystemConsole}
-import Std.Clock.{SystemClock}
-import Std.Fiber.{Fiber}
-
-fn main() {
-  with SystemConsole, SystemClock {
-    later = Fiber.scope(|| {
-      child = Fiber.fork(|| 42)
-      || Fiber.join(child)
-    })
-    (use Console).print_line("#{later()}")
-  }
-}
-```
-
-```console
-$ emela run main.emel
-warning[W0402]: a value that holds `Scope` leaves the `Fiber.scope` that provides it
-   ╭─[ main.emel:9:7 ]
-   │
- 7 │     later = Fiber.scope(|| {
-   │             ─────┬─────
-   │                  ╰─────── `Scope` is released at the end of this `Fiber.scope`
-   │
- 9 │       || Fiber.join(child)
-   │       ──────────┬─────────
-   │                 ╰─────────── the value of the scope holds `Scope`
-───╯
-
-1 warning
-defect: fiber was joined after its scope ended
-```
-
-コンパイラは値がどの能力を抱えているか（capture set）を追跡し、スコープの外へ出る値が Scope を抱えていれば W0402 の警告を出します。実験的な機能 `capture-checking` を有効にすると、この警告はエラー（E0444）になります（[状態と資源](/guide/resources/#能力を-with-の外へ持ち出さない)）。
+値の型か、関数の値の R に能力が残っていれば、型検査で止まります。実行時の検査はありません。
 
 ## 並列はない
 
-複数のスレッドでの並列実行はありません。CPU を使う計算を fiber に分けても速くなりません。スレッドやロックを言語に出すことはしません。
+複数のスレッドでの並列実行はありません。CPU を使う計算をタスクに分けても速くなりません。スレッドやロックを言語に出すことはしません。
 
 並行するコードは仮の時刻で動く TestClock でテストできます（[テスト](/guide/testing/)）。

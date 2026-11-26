@@ -22,7 +22,8 @@ fn search_request(query: String, page: Int) -> Request {
 }
 
 fn first_result(query: String) {
-  res = (use Http).send(search_request(query, 1)) |> Response.require_ok
+  http <- Http
+  res = http.send(search_request(query, 1)) |> Response.require_ok
   Option.or(List.head(String.split(res.body, "\n")), "")
 }
 
@@ -79,17 +80,17 @@ pub effect Http {
 
 - 4xx と 5xx は失敗にせず、`status` で返します。404 や 409 を見て分けたい場面が多いからで、失敗にしたいときは `Response.require_ok` を挟みます。`require_ok` は 2xx 以外を `UnexpectedStatus` にします。
 - `send` が失敗するのは応答を受け取れなかったときだけです。`http:` と `https:` 以外の URL は InvalidUrl、名前解決、接続、TLS、リダイレクトの回数超えは ConnectionFailed、UTF-8 として読めない本文は ResponseNotText です。リダイレクトは自動で辿ります。
-- タイムアウトの設定はありません。`Fiber.timeout` か `Fiber.race` で書きます。`send` を待っている fiber が中断されると、通信を止めます。
+- タイムアウトの設定はありません。`Task.timeout` か `Task.race` で書きます。`send` を待っているタスクが中断されると、通信を止めます。
 
 ```emela check
 import Std.Clock.{Clock}
-import Std.Fiber
 import Std.Http
 import Std.Http.{Http, InvalidUrl, ConnectionFailed, ResponseNotText}
+import Std.Task
 
 ## 2秒で間に合わなければ None。
 fn fetch_with_deadline(url: String) -> Option[String] uses { Http, Clock, Async } {
-  Fiber.timeout(2000, || Http.get(url).body) escape {
+  Task.timeout(2000, || Http.get(url).body) escape {
     InvalidUrl(..)       -> None
     ConnectionFailed(..) -> None
     ResponseNotText(..)  -> None
@@ -147,3 +148,38 @@ Hello, ada!
 - JS と WASM のターゲットで動きます。ネイティブのターゲットではまだ使えません。
 
 関数は `Request` を受けて `Response` を返すふつうの関数なので、上の `says_hello` のようにテストから直接呼べます。
+
+### 応答の後に続ける仕事
+
+監査のログのように、応答を待たせずに続けたい仕事は `Spawn` で始めます。`Http.serve` は要求ごとに [Task.Background](/guide/concurrency/#taskbackground) を作って `Spawn` を名前で供給し、その中で関数を呼びます。
+
+```emela check
+import Std.Console.{Console}
+import Std.Http.{Http}
+import Std.Http.Request
+import Std.Http.Request.{Request}
+import Std.Http.Response
+import Std.Http.Response.{Response}
+import Std.Platform.{Platform}
+import Std.Task.{Spawn}
+
+fn audit(request: Request) -> () {
+  console <- Console
+  with Platform {
+    console.print_error_line("served #{Request.path(request)}")
+  }
+}
+
+@entry(Http.serve)
+pub fn app(request: Request) -> Response uses { Spawn[{}, { Async }] } {
+  spawn <- Spawn
+  spawn.start(|| audit(request))
+  Response.new(200, "ok")
+}
+```
+
+- 関数が返ると、応答はすぐにホストへ渡ります。要求の処理は、background の release が仕事を待ち終えたところで終わります。
+- 始めた仕事が、関数が返った後にさらに仕事を始めてもかまいません。release はそれも待ちます。
+- 仕事が失敗すると、原因（`Cause.to_string`）を標準エラーに1行書きます。応答は変わりません。
+- 関数の R には、ホストのエフェクト（Async と ProcessHost）のほかに Spawn を残せます。`Spawn[{}, { Async }]` は、失敗しない（E が空の）仕事を、Async だけを使って始められることを表します。仕事の中で使うハンドラは、仕事の中の with で供給します。
+- Cloudflare Workers のように要求ごとの寿命を延ばす手段（`waitUntil`）があるホストでは、要求の処理の終わりをそこへ渡します。

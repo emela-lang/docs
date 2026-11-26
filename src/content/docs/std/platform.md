@@ -13,13 +13,14 @@ import Std.Instant
 import Std.Duration
 
 fn main() {
+  clock <- Clock
+  console <- Console
   with Platform {
-    clock = use Clock
     start = clock.now()
     clock.sleep(200)
     elapsed = clock.now() |> Instant.since(start)
-    (use Console).print_line("started at #{Instant.to_string(start)}")
-    (use Console).print_line("took 200ms or more: #{Duration.to_milliseconds(elapsed) >= 200}")
+    console.print_line("started at #{Instant.to_string(start)}")
+    console.print_line("took 200ms or more: #{Duration.to_milliseconds(elapsed) >= 200}")
   }
 }
 ```
@@ -51,11 +52,13 @@ import Std.Instant
 import Std.State.{State}
 
 fn main() {
+  clock <- Clock
+  console <- Console
   start = Instant.from_unix_milliseconds(1000)
   (_, end) = State.run(start, || {
     with Platform, TestClock {
-      (use Clock).sleep(500)
-      (use Console).print_line("woke at #{Instant.to_unix_milliseconds((use Clock).now())}")
+      clock.sleep(500)
+      console.print_line("woke at #{Instant.to_unix_milliseconds(clock.now())}")
     }
   })
   _ = dbg(Instant.to_unix_milliseconds(end))
@@ -83,24 +86,27 @@ import Std.Process.{ExitCode, EXIT_SUCCESS, EXIT_FAILURE}
 
 ## 標準入力の行に番号を付けて書き、読んだ行の数を返す。
 fn number_lines(n: Int) -> Int uses { Stdin, Stdout } {
-  line = (use Stdin).read_line() escape {
+  stdin <- Stdin
+  stdout <- Stdout
+  line = stdin.read_line() escape {
     InvalidInput     -> None
     StdinFailure(..) -> None
   }
   line match {
     None -> n
     Some(text) -> {
-      (use Stdout).print_line("#{n + 1}: #{text}")
+      stdout.print_line("#{n + 1}: #{text}")
       number_lines(n + 1)
     }
   }
 }
 
 fn main() -> ExitCode {
+  args <- Args
+  stderr <- Stderr
   with Process {
-    args = (use Args).list()
     count = number_lines(0)
-    (use Stderr).print_line("#{count} lines, arguments #{args}")
+    stderr.print_line("#{count} lines, arguments #{args.list()}")
     if count == 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
   }
 }
@@ -127,14 +133,15 @@ import Std.Process.{Stdout, TestStdout, StdoutText}
 import Std.State.{State}
 
 fn greet(names: List[String]) {
-  console = use Console
+  console <- Console
   List.each(names, |name| console.print_line("Hello, #{name}!"))
   console.print_error_line("done")
 }
 
 fn progress(steps: Int) -> () uses { Stdout } {
-  List.each(List.range(0, steps), |_| (use Stdout).print("."))
-  (use Stdout).print_line("ok")
+  stdout <- Stdout
+  List.each(List.range(0, steps), |_| stdout.print("."))
+  stdout.print_line("ok")
 }
 
 @test
@@ -154,39 +161,42 @@ fn prints_a_dot_per_step() {
 
 ## Clock
 
-`Std.Clock` の `Clock` は、待つこと（`sleep`）と、現在の時点（`now`）を表します。`sleep` は `suspend fn` で、呼んだ fiber だけを止めます。中断の仕組みは [中断と再開](/guide/suspend/) にあります。
+`Std.Clock` の `Clock` は、待つこと（`sleep`）と、現在の時点（`now`）を表します。`sleep` は `suspend fn` で、呼んだタスクだけを止めます。中断の仕組みは [中断と再開](/guide/suspend/) にあります。
 
-`SystemClock` はホストのタイマーを待ち、待っている fiber が中断されるとタイマーを消します。`TestClock` は `State[Instant]` に置いた仮の時刻で動きます。
+`SystemClock` はホストのタイマーを待ち、待っているタスクが中断されるとタイマーを消します。`TestClock` は `State[Instant]` に置いた仮の時刻で動きます。
 
 - `now` は状態の時刻を返します。
-- `sleep(ms)` を呼んだ fiber は止まります。どの fiber も先に進めず、ホストの処理も残っていなくなると、一番早く起きる予定の時刻まで状態の時刻を進めて、その fiber を起こします。同じ時刻なら `sleep` を呼んだ順です。
-- 実際の時間は待たないので、`Fiber.timeout` や `Fiber.race` を実際の時計と同じ順でテストできます。
+- `sleep(ms)` を呼んだタスクは止まります。どのタスクも先に進めず、ホストの処理も残っていなくなると、一番早く起きる予定の時刻まで状態の時刻を進めて、そのタスクを起こします。同じ時刻なら `sleep` を呼んだ順です。
+- 実際の時間は待たないので、`Task.timeout` や `Task.race` を実際の時計と同じ順でテストできます。
 
 ```emela check
 import Std.Clock.{Clock, TestClock}
 import Std.Console.{Console, TestConsole}
-import Std.Fiber
 import Std.Instant
 import Std.State.{State}
+import Std.Task
 
 fn stamp(label: String) {
-  at = Instant.to_unix_milliseconds((use Clock).now())
-  (use Console).print_line("#{label} at #{at}")
+  clock <- Clock
+  console <- Console
+  at = Instant.to_unix_milliseconds(clock.now())
+  console.print_line("#{label} at #{at}")
 }
 
 @test
 fn wakes_in_time_order() {
+  clock <- Clock
   start = Instant.from_unix_milliseconds(0)
   ((_, lines), end) = State.run(start, || {
     State.run([], || {
       with TestClock, TestConsole {
-        Fiber.both(
+        Task.both(
           || {
-            (use Clock).sleep(200)
+            clock.sleep(200)
             stamp("slow")
           },
           || {
-            (use Clock).sleep(100)
+            clock.sleep(100)
             stamp("fast")
           },
         )
@@ -199,9 +209,10 @@ fn wakes_in_time_order() {
 
 @test
 fn times_out_without_waiting() {
+  clock <- Clock
   start = Instant.from_unix_milliseconds(0)
   (result, _) = State.run(start, || {
-    with TestClock { Fiber.timeout(100, || (use Clock).sleep(1000)) }
+    with TestClock { Task.timeout(100, || clock.sleep(1000)) }
   })
   assert result == None
 }
@@ -229,6 +240,34 @@ fn main() {
 
 整数のリテラルは、文脈が Int64 を求めれば Int64 になるので、`Duration.seconds(5)` と書けます。Int の変数を渡すときは `Int64.from_int` で変えます。Clock の `sleep` だけは Int のミリ秒を取ります。
 
+文字列から読むときは `Duration.parse` と `Instant.parse` を使います。
+
+- `Duration.parse` は、数と単位を並べた形（`1h30m`、`1.5s`、`2h 30min`、`30 seconds`、`to_string` が書く `1500ms`）と、ISO 8601 の期間の時刻の部分（`PT1H30M`、`-PT1.5S`）を読みます。日より長い単位は読みません。
+- `Instant.parse` は、UTC からのずれの付いた日時を読みます。`to_string` が書く形、RFC 3339 の `date-time`、`2025-10-12 12:04:05.678+09` のような形を読み、ずれのない日時は読みません。
+- どちらも、読めなければ `ParseError(input: s)` で失敗します。ミリ秒より細かい桁は捨てます。
+- Duration と Instant は Encode、Decode、Shaped を持つので、`derive Encode` した型のフィールドにできます。JSON には `to_string` の文字列で書きます。
+
+```emela check
+import Std.Duration
+import Std.Duration.{Duration}
+import Std.Dynamic.{Encode}
+import Std.Instant
+import Std.Instant.{Instant}
+import Std.Json
+
+type Job(timeout: Duration, since: Instant) derive Encode
+
+fn main() {
+  dbg(Duration.to_milliseconds(Duration.parse("1h30m"))) # 5400000
+  dbg(Duration.to_string(Duration.parse("PT1.5S"))) # "1500ms"
+  dbg(Instant.to_string(Instant.parse("2025-10-12 12:04:05.678+09"))) # "2025-10-12T03:04:05.678Z"
+  bad = Duration.parse("3 days") escape { ParseError(..) -> Duration.seconds(0) }
+  dbg(Duration.to_string(bad)) # "0ms"
+  job = Job(timeout: Duration.seconds(5), since: Instant.from_unix_milliseconds(0))
+  _ = dbg(Json.encode(job)) # "{\"since\":\"1970-01-01T00:00:00.000Z\",\"timeout\":\"5000ms\"}"
+}
+```
+
 ## Random
 
 `Std.Random` の `Random` は乱数源です。`int()` は Int の全域で、`float()` は 0 以上 1 未満で一様な値を返します。`SystemRandom` はホストの暗号論的に安全な乱数源を使います。範囲を決めた値は、操作の上にふつうの関数で作ります。
@@ -240,7 +279,8 @@ import Std.Random.{Random}
 
 ## 1 から 6 の目。
 fn roll() -> Int uses { Random } {
-  Float.floor((use Random).float() * 6.0) + 1
+  random <- Random
+  Float.floor(random.float() * 6.0) + 1
 }
 
 handler FixedRandom: Random {
@@ -264,7 +304,8 @@ fn rolls_with_a_fixed_source() {
 import Std.Env.{Env}
 
 fn port() -> Int uses { Env } {
-  text = (use Env).get("PORT") |> Option.or("8080")
+  env <- Env
+  text = env.get("PORT") |> Option.or("8080")
   Int.parse(text) escape { ParseError(..) -> 8080 }
 }
 
