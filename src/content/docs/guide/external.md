@@ -96,7 +96,7 @@ error: external function `console_log` can only be used in handlers
 
 `uses {}` の宣言が正しいかどうかを、コンパイラは検証できません。宣言した人が責任を持ちます。
 
-uses 節に書けるのはホストのエフェクト ProcessHost と PageHost だけです（ほかは E0445）。`uses { ProcessHost }` は、ホストが OS のプロセスでなければ動かないことを表します。この外部関数を呼ぶハンドラは ProcessHost を要求します。ProcessHost は with で消えずに R に残るので、そのハンドラを使う関数は ProcessHost が与えられる `main` やテスト関数から呼ぶことになります。同梱の SystemArgs や SystemFileSystem がこの形です。
+uses 節に書けるのはホストのエフェクト ProcessHost と PageHost だけです（ほかは E5002）。`uses { ProcessHost }` は、ホストが OS のプロセスでなければ動かないことを表します。この外部関数を呼ぶハンドラは ProcessHost を要求します。ProcessHost は with で消えずに R に残るので、そのハンドラを使う関数は ProcessHost が与えられる `main` やテスト関数から呼ぶことになります。同梱の SystemArgs や SystemFileSystem がこの形です。
 
 制限は呼び出しだけでなく参照にも掛かります。uses を省略した外部関数を関数の値としてハンドラの外へ持ち出すこともできません。外部関数のホストの副作用は R に載らず、外から見えるのはそれを包んだハンドラのエフェクトです。
 
@@ -315,7 +315,7 @@ error: effect `Clock` may suspend, but callbacks passed to external function `se
 
 コールバックからファイルや通信を扱いたいときは、Deferred で fiber に合図を送ります（[並行処理](/guide/concurrency/)）。
 
-native のターゲットは、関数型（コールバック）と Bytes、Array を境界で受け渡せません。エントリからたどれる外部関数がこれらを受け取るか返すと、コンパイルエラー（E0427、E0443）です。
+native のターゲットは、関数型（コールバック）と Bytes、Array を境界で受け渡せません。エントリからたどれる外部関数がこれらを受け取るか返すと、コンパイルエラー（E5201、E5204）です。
 
 ### C の型
 
@@ -330,7 +330,7 @@ native のターゲットは、関数型（コールバック）と Bytes、Arra
 | String | `const char *`（NUL 終端の UTF-8） | `char *`（NUL 終端。`malloc` で確保したもの） |
 | `()` | 引数にしない | `void` |
 | `@external type` | `void *` | `void *` |
-| 関数型 | なし（E0427） | なし（E0427） |
+| 関数型 | なし（E5201） | なし（E5201） |
 
 C に渡す String の写しは呼び出しの間だけ有効です。後から使うなら C の側で写します。C から受け取った String は、ランタイムが Emela の文字列に写した後すぐに `free` します。`size_t` や `int` のような表にない型は、C の側に小さな関数を書いて表の型に直します。
 
@@ -573,7 +573,7 @@ allow = ["github.com/emela-lang/x/platform-cloudflare"]
 ```
 
 - `allow` には Pome のソースパスを並べ、版は書きません。依存の依存も、ここに書かなければ `@external` を使えません。
-- 許していない依存の `@external` はコンパイルエラー（E0233）です。`@export` も `@external` と同じに数えます。`emela pome add --allow-external <ソースパス>` は、依存を足すときに `allow` にも書き足します。
+- 許していない依存の `@external` はコンパイルエラー（E2303）です。`@export` も `@external` と同じに数えます。`emela pome add --allow-external <ソースパス>` は、依存を足すときに `allow` にも書き足します。
 - 依存の中の `@external` の関数は `pub` にできません（E0237）。ホストに触れる Pome は、外へはエフェクトか、外部関数を呼ぶ普通の関数として見せます。
 
 ライブラリはふつう純粋な Emela と std のエフェクトの上に書き、どのターゲットでも同じ意味で動くようにします。多くのプログラムが使うホストの機能は、std に platform のエフェクトか値の型として足します。特定のホストにしかない機能は、ターゲット専用の Pome に置きます（[Pome](/tools/pome/)）。

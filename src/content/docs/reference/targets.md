@@ -53,14 +53,14 @@ JS と WASM は、言語のすべての構文を出力できます。違いは�
 | ターゲット | まだ使えないもの | 出る診断 |
 |---|---|---|
 | `wasm` | 利用者が書いた `@external(wasm, ...)` と `@export(wasm, ...)` | コードのないコンパイル時のエラー |
-| `wasm` | 標準入力（`SystemStdin`） | エントリからたどれると E0412 |
+| `wasm` | 標準入力（`SystemStdin`） | エントリからたどれると E5001 |
 | `native` | `String.length`、`String.chars`、区切りが空文字列の定数の `String.split`（書記素クラスタの表が要る） | コードのないコンパイル時のエラー |
 | `native` | 区切りが実行時に空文字列になる `String.split` を、ASCII でない文字列に使う | 実行時の defect |
-| `native` | コールバックを取るか返す外部関数 | E0427 |
-| `native` | 境界の型に `Bytes` か `Array` を含む外部関数と export | E0443 |
-| `native` | HTTP サービス（`@entry(Http.serve)`） | E0442 |
-| `native` | 中断しうる export の fn | E0441 |
-| `native`、`wasm` | `Std.Http` のクライアント（`SystemHttp` は JS にだけ実装がある） | E0412 |
+| `native` | コールバックを取るか返す外部関数 | E5201 |
+| `native` | 境界の型に `Bytes` か `Array` を含む外部関数と export | E5204 |
+| `native` | HTTP サービス（`@entry(Http.serve)`） | E5203 |
+| `native` | 中断しうる export の fn | E5202 |
+| `native`、`wasm` | `Std.Http` のクライアント（`SystemHttp` は JS にだけ実装がある） | E5001 |
 
 :::caution[仕様と 0.28.1 の違い]
 仕様の `[target.wasm.external]` は、`SystemClock.sleep` と `Std.FileSystem` も WASM ではまだ使えないとしています。emela 0.28.1 ではどちらも動きます。`emela run --target wasm` はプロジェクトのディレクトリを `wasmtime run --dir` で渡します。
@@ -196,7 +196,7 @@ fn main() {
 | `wasm` | `wasm` |
 | `native` | `c` |
 
-ビルドするターゲットの言語の注釈がない外部関数は、エントリからたどれるときだけエラーになります（E0412）。
+ビルドするターゲットの言語の注釈がない外部関数は、エントリからたどれるときだけエラーになります（E5001）。
 
 - ハンドラを with に書くと、その init と release から呼ぶ fn がたどれる側に入ります。操作の本体から呼ぶ fn は、その操作がどこかで呼ばれるか値として使われるときだけ入ります。
 - ライブラリだけのプロジェクトでは、エントリの代わりに公開関数からたどれる外部関数を検査します。

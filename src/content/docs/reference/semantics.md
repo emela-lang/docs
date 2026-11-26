@@ -184,11 +184,11 @@ FailingDb の release と本体は実行されません。
 - main はエントリのモジュールの `main` という名前の fn です。main でない `main`（const など）は数えません。
 - main が正常に終わったときは、戻り値を表示せずに捨て、終了コード 0 で終わります。値を見たいときは `dbg` を使います。
 - 例外は戻り値の型が `ExitCode`（`Std.Process`）の main で、その値の終了コードで終わります。0 から 255 のどれでも選べます。
-- main の戻り値の型は `()` か `ExitCode` にします。どちらでもなく Never でもない型は警告 W0304 になります。そのときも実行はでき、値は捨てます。
+- main の戻り値の型は `()` か `ExitCode` にします。どちらでもなく Never でもない型は警告 W3001 になります。そのときも実行はでき、値は捨てます。
 - `ExitCode` で 1、101、130 も選べます。そのときは終了コードだけではエラー、defect、中断と区別できず、区別できるのは標準エラーに出る行だけです。
 - main まで達したエラーは、プログラムの異常終了になります。標準エラーに `error: <エラーの値の表示>` を1行出し、終了コード 1 で終わります。エラーの型が Show を満たすときは inspect と同じ表示です（`error DbError(message: String) derive Show` なら `error: DbError(message: "down")`）。満たさないときは、エラーの名前だけを表示します（`error: Retry`）。main の E に Show は要りません。
 - main の E は空でなくてかまいません。
-- main の R は、main に与えられるホストのエフェクト（Async と ProcessHost）を除いて空でなければなりません（E0402）。main に uses 節を書いていても同じです。
+- main の R は、main に与えられるホストのエフェクト（Async と ProcessHost）を除いて空でなければなりません（E4301）。main に uses 節を書いていても同じです。
 
 ```emela check
 error DbError(message: String) derive Show
@@ -255,7 +255,7 @@ defect はプログラムの誤りや回復できない異常です。型には�
 
 ### release の中の defect
 
-release はエラーで終われません（E が空。E0420）。release の中で defect が起きたときは次のとおりにします。
+release はエラーで終われません（E が空。E4007）。release の中で defect が起きたときは次のとおりにします。
 
 - 本体が値かエラーで終わっていたなら、release の defect が with の結果になります。
 - 本体がすでに defect で終わっていたなら、最初の defect を結果にし、release の defect は表示の注記に足します。
@@ -656,13 +656,13 @@ $ echo $?
 101
 ```
 
-- 右辺は純粋な式（E と R が空）に限ります。`use` と `fail` は書けません。純粋な関数の呼び出しは書けますが、失敗しうる関数やエフェクトを使う関数は呼べません（E0318、E0402）。
+- 右辺は純粋な式（E と R が空）に限ります。`use` と `fail` は書けません。純粋な関数の呼び出しは書けますが、失敗しうる関数やエフェクトを使う関数は呼べません（E3201、E4301）。
 - 右辺は最初に参照したときに1回だけ評価し、その値を覚えておきます。起動時にすべてを評価しないのは、使っていない const の defect でプログラムやほかのテストが動かなくなるのを避けるためです。
 - 評価の途中の defect は最初に参照したところで起きます。文面に const の名前を入れます（`while evaluating const X: division by zero`）。
 - 評価の途中の defect も覚え、次の参照でも同じ defect を起こします（評価し直しません）。テストの間でも共有されます。
 - 入れ子の const の defect は、通った const ごとに名前を前に足します（`while evaluating const A: while evaluating const B: division by zero`）。
 - 評価の途中で自分自身を参照すると defect（`const A refers to itself while being evaluated`）になります。自己参照の defect には名前を足さず、どの const にも覚えさせません（最初の参照がどこから来たかで文面が変わらないようにするため）。
-- 名前だけで循環している const（`const A = B` と `const B = A`）はコンパイル時に E0231 になります。E0231 は値を評価すると必ず評価する参照だけで循環を見ます。if と match の腕、`&&` と `||` の右辺、ラムダの本体、呼んだ関数の中の参照は数えず、実行時の自己参照の defect に任せます。構造を通る循環（`const P = (Q, 1)` と `const Q = [P]`）は E0231 です。
+- 名前だけで循環している const（`const A = B` と `const B = A`）はコンパイル時に E2113 になります。E2113 は値を評価すると必ず評価する参照だけで循環を見ます。if と match の腕、`&&` と `||` の右辺、ラムダの本体、呼んだ関数の中の参照は数えず、実行時の自己参照の defect に任せます。構造を通る循環（`const P = (Q, 1)` と `const Q = [P]`）は E2113 です。
 - 汎化した const（`const EMPTY = []`）も、型が実行時に消えるので、覚える値は1つです。
 
 ```emela check
@@ -690,11 +690,11 @@ $ emela run main.emel
 defect: const A refers to itself while being evaluated
 ```
 
-if の腕を通る自己参照は E0231 にならず、実行時に defect になります。
+if の腕を通る自己参照は E2113 にならず、実行時に defect になります。
 
 ```emela check=error
 const A = B + 1
-const B = A + 1    # error[E0231]: constants refer to each other
+const B = A + 1    # error[E2113]: constants refer to each other
 ```
 
 ## 終了コード

@@ -21,12 +21,12 @@ description: emela lsp の機能、VS Code の拡張、Neovim、Zed、Sublime Te
 | リンク | `@external` のファイルの引数（`"./ffi.mjs"`）から、そのファイルへのリンク |
 | rename | 名前を一括で変える |
 | 整形 | `emela fmt` と同じ整形 |
-| コードアクション | 推論した注釈（戻り値の型、`fails`、`uses`）を書き込む。クイックフィックスで、網羅していない match の腕、impl に足りない関数、import、綴りの誤り、`fails` と `uses` の不足、古い書き方（E0144、E0145、E0147）を直す |
+| コードアクション | 推論した注釈（戻り値の型、`fails`、`uses`）を書き込む。クイックフィックスで、網羅していない match の腕、impl に足りない関数、import、綴りの誤り、`fails` と `uses` の不足、古い書き方（E1402、E1403、E1404）を直す |
 | semantic tokens | 能力の値（`use X` で束縛した変数）に印を付ける |
 
-- 言語サーバーはネットワークに出ません。依存はキャッシュにあるものだけを読み、なければ `Pome.toml` に E0236 を出します。
+- 言語サーバーはネットワークに出ません。依存はキャッシュにあるものだけを読み、なければ `Pome.toml` に E2306 を出します。
 - 実験的な機能は `Pome.toml` の `[experimental]` だけを見ます。コマンドの `--experimental-<名前>` で有効にした機能はエディタの診断に出ません。
-- ターゲットを決めないので、ターゲットに依存する検査（E0412 など）は `emela build` や `emela test` でだけ出ます。
+- ターゲットを決めないので、ターゲットに依存する検査（E5001 など）は `emela build` や `emela test` でだけ出ます。
 - 保存していないバッファ（`untitled:`）には診断を出しません。
 
 まず注釈なしで書き、公開する関数にはあとからコードアクションで推論した注釈を書き込めます。
@@ -202,7 +202,7 @@ fn main() {
 ```
 
 ```text
-error[E0211]: cannot find value `usr` in this scope
+error[E2101]: cannot find value `usr` in this scope
    ╭─[ main.emel:3:7 ]
    │
  3 │   dbg(usr)

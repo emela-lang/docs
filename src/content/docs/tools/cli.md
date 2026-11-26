@@ -48,7 +48,7 @@ Options:
 
 `check`、`build`、`run`、`test`、`doc`、`doctor` の `PATH` には、プロジェクトのディレクトリかファイルを渡します。省けば `.` です。
 
-ディレクトリを渡すと、祖先をたどって最初に見つかった `Pome.toml` のプロジェクト全体が対象になります。渡せるのはプロジェクトのディレクトリか、`src/` か `test/` の中のディレクトリで、それより外（`scripts/` など）はエラー（E0208）です。`src/` の中のディレクトリを渡しても、型の検査はモジュールをまたぐのでプロジェクト全体を検査します。`Pome.toml` が見つからないディレクトリもエラー（E0207）です。
+ディレクトリを渡すと、祖先をたどって最初に見つかった `Pome.toml` のプロジェクト全体が対象になります。渡せるのはプロジェクトのディレクトリか、`src/` か `test/` の中のディレクトリで、それより外（`scripts/` など）はエラー（E2006）です。`src/` の中のディレクトリを渡しても、型の検査はモジュールをまたぐのでプロジェクト全体を検査します。`Pome.toml` が見つからないディレクトリもエラー（E2301）です。
 
 ファイルを渡して `Pome.toml` が見つからなければ、単独のファイルとして扱います。同じディレクトリの直下の `.emel` だけがモジュールになり、エントリから import でたどれるファイルだけを読みます。ファイル名は小文字の snake_case で、モジュール名に変換できる形でなければなりません。
 
@@ -56,7 +56,7 @@ Options:
 
 ```console no-check
 $ emela check scripts
-error[E0208]: directory `scripts` is outside the source root `src`
+error[E2006]: directory `scripts` is outside the source root `src`
    = note: source files of a project (the directory with Pome.toml) go under src/, and those only the tests use under test/; pass the project directory, or a file or directory under one of them
 
 1 error
@@ -96,7 +96,7 @@ Options:
 
 - 型を検査して診断を出します。何も書き出しません。
 - 診断は標準エラーに出します。形は [エディタと言語サーバー](/tools/editors/#診断の表示形式) にあります。
-- `check` はターゲットを取りません。ターゲットに関わる診断（そのターゲットの `@external` がない E0412 など）は `build`、`run`、`test` で出ます。`[build].target` の誤り（E0232）は `check` でも出ます。
+- `check` はターゲットを取りません。ターゲットに関わる診断（そのターゲットの `@external` がない E5001 など）は `build`、`run`、`test` で出ます。`[build].target` の誤り（E2302）は `check` でも出ます。
 - `test/` と `[dev-dependencies]` も読みます。
 
 ## emela build
@@ -111,7 +111,7 @@ Options:
 ```
 
 - 出力先はプロジェクトなら `<プロジェクト>/target/emela/<ターゲット>`、単独のファイルならファイルのあるディレクトリの `target/emela/<ターゲット>` です。`--out-dir` で変えられます。前の出力は消さずに上書きします。
-- `test/` と `[dev-dependencies]` は読みません。`test/` の中のファイルを渡すとエラー（E0208）です。
+- `test/` と `[dev-dependencies]` は読みません。`test/` の中のファイルを渡すとエラー（E2006）です。
 - ライブラリだけのプロジェクト（`src/lib.emel` だけ）では、検査だけをして何も書き出しません。
 
 ### --target
@@ -149,7 +149,7 @@ Options:
 - プログラムへの引数は `--` の後に書きます（`emela run -- a b`）。`Std.Process` の `Args` で読めます。標準入力はプログラムが引き継ぎます。
 - `js` は JS のホスト（既定は `node`）で、`native` は実行ファイル `main` を直接、`wasm` は `wasmtime run -S p3=y` で動かします。
 - `main` が返した値は表示しません。`main` が `ExitCode` を返したときは、その終了コードで終わります。
-- エントリに `main` がなく、HTTP サービスでもなければエラー（E0230）です。HTTP サービス（`@entry(Http.serve)`）は `127.0.0.1:8080` で待ち受けます。`--addr <host>:<port>` か環境変数 `HOST` と `PORT` で変えられます。
+- エントリに `main` がなく、HTTP サービスでもなければエラー（E2009）です。HTTP サービス（`@entry(Http.serve)`）は `127.0.0.1:8080` で待ち受けます。`--addr <host>:<port>` か環境変数 `HOST` と `PORT` で変えられます。
 
 ```console no-check
 $ emela run
@@ -338,12 +338,12 @@ pome
 `check`、`build`、`run`、`test` は、実験的な機能ごとに `--experimental-<名前>` を受け取ります。その1回の実行だけ、ビルドする Pome（単独のファイルなら読むファイル）で機能を有効にします。`Pome.toml` の `[experimental]` に足す形で働き、依存には効かず、`Pome.toml` で有効にした機能を無効にもできません。
 
 - 0.28.1 の実験的な機能は `capture-checking` だけです（[実装の状況](/start/status/#実験的な機能)）。
-- `--experimental-` で始まり、知らない機能、安定した機能、取り除いた機能を指すフラグはエラーにせず、警告（W0206）にします。
+- `--experimental-` で始まり、知らない機能、安定した機能、取り除いた機能を指すフラグはエラーにせず、警告（W2304）にします。
 - 言語サーバーはフラグを持たず、`Pome.toml` だけを見ます。
 
 ```console no-check
 $ emela check --experimental-foo
-warning[W0206]: unknown experimental feature `foo`
+warning[W2304]: unknown experimental feature `foo`
 
 1 warning
 ```
@@ -353,15 +353,15 @@ warning[W0206]: unknown experimental feature `foo`
 | 変数 | 働き |
 |---|---|
 | `EMELA_JS_HOST` | `run` と `test` が使う JS のホスト。なければ `node`。`node` と同じく `--input-type=module -e` を受け付けるもの（Node.js と Bun） |
-| `EMELA_NODE` | 古い名前。読むと警告（W0902）を出す。`EMELA_JS_HOST` があればそちらを使う |
+| `EMELA_NODE` | 古い名前。読むと警告（W9101）を出す。`EMELA_JS_HOST` があればそちらを使う |
 | `EMELA_CC` | native が使う C コンパイラ。なければ PATH の `cc`。値全体で1つのプログラムを指す |
 | `EMELA_CC_ARGS` | C コンパイラに足すフラグ。空白で区切り、コマンドラインの最後に付ける |
 | `EMELA_WASMTIME` | WASM が使う wasmtime。なければ PATH の `wasmtime` |
 | `EMELA_POMEPROXY`、`EMELA_POMESUMDB`、`EMELA_POMEPRIVATE`、`EMELA_POME_CACHE` | 依存の取得の経路、sumdb、非公開の Pome、キャッシュの場所（[プロジェクトと Pome](/tools/pome/#proxy-と-sumdb)） |
 | `NO_COLOR` | 空でない値を入れると、診断に色を付けない。色は、標準エラーが端末で `NO_COLOR` が空か未設定のときだけ付く |
 
-- `js` では、起動する前にホストの版を読み、Node.js 22 か Bun 1.4.3 より古ければ起動せずにエラー（E0904）にします。版を読めなければ起動します。
-- `wasm` では、wasmtime の major が 49 より古ければエラー（E0909）です。
+- `js` では、起動する前にホストの版を読み、Node.js 22 か Bun 1.4.3 より古ければ起動せずにエラー（E9101）にします。版を読めなければ起動します。
+- `wasm` では、wasmtime の major が 49 より古ければエラー（E9101）です。
 
 ```console no-check
 $ EMELA_JS_HOST=bun emela run main.emel
@@ -369,7 +369,7 @@ running `bun --input-type=module -e <launcher> -- /path/to/target/emela/js/main.
 1
 $ EMELA_JS_HOST=/nonexistent/node emela run main.emel
 running `/nonexistent/node --input-type=module -e <launcher> -- /path/to/target/emela/js/main.mjs`
-error[E0904]: `/nonexistent/node` not found
+error[E9101]: `/nonexistent/node` not found
    = note: install Node.js 22 or later or Bun 1.4.3 or later and add it to PATH, or set EMELA_JS_HOST to the JS host
 
 1 error

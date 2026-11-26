@@ -116,7 +116,7 @@ fn main() {
 
 ```console no-check
 $ emela check
-error[E0301]: type mismatch: expected `Int`, found `String`
+error[E3001]: type mismatch: expected `Int`, found `String`
    ╭─[ src/main.emel:2:12 ]
    │
  2 │   n: Int = "three"

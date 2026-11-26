@@ -49,7 +49,7 @@ emela check --experimental-capture-checking
 |---|---|---|
 | `capture-checking` | 0.28 | 能力を持つ値が、それを供給する `with` か `Fiber.scope` の外へ出ると、警告 W0402 の代わりにコンパイル時のエラー E0444 にする |
 
-- 知らない名前、安定した機能、取り除いた機能の名前は警告 W0206 です。
+- 知らない名前、安定した機能、取り除いた機能の名前は警告 W2304 です。
 - フラグは `check`、`build`、`run`、`test` が受け取ります。言語サーバーは `Pome.toml` だけを見るので、フラグだけで有効にした機能はエディタの診断に出ません。
 - 0.29 では `capture-checking` を既定にし、W0402 と実行時の検査を外す予定です（[emela#666](https://github.com/emela-lang/emela/issues/666)）。
 

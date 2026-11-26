@@ -72,7 +72,7 @@ fn main() {}
 ```
 
 ```text
-error[E0318]: unhandled error `NotFound`
+error[E3201]: unhandled error `NotFound`
     ╭─[ main.emel:15:3 ]
     │
  15 │   greeting(id)
