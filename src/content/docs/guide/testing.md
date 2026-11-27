@@ -18,8 +18,10 @@ effect Users {
 }
 
 fn greet(id: Int) -> String fails NotFound uses { Users, Console } {
-  user = (use Users).find(id)
-  (use Console).print_line("Hello, #{user.name}!")
+  users <- Users
+  console <- Console
+  user = users.find(id)
+  console.print_line("Hello, #{user.name}!")
   user.name
 }
 
@@ -169,16 +171,17 @@ $ echo $?
 
 使い方は [Platform](/std/platform/)、[FileSystem](/std/file-system/)、[Http](/std/http/) にあります。TestStdin、TestStdout、TestStderr は `Std.Process` にあります。State そのものは [状態と資源](/guide/resources/) で扱います。
 
-TestClock の `sleep` は、どの fiber も先に進めなくなったとき、一番早く起きる予定の時刻まで時刻を進めます。fiber を使うコードも、実際の時計と同じ順で、待たずにテストできます。
+TestClock の `sleep` は、どのタスクも先に進めなくなったとき、一番早く起きる予定の時刻まで時刻を進めます。タスクを使うコードも、実際の時計と同じ順で、待たずにテストできます。
 
 ```emela check
 import Std.Clock.{Clock, TestClock}
-import Std.Fiber.{Fiber}
 import Std.Instant.{Instant}
 import Std.State.{State}
+import Std.Task.{Task}
 
 fn slow() -> Int uses { Clock } {
-  (use Clock).sleep(5000)
+  clock <- Clock
+  clock.sleep(5000)
   1
 }
 
@@ -186,7 +189,7 @@ fn slow() -> Int uses { Clock } {
 fn gives_up_after_100ms() {
   start = Instant.from_unix_milliseconds(0)
   (result, end) = State.run(start, || {
-    with TestClock { Fiber.timeout(100, || slow()) }
+    with TestClock { Task.timeout(100, || slow()) }
   })
   assert result == None
   assert Instant.to_unix_milliseconds(end) == 100
@@ -197,14 +200,15 @@ fn main() { () }
 
 複数の State を重ねるときは `State.run` を入れ子にします。`with Platform, TestClock { ... }` のように、layer の後ろに書いたハンドラで一部だけを置き換えることもできます。
 
-テスト関数の中で使うエフェクトは、ホストのエフェクト（Async と ProcessHost）を除いてすべて with で供給します。この2つはテストランナーが供給するので、`sleep` や fiber、`with Process { ... }` のハンドラもそのまま使えます。
+テスト関数の中で使うエフェクトは、ホストのエフェクト（Async と ProcessHost）を除いてすべて with で供給します。この2つはテストランナーが供給するので、`sleep` やタスク、`with Process { ... }` のハンドラもそのまま使えます。
 
 ```emela check=error
 import Std.Console.{Console}
 
 @test
 fn prints() {
-  (use Console).print_line("hi")
+  console <- Console
+  console.print_line("hi")
 }
 
 fn main() { () }

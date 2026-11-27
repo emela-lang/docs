@@ -29,11 +29,12 @@ emela run --target native main.emel   # cc で実行ファイルを作って動�
 
 `--target` を省くと、`Pome.toml` の `[build].target`、それもなければ `js` になります（[emela コマンド](/tools/cli/)）。`emela doctor` は、各ターゲットが使うプログラムがあり、版が足りているかを確かめます。
 
-`c` は `native` の古い名前です。`--target c`、`[build].target = "c"`、`[pome].targets` の `"c"` は `native` を選び、警告 W0903 を出します。0.29 で知らないターゲットになります。
+0.28 まで `native` の古い名前として読んだ `c` は、0.29 で取り除きました。`--target c`、`[build].target = "c"`、`[pome].targets` の `"c"` はどれも知らないターゲットです（`[build].target` なら E2302）。`native` に書き換えます。
 
 ### 対象のホスト
 
 - JS のターゲットはサーバーで動くホストを前提にします。Node.js 22 以降か Bun 1.4.3 以降です。`emela run` と `emela test` が起動するホストは環境変数 `EMELA_JS_HOST` で選びます。
+- `emela build` が書く `main.mjs` は、JS のホストを `main.mjs` で起動すると（`node target/emela/js/main.mjs`）、`main` を引数なしで実行します。`main.mjs` の後ろの引数がプログラムの引数（`Args`）になり、標準エラーへの出力と終了コードは `emela run` と同じです。ほかのモジュールから import したときは `main` を実行しません。HTTP サービスは `serve.mjs` で起動します。
 - ブラウザはターゲットではありません。platform のハンドラ（[プラットフォーム](/std/platform/)）は、ブラウザでの動きを規定しません。
 - WASM のターゲットは WASI 0.3 のコンポーネントを出力し、`wasmtime run -S p3=y main.wasm` で動かします。外部のツールチェーンは使いません。
 - native のターゲットは、コンパイラを動かしているマシン向けにだけビルドします。ほかの OS や CPU 向けのクロスビルドはしません。対象は macOS（arm64）と glibc の Linux（x86_64）です。ほかの POSIX のシステムでも動くことはありますが、試験はしていません。Windows は対象外です。
@@ -53,17 +54,18 @@ JS と WASM は、言語のすべての構文を出力できます。違いは�
 | ターゲット | まだ使えないもの | 出る診断 |
 |---|---|---|
 | `wasm` | 利用者が書いた `@external(wasm, ...)` と `@export(wasm, ...)` | コードのないコンパイル時のエラー |
-| `wasm` | 標準入力（`SystemStdin`） | エントリからたどれると E0412 |
+| `wasm` | 標準入力（`SystemStdin`） | エントリからたどれると E5001 |
 | `native` | `String.length`、`String.chars`、区切りが空文字列の定数の `String.split`（書記素クラスタの表が要る） | コードのないコンパイル時のエラー |
 | `native` | 区切りが実行時に空文字列になる `String.split` を、ASCII でない文字列に使う | 実行時の defect |
-| `native` | コールバックを取るか返す外部関数 | E0427 |
-| `native` | 境界の型に `Bytes` か `Array` を含む外部関数と export | E0443 |
-| `native` | HTTP サービス（`@entry(Http.serve)`） | E0442 |
-| `native` | 中断しうる export の fn | E0441 |
-| `native`、`wasm` | `Std.Http` のクライアント（`SystemHttp` は JS にだけ実装がある） | E0412 |
+| `native` | コールバックを取るか返す外部関数 | E5201 |
+| `native` | 境界の型に `Array` を含む外部関数と export（`Bytes` は 0.29 から渡せる） | E5204 |
+| `native` | HTTP サービス（`@entry(Http.serve)`） | E5203 |
+| `native` | 中断しうる export の fn | E5202 |
+| `native`、`wasm` | `Std.Http` のクライアント（`SystemHttp` は JS にだけ実装がある） | E5001 |
+| `native`、`wasm` | `Std.Tcp` の操作（0.29.0 の `SystemTcp` は JS にだけ実装がある） | E5001 |
 
-:::caution[仕様と 0.28.1 の違い]
-仕様の `[target.wasm.external]` は、`SystemClock.sleep` と `Std.FileSystem` も WASM ではまだ使えないとしています。emela 0.28.1 ではどちらも動きます。`emela run --target wasm` はプロジェクトのディレクトリを `wasmtime run --dir` で渡します。
+:::caution[仕様と 0.29.0 の違い]
+仕様の `[target.wasm.external]` は、`SystemClock.sleep` と `Std.FileSystem` も WASM ではまだ使えないとしています。emela 0.29.0 ではどちらも動きます。`emela run --target wasm` はプロジェクトのディレクトリを `wasmtime run --dir` で渡します。
 :::
 
 検査するのはエントリからたどれる関数だけです。たどれない関数に使えないものが含まれていても、コンパイル時のエラーにはなりません。`with Platform` と書いても、`Http` を実際に使わなければ native と WASM でビルドできます。
@@ -171,8 +173,8 @@ fn main() {
 
 相互再帰の末尾呼び出しは保証しません。仕様では、コンパイラが相互再帰の末尾呼び出しを検出して警告し、escape の対象と with の本体の中の、末尾呼び出しに見える自分自身への呼び出しには linter が「保証されない」と警告します。
 
-:::caution[0.28.1 との違い]
-emela 0.28.1 は、相互再帰の末尾呼び出しにまだ警告を出しません。
+:::caution[0.29.0 との違い]
+emela 0.29.0 は、相互再帰の末尾呼び出しにまだ警告を出しません。
 :::
 
 ```emela check
@@ -196,7 +198,7 @@ fn main() {
 | `wasm` | `wasm` |
 | `native` | `c` |
 
-ビルドするターゲットの言語の注釈がない外部関数は、エントリからたどれるときだけエラーになります（E0412）。
+ビルドするターゲットの言語の注釈がない外部関数は、エントリからたどれるときだけエラーになります（E5001）。
 
 - ハンドラを with に書くと、その init と release から呼ぶ fn がたどれる側に入ります。操作の本体から呼ぶ fn は、その操作がどこかで呼ばれるか値として使われるときだけ入ります。
 - ライブラリだけのプロジェクトでは、エントリの代わりに公開関数からたどれる外部関数を検査します。
@@ -210,7 +212,7 @@ fn main() {
 - JS から受け取った文字列に対になっていないサロゲートが含まれるときは、境界で置換文字（U+FFFD）に直します。
 - 外部関数が投げた例外は defect です。
 - suspend fn の外部関数が Promise でない値を返したときは、解決した値として扱います。
-- ランタイムは suspend fn の外部関数の最後の引数に `AbortSignal` を足して渡し、待っている fiber が中断されると abort します。止めないと、結果を捨てても通信やタイマーが残り、プロセスが終わりません。
+- ランタイムは suspend fn の外部関数の最後の引数に `AbortSignal` を足して渡し、待っているタスクが中断されると abort します。止めないと、結果を捨てても通信やタイマーが残り、プロセスが終わりません。
 - suspend fn の操作の実装の中で外部関数を待っているときも、resume の前に呼び出し元が中断されれば、実装を巻き戻して abort します。
 - `@export(js, "name")` の fn は `main.mjs` の名前付き export になります。中断しうる fn は Promise を返します。
 
@@ -223,11 +225,14 @@ fn main() {
 | Float | `double` | `double` |
 | Bool | `bool` | `bool` |
 | String | `const char *`（NUL 終端の UTF-8） | `char *`（`malloc` で確保した NUL 終端） |
+| Bytes | `const uint8_t *data, size_t len`（2つの引数） | `em_bytes`（`emela.h` の構造体。`data` は `malloc` で確保するか、`len` が 0 なら NULL） |
 | `()` | 引数にならない | `void` |
 | `@external type` | `void *` | `void *` |
 
 - C に渡す文字列はランタイムのもので、ホストは書き換えも解放もしません。ポインタは関数が戻るまでだけ有効です。U+0000 を含む文字列は、渡す前に defect になります。
 - C から受け取った String は写してから `free` します。UTF-8 として正しくない並びは置換文字に直します。NULL が返ったら defect です。
+- C に渡す Bytes も、文字列と同じくランタイムのもので、ホストは書き換えも解放もしません。空の Bytes では `len` が 0 で、`data` は NULL のこともあります。
+- C から受け取った `em_bytes` は Bytes に写してから `data` を `free` します。`len` が 0 より大きいのに `data` が NULL なら defect、`len` が 2^31 - 1 を超えても defect です。
 - 表にない C の型（`size_t`、`int` など）は、C の側に小さな変換の関数を書いて表の型にします。整数の幅をコンパイラは推し量りません。
 - C には例外がありません。失敗はホスト側から値で返し、ハンドラの中で fail にします。C の関数が `abort` したりシグナルで止まったりすると、defect ではなくプロセスが終わります（終了コードは 128 + シグナル番号）。
 - C コンパイラは環境変数 `EMELA_CC`、なければ PATH の `cc` です。追加のフラグは `EMELA_CC_ARGS` に書きます。
@@ -235,12 +240,12 @@ fn main() {
 
 native の suspend fn の外部関数は、引数の後ろに `em_task *task` を受け取って `void` を返し、完了を後から関数で知らせます。
 
-- 完了の関数は `em_complete_int`、`em_complete_int64`、`em_complete_float`、`em_complete_bool`、`em_complete_string`（`malloc` で確保した NUL 終端の UTF-8 を渡す）、`em_complete_unit`、`em_complete_handle`（`@external type`）です。
-- ホスト側の誤りは `em_complete_defect(task, message)` で知らせます。待っている fiber で defect になります。
+- 完了の関数は `em_complete_int`、`em_complete_int64`、`em_complete_float`、`em_complete_bool`、`em_complete_string`（`malloc` で確保した NUL 終端の UTF-8 を渡す）、`em_complete_bytes`（`malloc` で確保した `data` と `len` を渡す）、`em_complete_unit`、`em_complete_handle`（`@external type`）です。
+- ホスト側の誤りは `em_complete_defect(task, message)` で知らせます。待っているタスクで defect になります。
 - 完了の関数は各 `task` にちょうど1回呼びます。2回目は defect です。
 - 完了の関数はどのスレッドからも呼べます。ほかの `em_` の関数は、ランタイムのスレッド（外部関数の中と、ランタイムが呼ぶコールバックの中）からだけ呼べます。
 - 待ちの登録は `em_after(ms, task, callback, ctx)`、`em_on_readable(fd, task, callback, ctx)`、`em_on_writable(fd, task, callback, ctx)` です。中断の知らせは `em_on_cancel(task, callback, ctx)` で受けます。
-- 待っている fiber が中断された後も、C の側は完了の関数をちょうど1回呼びます（値は捨てられます）。
+- 待っているタスクが中断された後も、C の側は完了の関数をちょうど1回呼びます（値は捨てられます）。
 - 別のスレッドに task を渡すホストの関数は、自分で待ちを登録してイベントループを待たせておきます。別のスレッドが持つ task だけでは、起動が止まったとみなされます。
 
 ## 規定しない点
@@ -250,7 +255,7 @@ native の suspend fn の外部関数は、引数の後ろに `em_task *task` �
 - 値のメモリ上の表現と、解放のタイミング
 - Trait の実装方式（辞書渡しか、型ごとの複製か）
 - 継続の実装方式
-- 実行可能な fiber が複数あるときの実行順序
+- 実行可能なタスクが複数あるときの実行順序
 - 必要なメモリを得られなかったプログラムの結果（defect になるか、release が走るか、`Exit.attempt` で観測できるか、何を出力するか、終了コード）
 
 ## 参考: 想定する実装方式

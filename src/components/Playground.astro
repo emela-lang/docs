@@ -13,7 +13,7 @@ fn find(id: Int) -> String fails NotFound {
 
 fn main() {
   with Platform {
-    console = use Console
+    console <- Console
     console.print_line("Hello, #{find(1)}!")
     console.print_line(find(2) escape { NotFound(_) -> "guest" })
   }

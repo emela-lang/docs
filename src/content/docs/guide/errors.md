@@ -152,10 +152,10 @@ fn main() {
 }
 ```
 
-- `_` の腕は E からすべてのタグを消します。`_` より下の腕は冗長として警告（W0301）になります。
+- `_` の腕は E からすべてのタグを消します。`_` より下の腕は冗長として警告（W3101）になります。
 - `_` にはガードを付けられません。
 - 変数で受けることはできません。「NotFound か DbError のどちらか」という値の型はないためです。エラーの中身を見たいときは構成子の名前で受けます。
-- defect と fiber の中断はエラーではないので、`_` でも受けません。
+- defect とタスクの中断はエラーではないので、`_` でも受けません。
 
 ガード付きの腕で一部の値だけ受けたときの E や、関数を受け取る関数の中の escape の扱いは、[型と効果の体系](/reference/type-system/)にあります。
 
@@ -264,18 +264,21 @@ effect Db {
 
 handler FakeDb: Db {
   init {
-    (use Console).print_line("open")
+    console <- Console
+    console.print_line("open")
     FakeDb
   }
   release {
-    (use Console).print_line("close")
+    console <- Console
+    console.print_line("close")
   }
   fn query(sql) { 1 / 0 }
 }
 
 fn main() {
+  db <- Db
   with SystemConsole, FakeDb {
-    _ = (use Db).query("select 1")
+    _ = db.query("select 1")
   }
 }
 ```
@@ -319,7 +322,7 @@ $ echo $?
 - `exit_code(n)` は 0 から 255 の終了コードを作ります。範囲の外は defect です。`EXIT_SUCCESS`（0）と `EXIT_FAILURE`（1）もあります。
 - ExitCode はただの値で、作るのにエフェクトもハンドラも要りません。
 - 1、101、130 も選べます。その場合、エラー、defect、中断とは終了コードでは見分けられず、標準エラーに出る行でだけ見分けられます。
-- `main` の戻り値の型は `()` か `ExitCode` にします。ほかの型を返す `main` は警告（W0304）になり、値は捨てられます。
+- `main` の戻り値の型は `()` か `ExitCode` にします。ほかの型を返す `main` は警告（W3001）になり、値は捨てられます。
 
 ## Result 型と ? 演算子はない
 

@@ -38,7 +38,7 @@ fn half(n: Int) -> Int fails Negative {
 
 fn main() {
   with Platform {
-    console = use Console
+    console <- Console
     [10, -4, 7]
       |> List.map(|n| Int.to_string(half(n)) escape { Negative(n:) -> "#{n} は負" })
       |> String.join(", ")
@@ -60,7 +60,7 @@ $ emela run main.emel
 		実装は `with` でハンドラを渡して決まります。テストではハンドラを差し替えます。
 	</Card>
 	<Card title="await のない並行処理" icon="random">
-		fiber はスコープの中でだけ動き、スコープより長生きしません。
+		タスクは `with` の項目の中でだけ動き、それを始めた `with` より長生きしません。
 	</Card>
 	<Card title="どのターゲットでも同じ結果" icon="rocket">
 		JavaScript、WebAssembly、ネイティブの実行ファイルに出力します。`Int` は32ビットに固定です。
@@ -68,7 +68,7 @@ $ emela run main.emel
 </CardGrid>
 
 :::note[開発中の言語です]
-このサイトは emela 0.28.1 に合わせています。1.0 までは minor の版で言語に壊れる変更が入ることがあります。動く範囲は [実装の状況](/start/status/) にあります。
+このサイトは emela 0.29.0 に合わせています。1.0 までは minor の版で言語に壊れる変更が入ることがあります。動く範囲は [実装の状況](/start/status/) にあります。
 :::
 
 ## 始め方

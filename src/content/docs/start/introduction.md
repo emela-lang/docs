@@ -25,13 +25,14 @@ handler SampleUsers: Users {
 
 # 推論される型: fn(Int) -> String fails NotFound uses { Users }
 fn greeting(id: Int) {
-  user = (use Users).find(id)
+  users <- Users
+  user = users.find(id)
   "Hello, #{user.name}!"
 }
 
 fn main() {
   with Platform, SampleUsers {
-    console = use Console
+    console <- Console
     console.print_line(greeting(1))
     console.print_line(greeting(2) escape { NotFound(_) -> "Hello, guest!" })
   }
@@ -60,7 +61,8 @@ effect Users {
 }
 
 fn greeting(id: Int) {
-  user = (use Users).find(id)
+  users <- Users
+  user = users.find(id)
   "Hello, #{user.name}!"
 }
 
@@ -72,10 +74,10 @@ fn main() {}
 ```
 
 ```text
-error[E0318]: unhandled error `NotFound`
-    ╭─[ main.emel:15:3 ]
+error[E3201]: unhandled error `NotFound`
+    ╭─[ main.emel:16:3 ]
     │
- 15 │   greeting(id)
+ 16 │   greeting(id)
     │   ──────┬─────
     │         ╰───────
 ────╯

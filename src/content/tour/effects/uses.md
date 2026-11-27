@@ -1,5 +1,5 @@
 ---
-title: use と uses
+title: エフェクトの別名と uses
 description: 関数が使うエフェクトは型の一部になる
 order: 2
 ---
@@ -12,10 +12,10 @@ order: 2
 
 `main` が使えるエフェクトは、`main` の中の `with` で渡したものだけです。どこかで `Greeter` を使うのに `with` で渡し忘れると、コンパイルエラーになります。実行してから気付くことはありません。
 
-`use Greeter` は値なので、`greeter = use Greeter` と名前を付けてから操作を呼んでもかまいません。
+`greeter <- Greeter` は値を作らず、`Greeter` に `greeter` という別名を付けるだけの文です。`greeter.greet(name)` を呼んだ時点で、いちばん内側の `Greeter` のハンドラが働き、関数の R に `Greeter` が載ります。
 
 > **試してみよう**
-> `shout` の本体を `(use Greeter).greet(text)` に変えてみてください。もう1つ、`main` の `with English` を外して `dbg(...)` だけにしたときのエラーも見てください。
+> `shout` の本体を `greeter <- Greeter` と `greeter.greet(text)` の2行に変えてみてください。もう1つ、`main` の `with English` を外して `dbg(...)` だけにしたときのエラーも見てください。
 
 ```emela check tour
 effect Greeter {
@@ -27,7 +27,7 @@ handler English: Greeter {
 }
 
 fn welcome(name: String) -> String uses { Greeter } {
-  greeter = use Greeter
+  greeter <- Greeter
   greeter.greet(name)
 }
 

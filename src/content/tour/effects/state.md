@@ -21,7 +21,7 @@ order: 4
 import Std.State.{State}
 
 fn next_id() -> Int uses { State[Int] } {
-  st = use State[Int]
+  st <- State[Int]
   id = st.get()
   st.set(id + 1)
   id

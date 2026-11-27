@@ -16,7 +16,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | クラスとメソッド `x.f()` | `type` と同じモジュールの関数。`x.f()` か `x \|> f` で呼ぶ |
 | interface で依存を渡す、DI、モック | `effect`、`handler`、`with` |
 | リソースの後始末（defer、try-with-resources、Drop） | ハンドラの `init` と `release` |
-| async / await | 印なしの呼び出しと `Fiber` |
+| async / await | 印なしの呼び出しと `Std.Task` |
 | 文字列補間 | `"Hello, #{name}"` |
 | 型クラス / interface | `trait` と `impl`、`derive` |
 
@@ -28,7 +28,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | `interface` / 構造的な型 | `type`（名前で区別する） |
 | `null` / `undefined`、`?.`、`??` | `Option[A]`、`Option.map`、`Option.or` |
 | `throw` / `try` / `catch` | `fail` / `escape`。エラーは型に出る |
-| `async` / `await` / `Promise` | 印なしの呼び出しと `Fiber` |
+| `async` / `await` / `Promise` | 印なしの呼び出しと `Std.Task` |
 | `let` と再代入 | 同じ名前での束縛し直し |
 | `` `Hello, ${name}` `` | `"Hello, #{name}"` |
 
@@ -45,7 +45,7 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | `opt.ok_or(NotFound(id))?` | `Option.or_fail(opt, NotFound(id:))` |
 | `panic!`、`todo!()` | `panic(..)`、`todo()` |
 | `Drop` | ハンドラの `release` |
-| `tokio::join!` / `select!` / `timeout` | `Fiber.both` / `Fiber.race` / `Fiber.timeout` |
+| `tokio::join!` / `select!` / `timeout` | `Task.both` / `Task.race` / `Task.timeout` |
 | `dbg!(x)` | `dbg(x)` |
 
 所有権、借用、ライフタイムはありません。値はすべて不変です。
@@ -61,14 +61,14 @@ description: TypeScript、Rust、Go、Kotlin / Java、Python の書き方が Eme
 | `errors.As` / `errors.Is` | `escape { NotFound(..) -> ... }` |
 | `fmt.Errorf("...: %w", err)` | `escape { A(..) -> fail B(..) }` |
 | `defer conn.Close()` | ハンドラの `release` |
-| `go f()` | `Fiber.fork(|| f())`（`Fiber.scope` の中だけ） |
-| `errgroup.Group` | `Fiber.scope`、`Fiber.all`、`Fiber.map` |
-| `context.WithTimeout` | `Fiber.timeout` |
-| `select` で最初の1つ | `Fiber.race` |
+| `go f()` | `tasks.start(|| f())`（`with tasks = Task.Group` か `Task.Background` の中だけ） |
+| `errgroup.Group` | `Task.Group`、`Task.all`、`Task.map` |
+| `context.WithTimeout` | `Task.timeout` |
+| `select` で最初の1つ | `Task.race` |
 | チャネル | 一度だけの受け渡しは `Deferred`、続けて受け渡すなら `Queue` |
 | `semaphore`、ワーカーの数の上限 | `Semaphore` |
 
-goroutine と違い、fiber はスコープより長生きしません。キャンセルのために `ctx` を引数で回す必要もなく、`Fiber.interrupt` で止めるか、スコープの本体が値を返した時点で残っている fiber が中断されます。
+goroutine と違い、タスクはそれを始めた `with` より長生きしません。キャンセルのために `ctx` を引数で回す必要もなく、`Task.Group` の本体が値を返した時点で残っているタスクが中断されます。1つのタスクだけを止めたいときは、そのタスクを専用の `Task.Group` で始めてその `with` を抜けるか、`Deferred` で止める合図を渡します。
 
 ## Kotlin / Java
 
@@ -83,9 +83,9 @@ goroutine と違い、fiber はスコープより長生きしません。キャ�
 | `RuntimeException` | defect（`panic`） |
 | 拡張関数 / static ユーティリティ | モジュールの関数と `\|>` |
 | コンストラクタ注入、Mockito | `effect` / `handler` / `with`、テスト用のハンドラ |
-| `coroutineScope` / `StructuredTaskScope` | `Fiber.scope` |
-| `async` と `await()` | `Fiber.fork` と `Fiber.join` |
-| `withTimeoutOrNull` | `Fiber.timeout` |
+| `coroutineScope` / `StructuredTaskScope` | `Task.Group` |
+| `async` と `await()` | `tasks.start` と `join` |
+| `withTimeoutOrNull` | `Task.timeout` |
 | `@Test` と `assertEquals` | `@test` と `assert` |
 
 オーバーロードはありません。引数の数や型が違う関数には別の名前を付けます。
@@ -103,8 +103,8 @@ goroutine と違い、fiber はスコープより長生きしません。キャ�
 | `for x in xs` / 内包表記 | `List.each`、`List.map`、`List.filter`、`List.fold` |
 | `x += 1` | `x = x + 1`（束縛し直し） |
 | `mock.patch` | ハンドラの差し替え |
-| `asyncio.gather` / `TaskGroup` / `wait_for` | `Fiber.all` / `Fiber.scope` / `Fiber.timeout` |
-| `print(x)` | `(use Console).print_line(...)`、デバッグなら `dbg(x)` |
+| `asyncio.gather` / `TaskGroup` / `wait_for` | `Task.all` / `Task.Group` / `Task.timeout` |
+| `print(x)` | `console <- Console` と `console.print_line(...)`、デバッグなら `dbg(x)` |
 | インデント | `{ }` |
 
 型は静的に決まり、ほとんどは推論されます。`dict` と `set` に当たるのは `Std.Map` と `Std.Set`、`json` に当たるのは `Std.Json` と `derive Encode, Decode` です。
@@ -140,9 +140,9 @@ Some(10)
 
 ループ構文がないので、繰り返しは `List.each`、`List.fold` のような関数か再帰で書きます。自分への末尾呼び出しはスタックを使いません。添字アクセス `xs[0]` もなく、`List.get` が `Option` を返します。
 
-クラスはありません。`user.greet()` は、`User` を定義したモジュールにある、最初の引数が `User` の関数 `greet` を呼びます。`.` で書けるのは、フィールドの参照、この形の関数の呼び出し、能力の値の操作（`(use Users).find(1)`）です。
+クラスはありません。`user.greet()` は、`User` を定義したモジュールにある、最初の引数が `User` の関数 `greet` を呼びます。`.` で書けるのは、フィールドの参照、この形の関数の呼び出し、エフェクトの操作（`users <- Users` の後の `users.find(1)`）です。
 
-`use X` は import とは別物で、エフェクト `X` の能力の値を取り出す式です。能力の値の型は `use X` で、引数に渡したり返したりできます。ただし、それを供給した `with` の外へ持ち出すと警告になります。`main` に残ってよいエフェクトはなく、使うものは `main` の中の `with` で全部供給します。標準のハンドラは `Std.Platform` の `Platform` と、ファイルや引数も含む `Std.Process` の `Process` にまとまっています。
+`x <- X` は import とは別物で、エフェクト `X` に別名 `x` を付ける文です。値は作らず、`x.op(...)` を呼んだ時点でいちばん内側の `X` のハンドラが働きます。特定のハンドラを指す値（能力の値）が要るときは、`with x = H` と名前を付けた項目で作ります。能力の値の型は `use X` で、引数に渡したり返したりできますが、それを作った `with` の外へは持ち出せません（E4405）。名前を付けた項目は、エフェクトを名前で供給しません。`use X` を式に書く古い書き方は 0.29 で非推奨（W4401）になりました。`main` に残ってよいエフェクトはなく、使うものは `main` の中の `with` で全部供給します。標準のハンドラは `Std.Platform` の `Platform` と、ファイルや引数も含む `Std.Process` の `Process` にまとまっています。
 
 文字列は `+` でつなげず、補間 `"#{a}#{b}"` を使います。数の型の間に暗黙の変換はなく、`Int` は32ビットです。`Float.from_int` や `Int64.from_int` で明示して変換します。
 

@@ -22,7 +22,7 @@ import Std.Console.{Console, SystemConsole, TestConsole}
 import Std.State.{State}
 
 fn report(scores: List[Int]) {
-  console = use Console
+  console <- Console
   List.each(scores, |s| {
     result = if s >= 60 { "pass" } else { "fail" }
     console.print_line("#{s}: #{result}")

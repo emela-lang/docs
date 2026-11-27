@@ -112,7 +112,7 @@
     },
     "operators": {
       "patterns": [
-        { "match": "\\|>|->|==|!=|<=|>=|&&|\\|\\||\\.\\.", "name": "keyword.operator.emela" },
+        { "match": "\\|>|->|<-|==|!=|<=|>=|&&|\\|\\||\\.\\.", "name": "keyword.operator.emela" },
         { "match": "[+\\-*/%<>!=|]", "name": "keyword.operator.emela" }
       ]
     }

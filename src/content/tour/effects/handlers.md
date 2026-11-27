@@ -8,7 +8,7 @@ order: 1
 
 中身は `handler` が実装します。`handler 名前: エフェクト` と書き、そのエフェクトのすべての操作を実装します。`English` と `Pirate` は、同じ `greet` を別のやり方で実装しています。
 
-操作を呼ぶには `use Greeter` で今のハンドラを取り出し、`(use Greeter).greet(name)` と書きます。どのハンドラが使われるかは、呼ぶ側が `with ハンドラ { 本体 }` で決めます。`with` の本体の中では、`Greeter` の操作はそのハンドラが実行します。
+操作を呼ぶには、`greeter <- Greeter` で `Greeter` に名前（エフェクトの別名）を付け、`greeter.greet(name)` と書きます。どのハンドラが使われるかは、呼ぶ側が `with ハンドラ { 本体 }` で決めます。`with` の本体の中では、`Greeter` の操作はそのハンドラが実行します。
 
 `welcome` は `Greeter` を使うことだけを知っていて、どのハンドラかは知りません。`main` は同じ `welcome` を2つのハンドラで呼んでいます。
 
@@ -29,7 +29,8 @@ handler Pirate: Greeter {
 }
 
 fn welcome(names: List[String]) -> List[String] {
-  List.map(names, |name| (use Greeter).greet(name))
+  greeter <- Greeter
+  List.map(names, |name| greeter.greet(name))
 }
 
 fn main() {

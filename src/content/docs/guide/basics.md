@@ -23,7 +23,7 @@ fn main() {
 
 `dbg(value)` は値を標準エラーに1行出して、その値を返す Prelude の関数です。このガイドの例では出力をコメントに書いています。
 
-`main` が返す型は `()` か、終了コードを選ぶ `Std.Process` の `ExitCode` です。ほかの型の値を返すと、その値は捨てられて警告 W0304 が出ます。このガイドの例で `main` の最後に `()` を置いているのはこのためです。
+`main` が返す型は `()` か、終了コードを選ぶ `Std.Process` の `ExitCode` です。ほかの型の値を返すと、その値は捨てられて警告 W3001 が出ます。このガイドの例で `main` の最後に `()` を置いているのはこのためです。
 
 ```emela check
 import Std.Process.{EXIT_SUCCESS, ExitCode}
@@ -103,7 +103,7 @@ error TooLong(length: Int)
 fn check_name(name: String) -> String
   fails Empty | TooLong
   uses { Console } {
-  out = use Console
+  out <- Console
   out.print_line("checking #{name}")
   n = String.length(name)
   if n == 0 { fail Empty }

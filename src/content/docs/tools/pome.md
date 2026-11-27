@@ -24,8 +24,8 @@ greeter/
 
 - `Pome.toml` を置いたディレクトリがプロジェクトです。ソースのルートは `<プロジェクト>/src`、テストのルートは `<プロジェクト>/test` です。
 - `emela` コマンドに渡したパスを、シンボリックリンクを解いた絶対パスに直し、祖先を上にたどって最初に見つかった `Pome.toml` のディレクトリをプロジェクトにします。
-- ディレクトリを渡して `Pome.toml` が見つからなければエラー（E0207）です。ファイルを渡して見つからなければ、単独のファイルとして扱います。
-- ファイルを渡して `Pome.toml` が見つかったのに、そのファイルがソースのルートとテストのルートの外にあればエラー（E0208）です。
+- ディレクトリを渡して `Pome.toml` が見つからなければエラー（E2301）です。ファイルを渡して見つからなければ、単独のファイルとして扱います。
+- ファイルを渡して `Pome.toml` が見つかったのに、そのファイルがソースのルートとテストのルートの外にあればエラー（E2006）です。
 - モジュール名はファイルのパスから決まります（`src/http/client.emel` は `Http.Client`）。詳しくは [モジュールと名前の解決](/reference/modules/) にあります。
 
 ### main.emel と lib.emel
@@ -36,7 +36,7 @@ greeter/
 | `src/lib.emel` | ライブラリのルート。依存されたときに、ルートのモジュールになる |
 
 - 両方を置いてもかまいません。どちらを持つかでアプリケーションとライブラリが決まり、設定では切り替えません。
-- `main.emel` がなく `lib.emel` があるプロジェクトはライブラリだけのプロジェクトです。`check` と `test` の入口は `lib.emel` で、`build` は検査だけをして何も書き出しません。`run` はエラー（E0230）です。
+- `main.emel` がなく `lib.emel` があるプロジェクトはライブラリだけのプロジェクトです。`check` と `test` の入口は `lib.emel` で、`build` は検査だけをして何も書き出しません。`run` はエラー（E2009）です。
 - `src/main.emel` は、依存されたときには使いません。
 - `test/` の下のモジュールはテストだけが使います。`build` と `run` は読みません（[テスト](/guide/testing/)）。
 
@@ -58,7 +58,7 @@ fn says_hello() {
 [pome]
 name = "github.com/emela-lang/quince"   # source path
 version = "0.3.2"
-emela = "0.28.0"                         # 要るコンパイラの最小の版
+emela = "0.29.0"                         # 要るコンパイラの最小の版
 module = "Quince"                        # 依存されたときのルート名（省略可）
 license = "MIT OR Apache-2.0"            # SPDX のライセンス式（省略可）
 
@@ -94,8 +94,8 @@ capture-checking = true                          # 実験的な機能
 | `targets` | 省略可 | この Pome が動くターゲット（`js`、`wasm`、`native`）。省けば全部 |
 
 - major が2以上の Pome は、source path の最後に `/vN` を付けます（`github.com/acme/http/v2`）。`version` の major は `/vN` と合わなければなりません。
-- `emela` より新しいコンパイラを求める依存はエラー（E0234）です。古い minor 向けの依存は警告（W0203）を出してビルドします。
-- 依存グラフの Pome の `targets` にビルドするターゲットがなければエラー（E0238）です。`@external` を持たない Pome は書かなくてかまいません。
+- `emela` より新しいコンパイラを求める依存はエラー（E2304）です。古い minor 向けの依存は警告（W2301）を出してビルドします。
+- 依存グラフの Pome の `targets` にビルドするターゲットがなければエラー（E2307）です。`@external` を持たない Pome は書かなくてかまいません。
 - モジュールごとに言語の版を切り替える仕組み（エディション）はありません。
 
 #### license
@@ -103,11 +103,11 @@ capture-checking = true                          # 実験的な機能
 `license` は SPDX のライセンス式です。ライセンスの識別子、`+`、`LicenseRef-` の参照を、大文字の `AND`、`OR`、`WITH` と括弧でつなぎます。識別子が SPDX のライセンスの一覧にあるかは確かめません。
 
 - 作者の宣言で、どのツールも Pome のファイルと突き合わせません。省いたときは、ライセンスを宣言していないという意味で、特定のライセンスを意味しません。
-- 文字列でないか、式の文法に合わなければ、ビルドする Pome でだけ警告（W0205）を出します。ビルドは止めません。
+- 文字列でないか、式の文法に合わなければ、ビルドする Pome でだけ警告（W2303）を出します。ビルドは止めません。
 
 ```console no-check
 $ emela check
-warning[W0205]: `MIT/Apache-2.0` is not an SPDX license expression
+warning[W2303]: `MIT/Apache-2.0` is not an SPDX license expression
    ╭─[ Pome.toml:5:11 ]
    │
  5 │ license = "MIT/Apache-2.0"
@@ -134,9 +134,9 @@ warning[W0205]: `MIT/Apache-2.0` is not an SPDX license expression
 
 テストだけが使う依存です。書き方は `[dependencies]` と同じです。
 
-- import できるのはテストのルート `test/` のモジュールだけです。`src/` のモジュールから import するとエラー（E0239）です。
+- import できるのはテストのルート `test/` のモジュールだけです。`src/` のモジュールから import するとエラー（E2010）です。
 - 読むのは `check`、`test`、言語サーバーだけです。`build` と `run` は読まず、取ってもきません。
-- 同じ Pome を `[dependencies]` と `[dev-dependencies]` の両方に書くとエラー（E0240）です。テストは `[dependencies]` の Pome もそのまま使えます。
+- 同じ Pome を `[dependencies]` と `[dev-dependencies]` の両方に書くとエラー（E2308）です。テストは `[dependencies]` の Pome もそのまま使えます。
 - version の選び方は、`[dependencies]` と `[dev-dependencies]` を合わせたグラフで1回だけ動かします。テストの依存が共通の依存の要求を上げると、ふつうのビルドもその version を使います。テストした version と配る version を同じにするためです。
 - その Pome をビルドするときだけ効き、依存されたときは無視します。
 
@@ -152,12 +152,12 @@ warning[W0205]: `MIT/Apache-2.0` is not an SPDX license expression
 
 ### [external]
 
-依存の Pome の `@external`（と `@export`）は、ビルドする Pome の `[external]` の `allow` に source path を書いたときだけ使えます。推移的な依存も、`allow` に書かなければ使えません。許していない Pome の `@external` はエラー（E0233）です。
+依存の Pome の `@external`（と `@export`）は、ビルドする Pome の `[external]` の `allow` に source path を書いたときだけ使えます。推移的な依存も、`allow` に書かなければ使えません。許していない Pome の `@external` はエラー（E2303）です。
 
 - ホストに触る依存が、いつもアプリケーションの `Pome.toml` に一覧として現れるようにするためです。
 - その Pome をビルドするときだけ効き、依存されたときは無視します。
-- `allow` に書いたのに依存グラフにない Pome は警告（W0204）です。
-- 依存の Pome の `@external` の fn は pub にできません（E0237）。ホストへの道は、その Pome のハンドラを通します。
+- `allow` に書いたのに依存グラフにない Pome は警告（W2302）です。
+- 依存の Pome の `@external` の fn も pub にできます（0.29 から）。ほかのモジュールから呼んでも、ホストの副作用のある外部関数は宣言したモジュールの `External` を R に足し、それを外すのはそのモジュールのハンドラだけなので、ホストへの道はその Pome のハンドラを通ります（[外部関数](/guide/external/)）。
 - `emela pome add --allow-external` は、足す Pome と、それが新しく持ち込む Pome のうち `@external` を使うものを `allow` に足します。
 
 ### [build]
@@ -167,13 +167,13 @@ warning[W0205]: `MIT/Apache-2.0` is not an SPDX license expression
 | `target` | `build`、`run`、`test` の既定のビルド対象。`js`、`wasm`、`native`。省けば `js` |
 
 - コマンドの `--target` が優先します。`check` はターゲットを取りませんが、`[build].target` が正しいかは確かめます。
-- `c` は `native` の古い名前で、警告（W0903）を出します。0.29 で取り除きます。
+- 0.28 まで `native` の古い名前として読んだ `c` は、0.29 で取り除きました。今は知らないターゲット（E2302）です。`[pome].targets` の `"c"` も同じく知らないターゲットのエラーです。
 - `[replace]` と同じく、その Pome をビルドするときだけ効き、依存されたときは無視します。
-- 知らないターゲットはエラー（E0232）です。
+- 知らないターゲットはエラー（E2302）です。
 
 ```console no-check
 $ emela check
-error[E0232]: unknown target `node` in `[build].target`
+error[E2302]: unknown target `node` in `[build].target`
    ─[ Pome.toml ]
    = note: expected one of `js`, `native`, `wasm`
 
@@ -186,12 +186,12 @@ error[E0232]: unknown target `node` in `[build].target`
 
 - 実験的な機能は互換性の保証の外にあり、どの版でも変わったり取り除かれたりします。
 - `[replace]` や `[external]` と違い、依存されたときも読みます。依存グラフの各 Pome は、それぞれ自分の `[experimental]` で検査します。
-- 知らない名前、安定した機能、取り除いた機能の名前は警告（W0206）です。値が真偽値でなければ警告（W0207）で、そのキーは効きません。
+- 知らない名前、安定した機能、取り除いた機能の名前は警告（W2304）です。値が真偽値でなければ警告（W2305）で、そのキーは効きません。
 - コマンドの `--experimental-<名前>` は、その1回の実行だけ、ビルドする Pome で機能を有効にします。依存には効かず、`Pome.toml` で有効にした機能を無効にもできません。言語サーバーは `Pome.toml` だけを見ます。
 
 ```console no-check
 $ emela check
-warning[W0206]: unknown experimental feature `fast-mode`
+warning[W2304]: unknown experimental feature `fast-mode`
     ╭─[ Pome.toml:15:1 ]
     │
  15 │ fast-mode = true
@@ -207,7 +207,7 @@ warning[W0206]: unknown experimental feature `fast-mode`
 - 依存した Pome のモジュールは、その Pome のルート名の下に見えます。`src/lib.emel` がルートのモジュール（`Quince`）、`src/router.emel` が `Quince.Router` です。
 - ルート名の既定は、source path の最後の区切りをモジュール名の規則で PascalCase にしたものです。`-` は `_` と同じに扱います（`json-codec` は `JsonCodec`）。末尾の `/vN` は区切りに数えません（`github.com/acme/http/v2` は `Http`）。
 - ルート名は、作者が `[pome].module` で変えられ、依存する側が `[dependencies]` の表の `module` で付け替えられます。同じ Pome の2つの major に依存するときは、片方を付け替えます。
-- `Std`、core のモジュール名（`List`、`String` など）、`Prelude` はルート名に使えません（E0203）。自分のモジュールやほかの依存のルート名とぶつかればエラー（E0204）で、依存する側で付け替えます。
+- `Std`、core のモジュール名（`List`、`String` など）、`Prelude` はルート名に使えません（E2002）。自分のモジュールやほかの依存のルート名とぶつかればエラー（E2003）で、依存する側で付け替えます。
 - 依存の依存（推移的な依存）は見えません。import できるのは、自分の `[dependencies]` に書いた Pome と、テストからは `[dev-dependencies]` の Pome だけです。
 - ソースのルートのモジュールはすべて依存する側から見えます。テストのルートのモジュールは見えません。依存の `@test` は集めません。
 
@@ -267,7 +267,7 @@ dev = true
 - `check`、`build`、`run`、`test` は、lock にある依存がキャッシュになければ取ってきて、lock のハッシュで確かめてから使います。lock は書き換えず、sumdb にも問い合わせません。`dev = true` の Pome は `build` と `run` では取りません。
 - lock がないか、`Pome.toml` にあって lock にない依存があれば、`emela pome install` を案内する `error:` の1行を出して終了コード 1 で終わります。ハッシュが合わなければ、すり替えの疑いとしてエラーにします。
 - sumdb と突き合わせるのは、まだ lock にない version を lock に書くとき（`emela pome` のコマンド）だけです。
-- 言語サーバーはネットワークに出ず、使えない依存があれば `Pome.toml` に E0236 を出します。
+- 言語サーバーはネットワークに出ず、使えない依存があれば `Pome.toml` に E2306 を出します。
 
 ## emela pome
 
@@ -301,8 +301,8 @@ the cached dependencies match Pome.lock
 - `[dev-dependencies]` が空になれば表ごと消します。`[dependencies]` は空でも残します。
 - 誤りは `error: ` で始まる1行を標準エラーに出し、終了コード 1 で終わります。
 
-:::caution[0.28.1 にないもの]
-仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.28.1 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
+:::caution[0.29.0 にないもの]
+仕様には、公開前に公開 API の変化と version の上げ幅を確かめ、proxy に取り込ませる `emela pome publish` がありますが、0.29.0 にはまだありません（`unrecognized subcommand 'publish'`）。公開は tag を push するだけでできます。
 :::
 
 ## 持たないもの
