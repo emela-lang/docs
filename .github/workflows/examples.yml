@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
       - id: pin
         run: echo "version=$(cat .emela-version)" >> "$GITHUB_OUTPUT"
       - uses: emela-lang/setup-emela@v1
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
 
       - name: Install the latest emela release
         if: matrix.emela == 'release'
